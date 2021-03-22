@@ -1,0 +1,848 @@
+openapi: 3.0.3
+info:
+  title: "MIMIRO Data Hub API documentation"
+  description: Semantic Entity Graph Database with Jobs Engine, Transformation and Query
+  version: "0.5.0"
+
+servers:
+    - url: http://localhost:8080
+      description: Local development instance server
+
+tags:
+  - name: dataset
+    description: Operations with Datasets
+  - name: jobs
+    description: Add, list and delete jobs
+  - name: operations
+    description: Job operations
+  - name: query
+    description: Query operations
+  - name: content
+    description: Operations to work with content objects
+  - name: server
+    description: Generic server information
+  - name: namespaces
+    description: Namespace operations
+
+paths:
+  /:
+    get:
+      summary: Show ServiceInfo
+      description: The ServiceInfo object contains information about the server
+      tags:
+        - server
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: A ServiceInfo object
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceInfo'
+  /health:
+    get:
+      summary: Health
+      tags:
+        - server
+      responses:
+        '200':
+          description: Just returns UP
+
+  /query:
+    post:
+      summary: Query
+      description: Run a query against a set of entities
+      tags:
+        - query
+      security:
+        - BearerAuth: []
+      requestBody:
+        description: A query to run
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Query'
+      responses:
+        '200':
+          description: Returns an object with entity refs as field names and a list of Entities pr field
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResponse'
+
+  /namespaces:
+    get:
+      summary: Namespaces
+      description: Returns a map of namespaces
+      tags:
+        - namespaces
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Map with all namespaces to their prefixes
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /jobs:
+    get:
+      summary: List Jobs
+      description: Lists all configured jobs
+      tags:
+        - jobs
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List with all configured jobs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Jobs"
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      summary: Add Job
+      description: Add a job to the Job manager
+      tags:
+        - jobs
+      security:
+        - BearerAuth: []
+      requestBody:
+        description: The Job object to add
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Job'
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+
+  /jobs/{jobid}:
+    get:
+      summary: Get Job
+      description: Get a job with a given jobid
+      parameters:
+        - in: path
+          name: jobid
+          schema:
+            type: string
+          required: true
+          description:
+            The id of the Job to retrieve
+      tags:
+        - jobs
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: The job in question
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+    post:
+      summary: Change Job state
+      description: Start, Stop or Deactivate a job
+      parameters:
+        - in: path
+          name: jobid
+          schema:
+            type: string
+          required: true
+          description:
+            The id of the Job to retrieve
+      tags:
+        - jobs
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: The job in question
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+    delete:
+      summary: Delete Job
+      description: |
+        Delete an existing job from the store. A running job will be terminated as soon as possible
+      parameters:
+        - in: path
+          name: jobid
+          schema:
+            type: string
+          required: true
+          description:
+            The id of the Job to retrieve
+      tags:
+        - jobs
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Ok
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+  /job/{jobid}/status:
+    get:
+      summary: Get Job status
+      description: Given the job id, returns the job status
+      parameters:
+        - in: path
+          name: jobid
+          schema:
+            type: string
+          required: true
+          description:
+            The id of the Job to retrieve
+      tags:
+        - operations
+      security:
+        - BearerAuth: []
+      responses:
+        '501':
+          description: Not imlemented
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /job/{jobid}/pause:
+    put:
+      summary: Pause job
+      description: Given the job id, pauses a job. If the job is running, it will not be stopped.
+      parameters:
+        - in: path
+          name: jobid
+          schema:
+            type: string
+          required: true
+          description:
+            The id of the Job to pause
+      tags:
+        - operations
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '500':
+          description: Internal server error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /job/{jobid}/resume:
+    put:
+      summary: Resume Job
+      description: Given the job id, resumes a paused job. The job will run at next schedule.
+      parameters:
+        - in: path
+          name: jobid
+          schema:
+            type: string
+          required: true
+          description:
+            The id of the Job to pause
+      tags:
+        - operations
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '500':
+          description: Internal server error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /job/{jobid}/kill:
+    put:
+      summary: Kill Job
+      description: Given the job id, kills a running job. If it is not running, nothing will happen.
+      parameters:
+        - in: path
+          name: jobid
+          schema:
+            type: string
+          required: true
+          description:
+            The id of the Job to kill
+      tags:
+        - operations
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /job/{jobid}/run:
+    put:
+      summary: Run Job
+      description: |
+        Given the job id, runs a job. This will check if the job is already running, and
+        if it is, then this will do nothing. If it is not running, it will create a temp RunOnce
+        job, and then run it without storing it. It will give it a temp job id, and return this.
+      parameters:
+        - in: path
+          name: jobid
+          schema:
+            type: string
+          required: true
+          description:
+            The id of the Job to kill
+        - in: query
+          name: jobType
+          schema:
+            type: string
+            enum: [ incremental, fullsync ]
+          required: false
+          description:
+            The jobType for this run. defaults to incremental
+      tags:
+        - operations
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /job/{jobid}/reset:
+    put:
+      summary: Reset Job
+      description: |
+        Given the job id, resets the job continuation token. If a since query parameter is added, then
+        the token is reset to this value instead.
+      parameters:
+        - in: path
+          name: jobid
+          schema:
+            type: string
+          required: true
+          description:
+            The id of the Job to reset
+        - in: query
+          name: since
+          schema:
+            type: string
+          required: false
+          description:
+            The continuation token to reset to.
+      tags:
+        - operations
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /datasets:
+    get:
+      summary: List Datasets
+      description: Returns a list of datasets the current user has access to
+      tags:
+        - dataset
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Returns a list of Datasets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Datasets'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /datasets/{dataset}/entities:
+    get:
+      summary: List Entities
+      description: Returns a list of Entities for the given dataset. Used for full sync.
+      parameters:
+        - in: path
+          name: dataset
+          schema:
+            type: string
+          required: true
+          description:
+            The name of the Dataset to recover
+        - in: query
+          name: limit
+          schema:
+            type: number
+            format: int
+          required: false
+          description:
+            The limit on how many entities to return.
+      tags:
+        - dataset
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: A list of entities
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entities'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Dataset not found, either because it does not exist, or you have no access
+        '500':
+          description: Internal server error
+    post:
+      summary: Update dataset
+      description: Updates (and/or creates) a Dataset.
+      parameters:
+        - in: path
+          name: dataset
+          schema:
+            type: string
+          required: true
+          description:
+            The name of the Dataset to recover
+      tags:
+        - dataset
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+  /datasets/{dataset}/changes:
+    get:
+      summary: List changed Entities
+      description: Given a since parameter, returns a list of changed entities since.
+      parameters:
+        - in: path
+          name: dataset
+          schema:
+            type: string
+          required: true
+          description:
+            The name of the Dataset to return
+        - in: query
+          name: since
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description:
+            A continuation token
+      tags:
+        - dataset
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of entities since
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entities'
+        '400':
+          description: Bad Request. Check your parameters.
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Dataset not found, either because it does not exist, or you have no access
+        '500':
+          description: Internal server error
+  /datasets/{dataset}:
+    delete:
+      summary: Delete Dataset
+      description: Deletes the given dataset
+      parameters:
+        - in: path
+          name: dataset
+          schema:
+            type: string
+          required: true
+          description:
+            The name of the Dataset to delete
+      tags:
+        - dataset
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+  /content:
+    get:
+      summary: List contents
+      description: Lists all stored contents in random order
+      tags:
+        - content
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lists of stored contents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contents'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+    post:
+      summary: Add Content
+      description: Add new or update existing content with same name
+      tags:
+        - content
+      security:
+        - BearerAuth: []
+      requestBody:
+        description: The content object to add or replace
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Content'            
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+  /content/{contentId}:
+    get:
+      summary: Show Content
+      description: Given its id, retrieves a single Content
+      tags:
+        - content
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: contentId
+          schema:
+            type: string
+          required: true
+          description:
+            The id of the Content to show
+      responses:
+        '200':
+          description: A single content object
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Content'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '500':
+          description: Internal server error
+    put:
+      summary: Update Content
+      description: Updates a content with the given id. The id in the object will be overwritten by the one in the url, if present.
+      tags:
+        - content
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: contentId
+          schema:
+            type: string
+          required: true
+          description:
+            The id of the Content to update
+      requestBody:
+        description: The Content object to update
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Content'            
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+
+    delete:
+      summary: Delete Content
+      description: Deletes the given content by it's id
+      tags:
+        - content
+      security:
+          - BearerAuth: []
+      parameters:
+        - in: path
+          name: contentId
+          schema:
+            type: string
+          required: true
+          description:
+            The id of the Content to delete
+      responses:
+        '200':
+          description: OK
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '500':
+          description: Internal server error
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+
+  schemas:
+    ServiceInfo:
+      properties:
+        name:
+          type: string
+          description: Name of the server
+        location:
+          type: string
+          description: Location of the server
+
+    Query:
+      properties:
+        startingEntities:
+          type: array
+          items:
+            type: string
+          description: List of uris for entities
+        predicate:
+          type: string
+        inverse:
+          type: boolean
+        datasets:
+          type: array
+          items:
+            type: string
+          description: List of dataset names. If not empty, the query will only traverse these datasets to find results. If empty, all datasets are accessed
+
+    QueryResponse:
+      type: object
+
+    Contents:
+      type: array
+      items:
+        $ref: '#/components/schemas/Content'
+
+    Content:
+      properties:
+        id:
+          type: string
+          description: Must be a unique name for this content
+        data:
+          type: object
+          description: An object without schema constraints.
+      required:
+          - id
+          - data
+    Jobs:
+      type: array
+      items:
+        $ref: '#/components/schemas/Job'
+    JobResponse:
+      properties:
+        jobId:
+          type: string
+          description: The jobId of the current job.
+    Job:
+      properties:
+        id:
+          type: string
+          description: Job id
+          example: sync-samplesource-to-datasetsink
+        incrementalSchedule:
+          type: string
+          description: Cron description of when to run the job incrementally
+          example: '@every 2s'
+        fullSyncSchedule:
+          type: string
+          description: Cron description of when to run a full sync
+          example: '@every 2h30m'
+        runOnce:
+          type: boolean
+          description: If true, the job is a one time job, if not, it will be repeated
+          example: false
+        paused:
+          type: boolean
+          description: If true, the job is currently paused. If a job is added with this to true, it will not start.
+          example: false
+        source:
+          type: object
+          description: An object describing the Source of the Job          
+        sink:
+          type: object
+          description: An object describing the Sink of the Job
+        transform:
+          type: object
+          description: An object describing the Transform to be added to the job
+          example:
+            {
+              "Type" : "HttpTransform || JavascriptTransform",
+              "Code" : "For JS transform: base64 encoded js code."
+            }
+
+    Datasets:
+      type: array
+      items:
+        properties:
+          name:
+            type: string
+            description: Name of dataset
+
+    Entities:
+      type: array
+      items:
+        anyOf:
+            - $ref: '#/components/schemas/Context'
+            - $ref: '#/components/schemas/Entity'
+            - $ref: '#/components/schemas/NextToken'
+
+    Context:
+      properties:
+        id:
+          type: string
+          description: Will be @context
+          example: "@context"
+        namespaces:
+          type: object
+          description: A map of namespaces
+          example: { "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#" }
+    Entity:
+      properties:
+        id:
+          type: string
+          description: The id of the entity recovered
+        internalId:
+          type: integer
+          format: int64
+          description: Internal entity id
+        recorded:
+          type: integer
+          format: int64
+          description: Timestamp of when the entity was recorded
+          example: 1601379740
+        deleted:
+          type: boolean
+          description: Whether an entity is deleted or not.
+          example: false
+        refs:
+          type: object
+          description: Map of references to other entities
+        props:
+          type: object
+          description: Map of fields and values (aka properties)
+    NextToken:
+      properties:
+        id:
+          type: string
+          description: Always set to @continuation
+          example: "@continuation"
+        token:
+          type: string
+          description: |
+            Contains the continuation token. This should be a base64 encoded string. What's inside the
+            token is up to the server.
+
