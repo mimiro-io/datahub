@@ -14,11 +14,16 @@
 
 package server
 
-/*
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
+
+	"github.com/DataDog/datadog-go/statsd"
+	"github.com/mimiro-io/datahub/internal/conf"
+	"go.uber.org/fx/fxtest"
+	"go.uber.org/zap"
 
 	"github.com/franela/goblin"
 )
@@ -35,7 +40,21 @@ func TestDatasetManager(t *testing.T) {
 			storeLocation = fmt.Sprintf("./test_dataset_manager_%v", testCnt)
 			err := os.RemoveAll(storeLocation)
 			g.Assert(err).IsNil("should be allowed to clean testfiles in " + storeLocation)
-			store, dsm = setupStore(storeLocation, t)
+			e := &conf.Env{
+				Logger:        zap.NewNop().Sugar(),
+				StoreLocation: storeLocation,
+			}
+
+			devNull, _ := os.Open("/dev/null")
+			oldErr := os.Stderr
+			os.Stderr = devNull
+			lc := fxtest.NewLifecycle(t)
+			store = NewStore(lc, e, &statsd.NoOpClient{})
+			dsm = NewDsManager(lc, e, store, NoOpBus())
+
+			err = lc.Start(context.Background())
+			g.Assert(err).IsNil()
+			os.Stderr = oldErr
 		})
 		g.AfterEach(func() {
 			_ = store.Close()
@@ -58,7 +77,7 @@ func TestDatasetManager(t *testing.T) {
 			g.Assert(err).IsNil()
 			g.Assert(ds).IsNotZero()
 
-			err = ds.StoreEntities([]*Entity{&Entity{ID: "hei"}})
+			err = ds.StoreEntities([]*Entity{{ID: "hei"}})
 			g.Assert(err).IsNil()
 
 			details, found, err = dsm.GetDatasetDetails("people")
@@ -68,112 +87,56 @@ func TestDatasetManager(t *testing.T) {
 			details, found, err = dsm.GetDatasetDetails("more.people")
 			g.Assert(details.Properties).Eql(map[string]interface{}{"ns0:items": 1, "ns0:name": "more.people"})
 		})
+
+		g.It("Should persist internal IDs of deleted datasets, so that they are not given out again", func() {
+			ds, err := dsm.CreateDataset("people")
+			g.Assert(err).IsNil()
+			g.Assert(ds).IsNotZero()
+
+			err = dsm.DeleteDataset("people")
+			g.Assert(err).IsNil()
+
+			err = store.Close()
+			g.Assert(err).IsNil()
+
+			err = store.Open()
+			g.Assert(err).IsNil()
+
+			g.Assert(len(store.deletedDatasets)).Eql(1, "Deleted datasets should have surviced restart of store")
+			_, ok := store.deletedDatasets[ds.InternalID]
+			g.Assert(ok).IsTrue("our ds should still be deleted")
+
+		})
+
+		g.It("Should assign a new internal id to re-created datasets", func() {
+			ds, _ := dsm.CreateDataset("people")
+			g.Assert(ds).IsNotZero()
+
+			_ = dsm.DeleteDataset("people")
+
+			ds1, _ := dsm.CreateDataset("people")
+			g.Assert(ds1).IsNotZero()
+
+			g.Assert(ds1.InternalID == ds.InternalID).IsFalse("re-creating the same dataset after deletin should result in new internal id")
+			g.Assert(ds1.ID).Eql(ds.ID, "the re-created dataset's ID should be equal to previously deleted ID")
+		})
+
+		g.It("Should persist internal IDs correctly across restarts", func() {
+			ds, _ := dsm.CreateDataset("people")
+			g.Assert(ds).IsNotZero()
+			g.Assert(ds.InternalID).Eql(uint32(2))
+
+			_ = store.Close()
+			_ = store.Open()
+
+			ds = dsm.GetDataset("people")
+			g.Assert(ds).IsNotZero()
+			g.Assert(ds.InternalID).Eql(uint32(2))
+
+			ds2, _ := dsm.CreateDataset("animals")
+			g.Assert(ds2).IsNotZero()
+			g.Assert(ds2.InternalID).Eql(uint32(3))
+
+		})
 	})
 }
-
-func TestDeletedDatasetsStored(m *testing.T) {
-	storeLocation := "./test_create_dataset_store"
-	err := os.RemoveAll(storeLocation)
-	checkFail(err, m)
-
-	s, dsm := setupStore(storeLocation, m)
-
-	ds, err := dsm.CreateDataset("people")
-	checkFail(err, m)
-
-	if ds == nil {
-		m.FailNow()
-	}
-
-	err = dsm.DeleteDataset("people")
-	checkFail(err, m)
-
-	err = s.Close()
-	checkFail(err, m)
-
-	s1, _ := setupStore(storeLocation, m)
-
-	if len(s1.deletedDatasets) != 1 {
-		m.FailNow()
-	}
-
-	_, ok := s1.deletedDatasets[ds.InternalID]
-	if !ok {
-		m.FailNow()
-	}
-}
-
-func TestDeleteDataset(m *testing.T) {
-
-	storeLocation := "./test_create_dataset_store"
-	err := os.RemoveAll(storeLocation)
-	checkFail(err, m)
-
-	_, dsm := setupStore(storeLocation, m)
-
-	ds, err := dsm.CreateDataset("people")
-	if ds == nil {
-		m.FailNow()
-	}
-
-	_ = dsm.DeleteDataset("people")
-
-	ds1, err := dsm.CreateDataset("people")
-	if ds1 == nil {
-		m.FailNow()
-	}
-
-	if ds1.InternalID == ds.InternalID {
-		m.FailNow()
-	}
-
-	if ds1.ID != ds.ID {
-		m.FailNow()
-	}
-}
-
-func TestCreateDataset(m *testing.T) {
-
-	storeLocation := "./test_create_dataset_store"
-
-	err := os.RemoveAll(storeLocation)
-	checkFail(err, m)
-
-	s, dsm := setupStore(storeLocation, m)
-
-	ds, err := dsm.CreateDataset("people")
-	if ds == nil {
-		m.FailNow()
-	}
-
-	if ds.InternalID != 2 {
-		m.FailNow()
-	}
-
-	_ = s.Close()
-
-	// open again
-	s, dsm = setupStore(storeLocation, m)
-
-	ds = dsm.GetDataset("people")
-	if ds == nil {
-		m.FailNow()
-	}
-
-	if ds.InternalID != 2 {
-		m.FailNow()
-	}
-
-	ds2, err := dsm.CreateDataset("animals")
-	if ds2 == nil {
-		m.FailNow()
-	}
-
-	if ds2.InternalID != 3 {
-		m.FailNow()
-	}
-
-	err = os.RemoveAll(storeLocation)
-	checkFail(err, m)
-}
-*/

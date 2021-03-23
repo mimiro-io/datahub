@@ -152,12 +152,12 @@ func TestEvents(t *testing.T) {
 		g.It("Should emit event on sink's topic when a job with datasetSink is done", func() {
 			var eventReceived bool
 			var wg sync.WaitGroup
-			wg.Add(1)
+			wg.Add(2)
 			eventBus.SubscribeToDataset("people", "*", func(e *bus.Event) {
 				if e.Topic == "dataset.people" {
 					eventReceived = true
-					wg.Done()
 				}
+				wg.Done()
 			})
 			sj, err := scheduler.Parse([]byte((`{
 				"id" : "job1",
@@ -176,7 +176,7 @@ func TestEvents(t *testing.T) {
 			err = scheduler.AddJob(sj)
 			g.Assert(err).IsNil()
 
-			_, err = scheduler.RunJob(sj.Id, jobs.JobTypeFull)
+			_, err = scheduler.RunJob(sj.Id, jobs.JobTypeIncremental)
 			g.Assert(err).IsNil()
 			wg.Wait()
 			g.Assert(eventReceived).IsTrue("Should have observed event for people dataset")
