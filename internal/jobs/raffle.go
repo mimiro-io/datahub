@@ -116,14 +116,19 @@ func (r *raffle) borrowTicket(job *job) *ticket {
 }
 
 func (r *raffle) returnTicket(ticket *ticket) {
+	tags := []string{
+		"application:datahub",
+	}
 	r.runningMu.Lock()
 	defer r.runningMu.Unlock()
 
 	delete(r.runningJobs, ticket.runState.id)
 	if ticket.runState.isFull {
 		r.ticketsFull++
+		_ = r.statsdClient.Gauge("jobs.tickets.full", float64(r.ticketsFull), tags, 1)
 	} else {
 		r.ticketsIncr++
+		_ = r.statsdClient.Gauge("jobs.tickets.incr", float64(r.ticketsIncr), tags, 1)
 	}
 
 }

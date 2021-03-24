@@ -28,9 +28,9 @@ import (
 	"time"
 
 	"github.com/bamzi/jobrunner"
-	"github.com/franela/goblin"
 	"github.com/robfig/cron/v3"
 
+	"github.com/franela/goblin"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx/fxtest"
 
@@ -40,7 +40,6 @@ import (
 	"go.uber.org/zap"
 )
 
-var statsdClient = statsd.NoOpClient{}
 var logger = zap.NewNop().Sugar()
 
 func TestScheduler(t *testing.T) {
@@ -52,14 +51,16 @@ func TestScheduler(t *testing.T) {
 		var store *server.Store
 		var runner *Runner
 		var storeLocation string
+		var statsdClient *StatsDRecorder
 		g.BeforeEach(func() {
 			testCnt += 1
 			storeLocation = fmt.Sprintf("./testscheduler_%v", testCnt)
 			err := os.RemoveAll(storeLocation)
 			g.Assert(err).IsNil("should be allowed to clean testfiles in " + storeLocation)
-			scheduler, store, runner, dsm = setupScheduler(storeLocation, t)
+			scheduler, store, runner, dsm, statsdClient = setupScheduler(storeLocation, t)
 		})
 		g.AfterEach(func() {
+			statsdClient.Reset()
 			runner.Stop()
 			_ = store.Close()
 			_ = os.RemoveAll(storeLocation)
@@ -86,16 +87,20 @@ func TestScheduler(t *testing.T) {
 			_, ok := runner.scheduledJobs[sj.Id]
 			g.Assert(ok).IsFalse("Does not have job id, because it is paused")
 
+			//register callback to get notified when job is done
+			wg := sync.WaitGroup{}
+			wg.Add(2) // ticket is borrowed and returned = 2 callback calls
+			statsdClient.GaugesCallback = func(data map[string]interface{}) {
+				if data["name"] == "jobs.tickets.incr" {
+					wg.Done()
+				}
+			}
+
 			id, err := scheduler.RunJob(sj.Id, JobTypeIncremental)
 			g.Assert(err).IsNil("RunJob returns no error")
 			g.Assert(id).Eql(sj.Id, "Correct job id is returned from RunJob")
 
-			// give job some time to run
-			time.Sleep(100 * time.Millisecond)
-			for runner.raffle.runningJob(id) != nil {
-				time.Sleep(100 * time.Millisecond)
-			}
-
+			wg.Wait()
 			history := scheduler.GetJobHistory()
 			g.Assert(len(history)).IsNotZero("We found something in the job history")
 			g.Assert(history[0].Id).Eql(sj.Id, "History contains only our job in first place")
@@ -137,19 +142,34 @@ func TestScheduler(t *testing.T) {
 			g.Assert(sj).IsNotNil("Could parse jobConfiguration json")
 			err = scheduler.AddJob(sj)
 			g.Assert(err).IsNil("Could add job to scheduler")
-			scheduler.RunJob(sj.Id, JobTypeIncremental)
 
-			//wait until our job is in running state
-			for runner.raffle.runningJob(sj.Id) == nil {
-				time.Sleep(10 * time.Millisecond)
+			//register callback to get notified when job is started and done
+			startWg := sync.WaitGroup{}
+			startWg.Add(1)
+			doneWg := sync.WaitGroup{}
+			doneWg.Add(1)
+			statsdClient.GaugesCallback = func(data map[string]interface{}) {
+				//ticket is borrowed -> available ticket count decreases to 9
+				if data["name"] == "jobs.tickets.incr" && data["value"] == float64(9) {
+					startWg.Done()
+				}
+				//ticket is returned -> available ticket count back to 10
+				if data["name"] == "jobs.tickets.incr" && data["value"] == float64(10) {
+					doneWg.Done()
+				}
 			}
+
+			_, err = scheduler.RunJob(sj.Id, JobTypeIncremental)
+			g.Assert(err).IsNil()
+
+			startWg.Wait()
+
 			g.Assert(scheduler.GetRunningJob(sj.Id)).IsNotNil("Our job is running now")
+
 			scheduler.KillJob(sj.Id)
 
 			//wait until our job is not running anymore
-			for runner.raffle.runningJob(sj.Id) != nil {
-				time.Sleep(10 * time.Millisecond)
-			}
+			doneWg.Wait()
 			g.Assert(scheduler.GetRunningJob(sj.Id)).IsNotNil("Our job is killed now")
 		})
 
@@ -227,15 +247,21 @@ func TestScheduler(t *testing.T) {
 			g.Assert(ok).IsFalse("Our job is not registered as schedule (paused in json)")
 
 			_, _ = dsm.CreateDataset("People")
+
+			//register callback to get notified when job is done
+			wg := sync.WaitGroup{}
+			wg.Add(2)
+			statsdClient.GaugesCallback = func(data map[string]interface{}) {
+				if data["name"] == "jobs.tickets.incr" {
+					wg.Done()
+				}
+			}
+
 			id, err := scheduler.RunJob(sj.Id, JobTypeIncremental)
 			g.Assert(err).IsNil("We could invoke RunJob without error")
 			g.Assert(id).Eql(sj.Id, "RunJob returned the correct job id")
 
-			//wait for job to start, and wait some more until it is finished
-			time.Sleep(10 * time.Millisecond)
-			for runner.raffle.runningJob(id) != nil {
-				time.Sleep(10 * time.Millisecond)
-			}
+			wg.Wait()
 
 			peopleDataset := dsm.GetDataset("People")
 			result, err := peopleDataset.GetEntities("", 50)
@@ -322,7 +348,7 @@ func TestScheduler(t *testing.T) {
 			g.Assert(err).IsNil("We could close the datahub store without error")
 
 			// reopen
-			scheduler, store, runner, dsm = setupScheduler(storeLocation, t)
+			scheduler, store, runner, dsm, statsdClient = setupScheduler(storeLocation, t)
 			g.Assert(runner.scheduledJobs[sj.Id]).Eql([]cron.EntryID{cron.EntryID(1)}, "Our job has received internal id 1")
 		})
 
@@ -359,13 +385,21 @@ func TestScheduler(t *testing.T) {
 				js, err := scheduler.toTriggeredJobs(config)
 				g.Assert(err).IsNil()
 				j := js[0]
+				//register callback to get notified when job is started
+				wg := sync.WaitGroup{}
+				wg.Add(1) // we will never see the return of the borrowed ticket since the job is longrunning
+				statsdClient.GaugesCallback = func(data map[string]interface{}) {
+					if data["name"] == "jobs.tickets.incr" {
+						wg.Done()
+					}
+				}
+
 				id := jobrunner.MainCron.Schedule(&TestSched{}, jobrunner.New(j))
 				g.Assert(id).Eql(cron.EntryID(2), "this should be the second schedule (same job though)")
 
 				//wait for schedule to start
-				for runner.raffle.runningJob(j.id) == nil {
-					time.Sleep(10 * time.Millisecond)
-				}
+				wg.Wait()
+
 				g.Assert(runner.raffle.runningJob(j.id).id).Eql(j.id, "scheduled job has started")
 				runJobId, err := scheduler.RunJob(j.id, JobTypeIncremental)
 				g.Assert(runJobId).IsZero()
@@ -376,11 +410,11 @@ func TestScheduler(t *testing.T) {
 				g.Assert(len(scheduler.GetRunningJobs())).Eql(1, "there is one (scheduled) job running")
 				originalStartTime := runner.raffle.runningJob(j.id).started
 				scheduler.Runner.startJob(j)
-				time.Sleep(100 * time.Millisecond)
+				//ideally we need to wait for the job runner to go through raffle etc.
 				g.Assert(runner.raffle.runningJob(j.id).started).Eql(originalStartTime, "runState did not change")
-
 				scheduler.KillJob(j.id)
 			})
+
 			g.It("Should skip a scheduled run, while a RunJob is active", func() {
 				config := &JobConfiguration{
 					Id:     "j1",
@@ -396,27 +430,40 @@ func TestScheduler(t *testing.T) {
 				js, err := scheduler.toTriggeredJobs(config)
 				g.Assert(err).IsNil()
 				j := js[0]
-				wg := sync.WaitGroup{}
-				wg.Add(1)
-				id := jobrunner.MainCron.Schedule(&TestSched{Callback: func() { wg.Done() }}, jobrunner.New(j))
+				schedwg := sync.WaitGroup{}
+				schedwg.Add(1)
+				id := jobrunner.MainCron.Schedule(&TestSched{Callback: func() { schedwg.Done() }}, jobrunner.New(j))
 				g.Assert(id).Eql(cron.EntryID(2), "this should be the second schedule (same job though)")
 
+				//register callback to get notified when job is started and done
+				wg := sync.WaitGroup{}
+				wg.Add(1)
+				donewg := sync.WaitGroup{}
+				donewg.Add(1)
+				statsdClient.GaugesCallback = func(data map[string]interface{}) {
+					// gauge is decreased by 1 on start
+					if data["name"] == "jobs.tickets.full" && data["value"] == float64(4) {
+						wg.Done()
+					}
+					// gauge is increased back to 5 on finish
+					if data["name"] == "jobs.tickets.full" && data["value"] == float64(5) {
+						donewg.Done()
+					}
+				}
 				runJobId, err := scheduler.RunJob(j.id, JobTypeFull)
 				g.Assert(runJobId).Eql(j.id, "The RunJob has succeeded")
 				g.Assert(err).IsNil()
 				//wait for RunJob to reach running state
-				for runner.raffle.runningJob(j.id) == nil {
-					time.Sleep(10 * time.Millisecond)
-				}
+				wg.Wait()
 
 				originalStartTime := runner.raffle.runningJob(j.id).started
 				//wait for schedule to trigger another run
-				wg.Wait()
+				schedwg.Wait()
 				state := runner.raffle.runningJob(j.id)
 				g.Assert(state.started).Eql(originalStartTime, "runState did not change")
 				g.Assert(state).IsNotZero("there is a runstate")
 				//wait for RunJob to finish (should run more 100ms)
-				time.Sleep(150 * time.Millisecond)
+				donewg.Wait()
 				state = runner.raffle.runningJob(j.id)
 				g.Assert(state).IsZero("no more runstate")
 			})
@@ -434,14 +481,20 @@ func TestScheduler(t *testing.T) {
 				g.Assert(err).IsNil()
 				j := js[0]
 
+				//register callback to get notified when job is done
+				donewg := sync.WaitGroup{}
+				donewg.Add(2)
+				statsdClient.GaugesCallback = func(data map[string]interface{}) {
+					if data["name"] == "jobs.tickets.incr" {
+						donewg.Done()
+					}
+				}
 				runJobId, err := scheduler.RunJob(j.id, JobTypeIncremental)
 				g.Assert(runJobId).Eql(j.id, "The RunJob has succeeded")
 				g.Assert(err).IsNil()
-				//a little delay for the job to run
-				time.Sleep(10 * time.Millisecond)
-				for runner.raffle.runningJob(j.id) != nil {
-					time.Sleep(10 * time.Millisecond)
-				}
+
+				donewg.Wait()
+
 				hist := scheduler.GetJobHistory()
 				g.Assert(len(hist)).Eql(1, "our RunJob is in history")
 				syncJobState := &SyncJobState{}
@@ -464,13 +517,21 @@ func TestScheduler(t *testing.T) {
 				js, err := scheduler.toTriggeredJobs(config)
 				g.Assert(err).IsNil()
 				j := js[0]
+
+				//register callback to get notified when job is started
+				startWg := sync.WaitGroup{}
+				startWg.Add(1)
+				statsdClient.GaugesCallback = func(data map[string]interface{}) {
+					if data["name"] == "jobs.tickets.incr" && data["value"] == float64(9) {
+						startWg.Done()
+					}
+				}
+
 				id := jobrunner.MainCron.Schedule(&TestSched{}, jobrunner.New(j))
 				g.Assert(id).Eql(cron.EntryID(2), "this should be the second schedule (same job though)")
 
 				//wait for schedule to start
-				for runner.raffle.runningJob(j.id) == nil {
-					time.Sleep(10 * time.Millisecond)
-				}
+				startWg.Wait()
 				g.Assert(runner.raffle.runningJob(j.id).id).Eql(j.id, "scheduled job has started")
 
 				//Now start a fullSync RunJob
@@ -483,12 +544,10 @@ func TestScheduler(t *testing.T) {
 				g.Assert(len(scheduler.GetRunningJobs())).Eql(1, "there is one (scheduled) job running")
 				originalStartTime := runner.raffle.runningJob(j.id).started
 				scheduler.Runner.startJob(j)
-				time.Sleep(100 * time.Millisecond)
 				g.Assert(runner.raffle.runningJob(j.id).started).Eql(originalStartTime, "runState did not change")
-
-				scheduler.KillJob(j.id)
 			})
-			/* g.It("Should start a scheduled fullsync after a RunJob if the schedule triggers during RunJob", func() {
+
+			g.It("Should start a scheduled fullsync after a RunJob if the schedule triggers during RunJob", func() {
 				_ = os.Setenv("JOB_FULLSYNC_RETRY_INTERVAL", "100ms")
 				config := &JobConfiguration{
 					Id:     "j1",
@@ -504,40 +563,60 @@ func TestScheduler(t *testing.T) {
 				js, err := scheduler.toTriggeredJobs(config)
 				g.Assert(err).IsNil()
 				j := js[0]
-				id := jobrunner.MainCron.Schedule(&TestSched{}, jobrunner.New(j))
+
+				//register callback to get notified when job is started and done
+				startWg := sync.WaitGroup{}
+				startWg.Add(1)
+				var started, stopped bool
+				doneWg := sync.WaitGroup{}
+				doneWg.Add(1)
+				statsdClient.GaugesCallback = func(data map[string]interface{}) {
+					if data["name"] == "jobs.tickets.full" && data["value"] == float64(4) && !started {
+						started = true
+						startWg.Done()
+					}
+					if data["name"] == "jobs.tickets.full" && data["value"] == float64(5) && !stopped {
+						doneWg.Done()
+					}
+				}
+
+				schedWg := sync.WaitGroup{}
+				schedWg.Add(1)
+				id := jobrunner.MainCron.Schedule(&TestSched{Callback: func() { schedWg.Done() }}, jobrunner.New(j))
 				g.Assert(id).Eql(cron.EntryID(2), "this should be the second schedule (same job though)")
 
 				runJobId, err := scheduler.RunJob(j.id, JobTypeFull)
 				g.Assert(runJobId).Eql(j.id, "The RunJob has succeeded")
 				g.Assert(err).IsNil()
 				//wait for RunJob to reach running state
-				for runner.raffle.runningJob(j.id) == nil {
-					time.Sleep(10 * time.Millisecond)
-				}
+				startWg.Wait()
 				//capture startingTime of RunJob for comparison
 				originalStartTime := runner.raffle.runningJob(j.id).started
 
 				//wait for schedule to trigger another run
-				time.Sleep(100 * time.Millisecond)
+				schedWg.Wait()
+
 				state := runner.raffle.runningJob(j.id)
 				g.Assert(state.started).Eql(originalStartTime, "runState should not change")
 				g.Assert(state).IsNotZero("there should be a runstate")
+
 				//wait for RunJob to finish
-				time.Sleep(200 * time.Millisecond)
+				doneWg.Wait()
+
 				state = runner.raffle.runningJob(j.id)
 				g.Assert(state).IsZero("no more runstate")
 
+				startWg.Add(1)
+				started = false
 				// now wait for fullsync retry
-				for runner.raffle.runningJob(j.id) == nil {
-					time.Sleep(10 * time.Millisecond)
-				}
+				startWg.Wait()
+
 				state = runner.raffle.runningJob(j.id)
 				g.Assert(state).IsNotZero("should be a new runstate")
 				g.Assert(state.started == originalStartTime).IsFalse("should not be same runstate as RunJob")
-				scheduler.KillJob(j.id)
 
 				_ = os.Unsetenv("JOB_FULLSYNC_RETRY_INTERVAL")
-			}) */
+			})
 		})
 
 		g.Describe("Should validate job configuration", func() {
@@ -816,7 +895,9 @@ func NewMockService() MockService {
 	return result
 }
 
-func setupScheduler(storeLocation string, t *testing.T) (*Scheduler, *server.Store, *Runner, *server.DsManager) {
+func setupScheduler(storeLocation string, t *testing.T) (*Scheduler, *server.Store, *Runner, *server.DsManager, *StatsDRecorder) {
+	statsdClient := &StatsDRecorder{}
+	statsdClient.Reset()
 	e := &conf.Env{
 		Logger:        logger,
 		StoreLocation: storeLocation,
@@ -831,13 +912,13 @@ func setupScheduler(storeLocation string, t *testing.T) (*Scheduler, *server.Sto
 	os.Stderr = devNull
 	os.Stdout = devNull
 	lc := fxtest.NewLifecycle(t)
-	store := server.NewStore(lc, e, &statsdClient)
+	store := server.NewStore(lc, e, statsdClient)
 
 	runner := NewRunner(&RunnerConfig{
 		PoolIncremental: 10,
 		PoolFull:        5,
 		Concurrent:      0,
-	}, e, store, nil, eb, &statsdClient)
+	}, e, store, nil, eb, statsdClient)
 
 	dsm := server.NewDsManager(lc, e, store, server.NoOpBus())
 
@@ -852,5 +933,61 @@ func setupScheduler(storeLocation string, t *testing.T) (*Scheduler, *server.Sto
 		t.FailNow()
 	}
 
-	return s, store, runner, dsm
+	return s, store, runner, dsm, statsdClient
 }
+
+type StatsDRecorder struct {
+	Gauges         map[string]float64
+	Counts         map[string]int64
+	GaugesCallback func(map[string]interface{})
+}
+
+func (r *StatsDRecorder) Reset() {
+	r.Gauges = make(map[string]float64)
+	r.Counts = make(map[string]int64)
+	r.GaugesCallback = nil
+}
+
+func (r *StatsDRecorder) Gauge(name string, value float64, tags []string, rate float64) error {
+	r.Gauges[name] = value
+	if r.GaugesCallback != nil {
+		r.GaugesCallback(map[string]interface{}{
+			"name":  name,
+			"value": value,
+			"tags":  tags,
+			"rate":  rate,
+		})
+	}
+	return nil
+}
+
+func (r *StatsDRecorder) Count(name string, value int64, tags []string, rate float64) error {
+	return nil
+}
+
+func (r *StatsDRecorder) Histogram(name string, value float64, tags []string, rate float64) error {
+	return nil
+}
+func (r *StatsDRecorder) Distribution(name string, value float64, tags []string, rate float64) error {
+	return nil
+}
+func (r *StatsDRecorder) Decr(name string, tags []string, rate float64) error { return nil }
+func (r *StatsDRecorder) Incr(name string, tags []string, rate float64) error { return nil }
+func (r *StatsDRecorder) Set(name string, value string, tags []string, rate float64) error {
+	return nil
+}
+func (r *StatsDRecorder) Timing(name string, value time.Duration, tags []string, rate float64) error {
+	return nil
+}
+func (r *StatsDRecorder) TimeInMilliseconds(name string, value float64, tags []string, rate float64) error {
+	return nil
+}
+func (r *StatsDRecorder) Event(e *statsd.Event) error                { return nil }
+func (r *StatsDRecorder) SimpleEvent(title, text string) error       { return nil }
+func (r *StatsDRecorder) ServiceCheck(sc *statsd.ServiceCheck) error { return nil }
+func (r *StatsDRecorder) SimpleServiceCheck(name string, status statsd.ServiceCheckStatus) error {
+	return nil
+}
+func (r *StatsDRecorder) Close() error                          { return nil }
+func (r *StatsDRecorder) Flush() error                          { return nil }
+func (r *StatsDRecorder) SetWriteTimeout(d time.Duration) error { return nil }

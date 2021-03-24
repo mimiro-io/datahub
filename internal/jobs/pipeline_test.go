@@ -29,7 +29,6 @@ import (
 )
 
 func TestPipeline(t *testing.T) {
-	//func TestDatasetToHttpDatasetSinkFullSync(t *testing.T) {
 	g := goblin.Goblin(t)
 	g.Describe("A pipeline", func() {
 		testCnt := 0
@@ -55,7 +54,7 @@ func TestPipeline(t *testing.T) {
 			go func() {
 				_ = mockService.echo.Start(":7777")
 			}()
-			scheduler, store, runner, dsm = setupScheduler(storeLocation, t)
+			scheduler, store, runner, dsm, _ = setupScheduler(storeLocation, t)
 
 			// undo redirect of stdout and stderr after successful init of fx and jobrunner
 			os.Stderr = oldErr
@@ -63,11 +62,11 @@ func TestPipeline(t *testing.T) {
 
 		})
 		g.AfterEach(func() {
+			runner.Stop()
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			_ = mockService.echo.Shutdown(ctx)
 			cancel()
 			mockService.HttpNotificationChannel = nil
-			runner.Stop()
 			_ = store.Close()
 			_ = os.RemoveAll(storeLocation)
 		})
