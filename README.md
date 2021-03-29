@@ -23,7 +23,7 @@ We follow semantic versioning and are pre 1.0. This means that the API or binary
   * [Getting Started](#getting-started)
   * [Documentation](#documentation)
   * [Contributing](#contributing)
-  * [Contact](#contact)
+  * [Contact](https://en.mimiro.no/#contact)
 
 # Getting Started
 
@@ -41,7 +41,7 @@ For Windows users, we recommend installing [WSL](https://docs.microsoft.com/en-u
 
 ## Running in Docker
 
-[Docker images](https://dockerhub.io/mimiro/datahub) are built and released to docker hub. They can also be built locally with the Dockerfile.
+[Docker images](https://hub.docker.com/repository/docker/mimiro/datahub) are built and released to docker hub. They can also be built locally with the Dockerfile.
 
 To build a local docker image:
 
