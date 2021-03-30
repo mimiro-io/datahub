@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datahub
+package conf
 
 import (
 	"os"
 	"testing"
 
 	"github.com/franela/goblin"
-	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/spf13/viper"
 )
 
@@ -36,7 +35,7 @@ func TestLoadEnv(t *testing.T) {
 			if err != nil {
 				g.Fail(err)
 			}
-			currentDir = d + "/.env-test"
+			currentDir = d + "/../../.env-test"
 
 		})
 		g.It("should parse the test env file", func() {
@@ -59,7 +58,7 @@ func TestParseEnvFromFile(t *testing.T) {
 	g := goblin.Goblin(t)
 
 	var currentDir string
-	var env *conf.Env
+	var env *Env
 	g.Describe("Parsing the env file", func() {
 		g.Before(func() {
 			_ = os.Setenv("PROFILE", "test")
@@ -68,7 +67,7 @@ func TestParseEnvFromFile(t *testing.T) {
 			if err != nil {
 				g.Fail(err)
 			}
-			currentDir = d + "/.env-test"
+			currentDir = d + "/../../.env-test"
 			e, err := loadEnv(&currentDir, false)
 			if err != nil {
 				g.Fail(err)
@@ -137,7 +136,7 @@ func TestLoadEnvNoFile(t *testing.T) {
 func TestLoadEnvVariables(t *testing.T) {
 	g := goblin.Goblin(t)
 	g.Describe("Loading env from env variables only", func() {
-		var c *conf.Env
+		var c *Env
 
 		g.Before(func() {
 			viper.Reset()
