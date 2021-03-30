@@ -272,13 +272,14 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 // storeEntitiesHandler
 func (handler *datasetHandler) storeEntitiesHandler(c echo.Context) error {
 	datasetName := c.Param("dataset")
-	fsId := c.Request().Header.Get("universal-data-api-full-sync-id")
+	fsID := c.Request().Header.Get("universal-data-api-full-sync-id")
 	fsStart := c.Request().Header.Get("universal-data-api-full-sync-start")
 	fsEnd := c.Request().Header.Get("universal-data-api-full-sync-end")
-	return handler.processEntities(c, datasetName, "true"==fsStart, fsId, "true"==fsEnd)
+
+	return handler.processEntities(c, datasetName, "true"==fsStart, fsID, "true"==fsEnd)
 }
 
-func (handler *datasetHandler) processEntities(c echo.Context, datasetName string, fullSyncStart bool, fullSyncId string, fullSyncEnd bool) error {
+func (handler *datasetHandler) processEntities(c echo.Context, datasetName string, fullSyncStart bool, fullSyncID string, fullSyncEnd bool) error {
 	var err error
 	// check dataset exists
 	ok := handler.datasetManager.IsDataset(datasetName)
@@ -287,9 +288,23 @@ func (handler *datasetHandler) processEntities(c echo.Context, datasetName strin
 	}
 
 	dataset := handler.datasetManager.GetDataset(datasetName)
+
+	// start new fullsync if requested
 	if fullSyncStart {
-		dataset.StartFullSync()
+		err = dataset.StartFullSync(fullSyncID)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusConflict, server.HttpFullsyncRunning.Error())
+		}
 	}
+
+	// renew lease for active fullsync, if fullsync is running
+	if dataset.FullSyncStarted() {
+		err = dataset.RefreshFullSyncLease(fullSyncID)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusConflict, server.HttpFullsyncRunning.Error())
+		}
+	}
+
 	batchSize := 10
 	entities := make([]*server.Entity, 0)
 	esp := server.NewEntityStreamParser(handler.store)
@@ -321,7 +336,10 @@ func (handler *datasetHandler) processEntities(c echo.Context, datasetName strin
 	}
 
 	if fullSyncEnd {
-		dataset.CompleteFullSync()
+		err = dataset.CompleteFullSync()
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, server.HttpGenericErr.Error())
+		}
 	}
 	// we have to emit the dataset, so that subscribers can react to the event
 	ctx := context.Background()

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -25,7 +26,6 @@ func TestFullSync(t *testing.T) {
 
 	g.Describe("The dataset endpoint", func() {
 		g.Before(func() {
-
 			_ = os.Setenv("STORE_LOCATION", location)
 			_ = os.Setenv("PROFILE", "test")
 			_ = os.Setenv("SERVER_PORT", "24998")
@@ -44,17 +44,20 @@ func TestFullSync(t *testing.T) {
 			g.Assert(err).IsNil()
 			err = os.RemoveAll(location)
 			g.Assert(err).IsNil()
+			_ = os.Unsetenv("STORE_LOCATION")
+			_ = os.Unsetenv("PROFILE")
+			_ = os.Unsetenv("SERVER_PORT")
 		})
 
 		g.It("Should create a dataset", func() {
-			//create new dataset
+			// create new dataset
 			res, err := http.Post(dsUrl, "application/json", strings.NewReader(""))
 			g.Assert(err).IsNil()
 			g.Assert(res).IsNotZero()
 			g.Assert(res.StatusCode).Eql(200)
 		})
 		g.It("Should accept a single batch of changes", func() {
-			//populate dataset
+			// populate dataset
 			payload := strings.NewReader(bananasFromTo(1, 10, false))
 			res, err := http.Post(dsUrl+"/entities", "application/json", payload)
 
@@ -62,7 +65,7 @@ func TestFullSync(t *testing.T) {
 			g.Assert(res).IsNotZero()
 			g.Assert(res.StatusCode).Eql(200)
 
-			//read it back
+			// read it back
 			res, err = http.Get(dsUrl + "/changes")
 			g.Assert(err).IsNil()
 			g.Assert(res).IsNotZero()
@@ -76,7 +79,7 @@ func TestFullSync(t *testing.T) {
 		})
 
 		g.It("Should accept multiple overlapping batches of changes", func() {
-			//replace 5-10 and add 11-15
+			// replace 5-10 and add 11-15
 			payload := strings.NewReader(bananasFromTo(5, 15, false))
 			res, err := http.Post(dsUrl+"/entities", "application/json", payload)
 			g.Assert(err).IsNil()
@@ -168,7 +171,6 @@ func TestFullSync(t *testing.T) {
 			_, _ = http.DefaultClient.Do(req)
 			cancel()
 
-
 			// read changes back
 			res, err := http.Get(dsUrl + "/changes")
 			g.Assert(err).IsNil()
@@ -179,7 +181,7 @@ func TestFullSync(t *testing.T) {
 			var entities []*server.Entity
 			err = json.Unmarshal(bodyBytes, &entities)
 			g.Assert(err).IsNil()
-			g.Assert(len(entities)).Eql(33, "expected 20 entities plus 13 changes and @context and @continuation")
+			g.Assert(len(entities)).Eql(33, "expected 20 entities plus 11 changes and @context and @continuation")
 			g.Assert(entities[7].IsDeleted).IsFalse("original change 7 is still undeleted")
 			g.Assert(entities[22].IsDeleted).IsTrue("deleted state for 7  is a new change at end of list")
 
@@ -194,7 +196,7 @@ func TestFullSync(t *testing.T) {
 			err = json.Unmarshal(bodyBytes, &entities)
 			g.Assert(err).IsNil()
 			g.Assert(len(entities)).Eql(22, "expected 20 entities plus @context and @continuation")
-			//remove context
+			// remove context
 			entities = entities[1:]
 			for i := 0; i < 3; i++ {
 				g.Assert(entities[i].IsDeleted).IsTrue("entity was not part of fullsync, should be deleted: ", i)
@@ -207,10 +209,95 @@ func TestFullSync(t *testing.T) {
 			}
 		})
 
-		g.It("should handle fullsync requests with same sync-id in parallel")
-		g.It("should abandon fullsync and start new fullsync if new start-signal is sent during sync")
-		g.It("should reject fullsync when job writing to same dataset is running?")
-		g.It("should not start job writing to same dataset while http fullsync is running?")
+		g.It("should keep fullsync requests with same sync-id in parallel", func() {
+			// only send IDs 4 through 16 in batches as fullsync
+			// 1-3 and 17-20 should end up deleted
+
+			// first batch with "start" header
+			payload := strings.NewReader(bananasFromTo(4, 4, false))
+			ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ := http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-start", "true")
+			req.Header.Add("universal-data-api-full-sync-id", "43")
+			_, _ = http.DefaultClient.Do(req)
+			cancel()
+
+			// next, updated id 5 with wrong sync-id. should not be registered as "seen" and therefore be deleted after fs
+			payload = strings.NewReader(bananasFromTo(5, 5, false))
+			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ = http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-id", "44")
+			res, err := http.DefaultClient.Do(req)
+			cancel()
+			g.Assert(res.StatusCode).Eql(409, "request should be rejected because fullsync is going on")
+
+			// 10 batches in parallel with correct sync-id
+			wg := sync.WaitGroup{}
+			for i := 6; i < 16; i++ {
+				wg.Add(1)
+				id := i
+				go func() {
+					payload := strings.NewReader(bananasFromTo(id, id, false))
+					ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+					req, _ := http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+					req.Header.Add("universal-data-api-full-sync-id", "43")
+					_, _ = http.DefaultClient.Do(req)
+					cancel()
+					wg.Done()
+				}()
+			}
+
+			wg.Wait()
+
+			// last batch with "end" signal
+			payload = strings.NewReader(bananasFromTo(16, 16, false))
+			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ = http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-id", "43")
+			req.Header.Add("universal-data-api-full-sync-end", "true")
+			_, _ = http.DefaultClient.Do(req)
+			cancel()
+
+			// read changes back
+			res, err = http.Get(dsUrl + "/changes")
+			g.Assert(err).IsNil()
+			g.Assert(res).IsNotZero()
+			g.Assert(res.StatusCode).Eql(200)
+			bodyBytes, _ := ioutil.ReadAll(res.Body)
+			_ = res.Body.Close()
+			var entities []*server.Entity
+			err = json.Unmarshal(bodyBytes, &entities)
+			g.Assert(err).IsNil()
+			g.Assert(len(entities)).Eql(34, "expected 31 changes from before plus deletion of 5 and @context and @continuation")
+			g.Assert(entities[32].IsDeleted).IsTrue("deleted state for 5  is a new change at end of list")
+		})
+		g.It("should reject new fullsync and while fullsync is running", func() {
+			// start a fullsync
+			payload := strings.NewReader(bananasFromTo(1, 1, false))
+			ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ := http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-start", "true")
+			req.Header.Add("universal-data-api-full-sync-id", "45")
+			res, err := http.DefaultClient.Do(req)
+			cancel()
+			g.Assert(err).IsNil()
+			g.Assert(res).IsNotZero()
+			g.Assert(res.StatusCode).Eql(200)
+
+			// start another fullsync
+			payload = strings.NewReader(bananasFromTo(1, 1, false))
+			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ = http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-start", "true")
+			req.Header.Add("universal-data-api-full-sync-id", "46")
+			res, err = http.DefaultClient.Do(req)
+			cancel()
+			g.Assert(err).IsNil()
+			g.Assert(res).IsNotZero()
+			g.Assert(res.StatusCode).Eql(409)
+		})
+		g.It("should abandon fullsync after a timeout period without new requests", func() {
+		})
 	})
 }
 
@@ -218,6 +305,7 @@ func bananasFromTo(from, to int, deleted bool) string {
 	prefix := `[ { "id" : "@context", "namespaces" : { "_" : "http://example.com" } }, `
 
 	var bananas []string
+
 	for i := from; i <= to; i++ {
 		if deleted {
 			bananas = append(bananas, fmt.Sprintf(`{ "id" : "%v", "deleted": true }`, i))

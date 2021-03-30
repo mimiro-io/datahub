@@ -15,6 +15,7 @@
 package server
 
 import (
+	"context"
 	b64 "encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -26,6 +27,11 @@ import (
 	"github.com/dgraph-io/badger/v2"
 )
 
+type fullSyncLease struct {
+	ctx    context.Context
+	cancel func()
+}
+
 // Dataset data structure
 type Dataset struct {
 	ID                  string `json:"id"`
@@ -34,7 +40,7 @@ type Dataset struct {
 	store               *Store
 	writeLock           sync.Mutex
 	fullSyncStarted     bool
-	fullSyncLease       int // seconds in epoch when it expires.
+	fullSyncLease       *fullSyncLease
 	fullSyncSeen        map[uint64]int
 	isChangeCache       bool      // indicates if this is a local change cache
 	dataChangeNotifiers []string  // list of endpoints to ping after new batch committed.
@@ -42,6 +48,7 @@ type Dataset struct {
 	cacheStartOffset    uint32    // log position start in cache
 	markedForDeletion   bool
 	PublicNamespaces    []string `json:"publicNamespaces"`
+	fullSyncID          string
 }
 
 // NewDataset Create a new dataset from the params provided
@@ -55,20 +62,72 @@ func NewDataset(store *Store, id string, internalID uint32, subjectIdentifier st
 }
 
 // StartFullSync Indicates that a full sync is starting
-func (ds *Dataset) StartFullSync() error {
+func (ds *Dataset) StartFullSync(fullSyncID string) error {
 	if ds.fullSyncStarted {
 		se := NewStorageError("Full Sync In Progress", nil)
 		return se
 	}
+
 	ds.fullSyncStarted = true
-	ds.fullSyncLease = 0 // fix me
 	ds.fullSyncSeen = make(map[uint64]int)
+	ds.fullSyncID = fullSyncID
+
+	return ds.RefreshFullSyncLease(fullSyncID)
+}
+
+func (ds *Dataset) RefreshFullSyncLease(fullSyncID string) error {
+	if ds.fullSyncStarted {
+		if fullSyncID == ds.fullSyncID {
+			//cancel previous lease
+			if ds.fullSyncLease != nil && ds.fullSyncLease.cancel != nil {
+				ds.fullSyncLease.cancel()
+			}
+
+			//start new lease
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
+			ds.fullSyncLease = &fullSyncLease{
+				ctx,
+				cancel,
+			}
+
+			go func() {
+				for {
+					select {
+					case <-ctx.Done():
+						endTime, ok := ctx.Deadline()
+						// time out was the cause
+						if ok && time.Now().After(endTime) {
+							ds.fullSyncStarted = false
+							ds.fullSyncSeen = make(map[uint64]int)
+							ds.fullSyncID = ""
+							ds.fullSyncLease = nil
+						}
+						// else, canceled by refresh. do nothing
+					}
+				}
+			}()
+
+			return nil
+		}
+
+		return fmt.Errorf("given fullsyncId %v does not match running fullsync id %v", fullSyncID, ds.fullSyncID)
+
+	} else if fullSyncID != "" {
+		return fmt.Errorf("fullsync with sync-id %v is not running", fullSyncID)
+	}
+
 	return nil
 }
 
 // CompleteFullSync Full sync completed - mark unseen entities as deleted
 func (ds *Dataset) CompleteFullSync() error {
-	defer func() { ds.fullSyncStarted = false }()
+	defer func() {
+		ds.fullSyncStarted = false
+		ds.fullSyncSeen = make(map[uint64]int) //release sync state
+		ds.fullSyncLease = nil                 //unset lease
+		ds.fullSyncID = ""                     // unset id
+	}()
+
 	// check all seen and mark deleted
 	txn := ds.store.database.NewTransaction(true)
 	defer txn.Discard()
@@ -782,4 +841,8 @@ func (ds *Dataset) ProcessChangesRaw(since uint64, count int, processChangedEnti
 
 func (ds *Dataset) GetContext() *Context {
 	return ds.store.NamespaceManager.GetContext(ds.PublicNamespaces)
+}
+
+func (ds *Dataset) FullSyncStarted() bool {
+	return ds.fullSyncStarted
 }

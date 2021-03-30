@@ -739,7 +739,7 @@ func TestStore(test *testing.T) {
 			g.Assert(err).IsNil()
 			batchSize := 5
 
-			err = ds.StartFullSync()
+			err = ds.StartFullSync("")
 			g.Assert(err).IsNil()
 
 			entities := make([]*Entity, batchSize)
@@ -755,7 +755,7 @@ func TestStore(test *testing.T) {
 			g.Assert(err).IsNil()
 
 			//start 2nd fullsync
-			err = ds.StartFullSync()
+			err = ds.StartFullSync("")
 			g.Assert(err).IsNil()
 
 			entities = make([]*Entity, 1)
