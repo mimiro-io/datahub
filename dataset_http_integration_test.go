@@ -26,9 +26,12 @@ func TestFullSync(t *testing.T) {
 
 	g.Describe("The dataset endpoint", func() {
 		g.Before(func() {
+			_ = os.RemoveAll(location)
 			_ = os.Setenv("STORE_LOCATION", location)
 			_ = os.Setenv("PROFILE", "test")
 			_ = os.Setenv("SERVER_PORT", "24998")
+			_ = os.Setenv("FULLSYNC_LEASE_TIMEOUT", "500ms")
+
 			oldOut := os.Stdout
 			oldErr := os.Stderr
 			devNull, _ := os.Open("/dev/null")
@@ -47,6 +50,7 @@ func TestFullSync(t *testing.T) {
 			_ = os.Unsetenv("STORE_LOCATION")
 			_ = os.Unsetenv("PROFILE")
 			_ = os.Unsetenv("SERVER_PORT")
+			_ = os.Unsetenv("FULLSYNC_LEASE_TIMEOUT")
 		})
 
 		g.It("Should create a dataset", func() {
@@ -294,9 +298,55 @@ func TestFullSync(t *testing.T) {
 			cancel()
 			g.Assert(err).IsNil()
 			g.Assert(res).IsNotZero()
-			g.Assert(res.StatusCode).Eql(409)
+			g.Assert(res.StatusCode).Eql(409, "should be rejected because there is another sync running")
+
+			// last batch with "end" signal
+			payload = strings.NewReader(bananasFromTo(16, 16, false))
+			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ = http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-id", "45")
+			req.Header.Add("universal-data-api-full-sync-end", "true")
+			_, _ = http.DefaultClient.Do(req)
+			cancel()
 		})
 		g.It("should abandon fullsync after a timeout period without new requests", func() {
+			// start a fullsync
+			payload := strings.NewReader(bananasFromTo(1, 1, false))
+			ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ := http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-start", "true")
+			req.Header.Add("universal-data-api-full-sync-id", "47")
+			res, err := http.DefaultClient.Do(req)
+			cancel()
+			g.Assert(err).IsNil()
+			g.Assert(res).IsNotZero()
+			g.Assert(res.StatusCode).Eql(200)
+
+			// exceed fullsync timeout
+			time.Sleep(501 * time.Millisecond)
+
+			// send next fullsync batch. should be OK even though lease is timed out
+			payload = strings.NewReader(bananasFromTo(2, 2, false))
+			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ = http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-id", "47")
+			res, err = http.DefaultClient.Do(req)
+			cancel()
+			g.Assert(err).IsNil()
+			g.Assert(res).IsNotZero()
+			g.Assert(res.StatusCode).Eql(200)
+
+			// send next end signal. should produce error since lease should have timed out
+			payload = strings.NewReader(bananasFromTo(3, 3, false))
+			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ = http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-end", "true")
+			req.Header.Add("universal-data-api-full-sync-id", "47")
+			res, err = http.DefaultClient.Do(req)
+			cancel()
+			g.Assert(err).IsNil()
+			g.Assert(res).IsNotZero()
+			g.Assert(res.StatusCode).Eql(410)
 		})
 	})
 }

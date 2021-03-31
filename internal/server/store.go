@@ -44,17 +44,18 @@ type result struct {
 
 // Store data structure
 type Store struct {
-	database         *badger.DB
-	datasets         *sync.Map              // concurrent map of datasets
-	deletedDatasets  map[uint32]bool        // list of datasets to be garbage collected
-	storeLocation    string                 // local location of data folder
-	nextDatasetID    uint32                 // the next internal id for a dataset
-	NamespaceManager *NamespaceManager      // namespace manager for consistent short expansions
-	logger           *zap.SugaredLogger     // store logger
-	statsdClient     statsd.ClientInterface // datadog metrics
-	idseq            *badger.Sequence       // sequence used for assigning ids to uris
-	idtxn            *badger.Txn            // rolling txn for ids
-	idmux            sync.Mutex
+	database             *badger.DB
+	datasets             *sync.Map              // concurrent map of datasets
+	deletedDatasets      map[uint32]bool        // list of datasets to be garbage collected
+	storeLocation        string                 // local location of data folder
+	nextDatasetID        uint32                 // the next internal id for a dataset
+	NamespaceManager     *NamespaceManager      // namespace manager for consistent short expansions
+	logger               *zap.SugaredLogger     // store logger
+	statsdClient         statsd.ClientInterface // datadog metrics
+	idseq                *badger.Sequence       // sequence used for assigning ids to uris
+	idtxn                *badger.Txn            // rolling txn for ids
+	idmux                sync.Mutex
+	fullsyncLeaseTimeout time.Duration
 }
 
 type BadgerLogger struct { // we use this to implement the Badger Logger interface
@@ -68,12 +69,18 @@ func (bl BadgerLogger) Debugf(format string, v ...interface{})   { bl.Logger.Deb
 
 // NewStore Create a new store
 func NewStore(lc fx.Lifecycle, env *conf.Env, statsdClient statsd.ClientInterface) *Store {
+	fsTimeout := env.FullsyncLeaseTimeout
+	if fsTimeout == 0 * time.Second {
+		env.Logger.Warnf("No fullsync lease timeout set, fallback to 1h")
+		fsTimeout = 1 * time.Hour
+	}
 	store := &Store{
-		datasets:        &sync.Map{},
-		deletedDatasets: make(map[uint32]bool),
-		storeLocation:   env.StoreLocation,
-		logger:          env.Logger.Named("store"),
-		statsdClient:    statsdClient,
+		datasets:             &sync.Map{},
+		deletedDatasets:      make(map[uint32]bool),
+		storeLocation:        env.StoreLocation,
+		logger:               env.Logger.Named("store"),
+		statsdClient:         statsdClient,
+		fullsyncLeaseTimeout: fsTimeout,
 	}
 	store.NamespaceManager = NewNamespaceManager(store)
 

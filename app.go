@@ -19,7 +19,7 @@ func wire() *fx.App {
 		),
 		fx.Provide(
 			conf.NewEnv,
-			conf.NewStatsD,
+			conf.NewMetricsClient,
 			conf.NewLogger,
 			server.NewBus,
 			server.NewStore,
@@ -43,6 +43,7 @@ func wire() *fx.App {
 			web.NewJobsHandler,
 			web.NewNamespaceHandler,
 			server.NewBackupManager,
+			server.NewGarbageCollector,
 		),
 	)
 }

@@ -19,6 +19,7 @@ import (
 	b64 "encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -84,19 +85,21 @@ func (ds *Dataset) RefreshFullSyncLease(fullSyncID string) error {
 			}
 
 			//start new lease
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
+			ctx, cancel := context.WithTimeout(context.Background(), ds.store.fullsyncLeaseTimeout)
 			ds.fullSyncLease = &fullSyncLease{
 				ctx,
 				cancel,
 			}
 
 			go func() {
+				currentFsID := ds.fullSyncID
 				for {
 					select {
 					case <-ctx.Done():
 						endTime, ok := ctx.Deadline()
 						// time out was the cause
-						if ok && time.Now().After(endTime) {
+						now := time.Now()
+						if ok && now.After(endTime) && ds.fullSyncID == currentFsID {
 							ds.fullSyncStarted = false
 							ds.fullSyncSeen = make(map[uint64]int)
 							ds.fullSyncID = ""
@@ -121,10 +124,18 @@ func (ds *Dataset) RefreshFullSyncLease(fullSyncID string) error {
 
 // CompleteFullSync Full sync completed - mark unseen entities as deleted
 func (ds *Dataset) CompleteFullSync() error {
+	if ds.fullSyncLease == nil {
+		return errors.New("no active fullsync lease found, can't complete")
+	}
+
 	defer func() {
+		if ds.fullSyncLease != nil && ds.fullSyncLease.cancel != nil {
+			ds.fullSyncLease.cancel()
+		}
+
 		ds.fullSyncStarted = false
-		ds.fullSyncSeen = make(map[uint64]int) //release sync state
-		ds.fullSyncLease = nil                 //unset lease
+		ds.fullSyncSeen = make(map[uint64]int) // release sync state
+		ds.fullSyncLease = nil                 // unset lease
 		ds.fullSyncID = ""                     // unset id
 	}()
 

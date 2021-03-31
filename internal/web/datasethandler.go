@@ -338,7 +338,7 @@ func (handler *datasetHandler) processEntities(c echo.Context, datasetName strin
 	if fullSyncEnd {
 		err = dataset.CompleteFullSync()
 		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, server.HttpGenericErr.Error())
+			return echo.NewHTTPError(http.StatusGone, server.HttpGenericErr.Error())
 		}
 	}
 	// we have to emit the dataset, so that subscribers can react to the event

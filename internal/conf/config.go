@@ -76,6 +76,7 @@ func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 			Endpoint:     viper.GetString("DL_JWT_ENDPOINT"),
 		},
 		GcOnStartup: viper.GetBool("GC_ON_STARTUP"),
+		FullsyncLeaseTimeout: viper.GetDuration("FULLSYNC_LEASE_TIMEOUT"),
 	}, nil
 }
 
@@ -123,6 +124,7 @@ func parseEnv(basePath *string, profile string, logger *zap.SugaredLogger, loadF
 	viper.SetDefault("BACKUP_USE_RSYNC", "true")
 	viper.SetDefault("SECRETS_MANAGER", "noop") // turned off by default
 	viper.SetDefault("GC_ON_STARTUP", "true")
+	viper.SetDefault("FULLSYNC_LEASE_TIMEOUT", "1h")
 
 	viper.AutomaticEnv()
 
