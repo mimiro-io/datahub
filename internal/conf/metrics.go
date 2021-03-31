@@ -16,6 +16,7 @@ package conf
 
 import (
 	"context"
+	"math"
 	"runtime"
 	"runtime/metrics"
 	"strings"
@@ -115,6 +116,7 @@ func (mr *memoryReporter) run(samples []metrics.Sample) {
 			_ = mr.statsd.Gauge(name+".avg", val.avg, nil, 1)
 			_ = mr.statsd.Count(name+".count", val.count, nil, 1)
 			_ = mr.statsd.Gauge(name+".median", val.median, nil, 1)
+			_ = mr.statsd.Gauge(name+".max", val.max, nil, 1)
 		case metrics.KindBad:
 			// This should never happen because all metrics are supported
 			// by construction.
@@ -153,10 +155,27 @@ type histogram struct {
 }
 
 func getHistogram(h *metrics.Float64Histogram) histogram {
-	count := len(h.Buckets)-1
+	count := uint64(0)
+	for i := range h.Counts {
+		count += h.Counts[i]
+	}
 	max := h.Buckets[len(h.Buckets)-1]
-	median := 0.0
+	if max == math.Inf(1) { // slight optimization
+		max = h.Buckets[len(h.Buckets)-2]
+	}
 
+	median := medianBucket(h)
+	avg := count / uint64(len(h.Counts))
+
+	return histogram{
+		avg: float64(avg),
+		max: max,
+		count: int64(count),
+		median: median,
+	}
+}
+
+func medianBucket(h *metrics.Float64Histogram) float64 {
 	total := uint64(0)
 	for _, count := range h.Counts {
 		total += count
@@ -166,15 +185,8 @@ func getHistogram(h *metrics.Float64Histogram) histogram {
 	for i, count := range h.Counts {
 		total += count
 		if total >= thresh {
-			median = h.Buckets[i]
+			return h.Buckets[i]
 		}
 	}
-	avg := total / uint64(count)
-
-	return histogram{
-		avg: float64(avg),
-		max: max,
-		count: int64(count),
-		median: median,
-	}
+	return 0.0
 }
