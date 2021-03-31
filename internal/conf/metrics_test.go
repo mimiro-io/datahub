@@ -37,7 +37,7 @@ func TestStatsdClient(t *testing.T) {
 			env := &Env{
 				AgentHost: "",
 			}
-			client, err := NewStatsD(lc, env, zap.NewNop().Sugar())
+			client, err := NewMetricsClient(lc, env, zap.NewNop().Sugar())
 			g.Assert(err).IsNil()
 			g.Assert(reflect.ValueOf(client).Type().String()).Eql("*statsd.NoOpClient")
 		})
@@ -46,7 +46,7 @@ func TestStatsdClient(t *testing.T) {
 			env := &Env{
 				AgentHost: "127.0.0.1:8125",
 			}
-			client, err := NewStatsD(lc, env, zap.NewNop().Sugar())
+			client, err := NewMetricsClient(lc, env, zap.NewNop().Sugar())
 			g.Assert(err).IsNil()
 			g.Assert(reflect.ValueOf(client).Type().String()).Eql("*statsd.Client")
 		})
