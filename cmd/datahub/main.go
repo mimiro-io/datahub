@@ -34,7 +34,7 @@ func main() {
 		),
 		fx.Provide(
 			datahub.NewEnv,
-			conf.NewStatsD,
+			conf.NewMetricsClient,
 			conf.NewLogger,
 			server.NewBus,
 			server.NewStore,
