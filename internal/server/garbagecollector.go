@@ -1,7 +1,7 @@
 package server
 
 import (
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v2"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx"
 )
@@ -64,7 +64,7 @@ func (garbageCollector *GarbageCollector) cleandeleted() {
 			binary.BigEndian.PutUint16(incomingBuffer[34:], 0) // deleted.
 			binary.BigEndian.PutUint32(incomingBuffer[36:], ds.InternalID)
 	*/
-	
+
 }
 
 func (garbageCollector *GarbageCollector) DeleteByPrefixAndSelectorFunction(prefix []byte, selector func(key []byte) bool) {

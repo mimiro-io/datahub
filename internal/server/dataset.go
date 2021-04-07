@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v2"
 )
 
 // Dataset data structure

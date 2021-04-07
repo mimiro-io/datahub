@@ -21,6 +21,7 @@ import (
 	"errors"
 	"os"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,7 +31,7 @@ import (
 	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v2"
 	"go.uber.org/zap"
 )
 
@@ -327,7 +328,11 @@ func (s *Store) GetGlobalContext() *Context {
 func (s *Store) Open() error {
 	s.logger.Info("Open database")
 	opts := badger.DefaultOptions(s.storeLocation)
+	opts.MaxTableSize = 128 * 1024 * 1024
 	opts.Logger = BadgerLogger{Logger: s.logger.Named("badger")} // override the default getLogger
+	if runtime.GOOS == "windows" {
+		opts.Truncate = true
+	}
 	db, err := badger.Open(opts)
 	if err != nil {
 		s.logger.Error(err)
