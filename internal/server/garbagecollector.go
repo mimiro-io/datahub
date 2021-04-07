@@ -24,20 +24,23 @@ func NewGarbageCollector(lc fx.Lifecycle, store *Store, env *conf.Env) *GarbageC
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			if env.GcOnStartup {
+				gc.logger.Info("Starting inital GC in background")
 				go func() {
 					ts := time.Now()
+					gc.logger.Info("Starting to clean deleted datasets")
+					gc.Cleandeleted()
+					gc.logger.Infof("Finished cleaning of deleted datasets after %v", time.Since(ts).Round(time.Millisecond))
+
+					ts = time.Now()
 					gc.logger.Info("Starting badger gc")
 					err := gc.GC()
 					gc.logger.Infof("Finished badger gc after %v", time.Since(ts).Round(time.Millisecond))
 					if err != nil {
 						gc.logger.Panic("badger gc failed", err)
 					}
-
-					ts = time.Now()
-					gc.logger.Info("Starting to clean deleted datasets")
-					gc.Cleandeleted()
-					gc.logger.Infof("Finished cleaning of deleted datasets after %v", time.Since(ts).Round(time.Millisecond))
 				}()
+			} else {
+				gc.logger.Info("GC_ON_STARTUP disabled")
 			}
 			return nil
 		},
@@ -47,7 +50,12 @@ func NewGarbageCollector(lc fx.Lifecycle, store *Store, env *conf.Env) *GarbageC
 }
 
 func (garbageCollector *GarbageCollector) GC() error {
-	return garbageCollector.store.database.RunValueLogGC(0.5)
+again:
+	err := garbageCollector.store.database.RunValueLogGC(0.5)
+	if err == nil {
+		goto again
+	}
+	return nil
 }
 
 func (garbageCollector *GarbageCollector) Cleandeleted() error {
