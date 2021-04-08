@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/DataDog/datadog-go/statsd"
-	"github.com/dgraph-io/badger/v2"
 	"github.com/franela/goblin"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx/fxtest"
@@ -141,10 +140,9 @@ func TestGC(t *testing.T) {
 					"props": map[string]interface{}{workPrefix + ":Wage": "100"},
 					"refs":  map[string]interface{}{workPrefix + ":Coworker": peopleNamespacePrefix + ":person-3"}}),
 			})
-			g.Assert(count(b)).Eql(74)
+			g.Assert(count(b)).Eql(72)
 
 			// check that we can still query outgoing
-			/*
 			result, err = store.GetManyRelatedEntities(
 				[]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
 			g.Assert(err).IsNil()
@@ -157,14 +155,13 @@ func TestGC(t *testing.T) {
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1, "Expected still to find person-2 as reverse friend")
 			g.Assert(result[0][2].(*Entity).ID).Eql(peopleNamespacePrefix + ":person-2")
-			*/
 
 			_ = dsm.DeleteDataset("work")
-			g.Assert(count(b)).Eql(78, "before cleanup, 4 new keys are expected (deleted dataset state)")
+			g.Assert(count(b)).Eql(76, "before cleanup, 4 new keys are expected (deleted dataset state)")
 
 			err = gc.Cleandeleted()
 			g.Assert(err).IsNil()
-			g.Assert(count(b)).Eql(66, "two entities with 6 keys each should be removed now")
+			g.Assert(count(b)).Eql(66, "two entities with 5 keys each should be removed now")
 
 			// make sure we still can query
 			result, err = store.GetManyRelatedEntities(
@@ -182,21 +179,4 @@ func TestGC(t *testing.T) {
 			g.Assert(result[0][2].(*Entity).ID).Eql(peopleNamespacePrefix + ":person-1")
 		})
 	})
-}
-
-func count(b *badger.DB) int {
-	items := 0
-	_ = b.View(func(txn *badger.Txn) error {
-		it := txn.NewIterator(badger.DefaultIteratorOptions)
-
-		for it.Rewind(); it.Valid(); it.Next() {
-			items++
-			//os.Stdout.Write([]byte(fmt.Sprintf("%v\n",it.Item())))
-		}
-
-		it.Close()
-		return nil
-	})
-	//os.Stdout.Write([]byte(fmt.Sprintf("%v\n\n\n",items)))
-	return items
 }
