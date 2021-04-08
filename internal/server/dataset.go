@@ -371,7 +371,13 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 				// get time
 				et := binary.BigEndian.Uint64(k[10:])
 
-				// if time has changed then we are onto previous version of entity
+				// get dataset
+				datasetId := binary.BigEndian.Uint32(k[36:])
+				if datasetId != ds.InternalID {
+					continue
+				}
+
+				// if time has changed for entities in this dataset then we are onto previous version of entity
 				if entityTime != 0 && et != entityTime {
 					break
 				} else {
