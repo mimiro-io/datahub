@@ -93,21 +93,18 @@ func (ds *Dataset) RefreshFullSyncLease(fullSyncID string) error {
 
 			go func() {
 				currentFsID := ds.fullSyncID
-				for {
-					select {
-					case <-ctx.Done():
-						endTime, ok := ctx.Deadline()
-						// time out was the cause
-						now := time.Now()
-						if ok && now.After(endTime) && ds.fullSyncID == currentFsID {
-							ds.fullSyncStarted = false
-							ds.fullSyncSeen = make(map[uint64]int)
-							ds.fullSyncID = ""
-							ds.fullSyncLease = nil
-						}
-						// else, canceled by refresh. do nothing
-					}
+
+				<-ctx.Done()
+				endTime, ok := ctx.Deadline()
+				// time out was the cause
+				now := time.Now()
+				if ok && now.After(endTime) && ds.fullSyncID == currentFsID {
+					ds.fullSyncStarted = false
+					ds.fullSyncSeen = make(map[uint64]int)
+					ds.fullSyncID = ""
+					ds.fullSyncLease = nil
 				}
+				// else, canceled by refresh. do nothing
 			}()
 
 			return nil
@@ -128,11 +125,11 @@ func (ds *Dataset) CompleteFullSync() error {
 		return errors.New("no active fullsync lease found, can't complete")
 	}
 
-	defer func() {
-		if ds.fullSyncLease != nil && ds.fullSyncLease.cancel != nil {
-			ds.fullSyncLease.cancel()
-		}
+	if ds.fullSyncLease != nil && ds.fullSyncLease.cancel != nil {
+		ds.fullSyncLease.cancel()
+	}
 
+	defer func() {
 		ds.fullSyncStarted = false
 		ds.fullSyncSeen = make(map[uint64]int) // release sync state
 		ds.fullSyncLease = nil                 // unset lease

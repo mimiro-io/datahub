@@ -187,7 +187,7 @@ func TestFullSync(t *testing.T) {
 			g.Assert(err).IsNil()
 			g.Assert(len(entities)).Eql(33, "expected 20 entities plus 11 changes and @context and @continuation")
 			g.Assert(entities[7].IsDeleted).IsFalse("original change 7 is still undeleted")
-			g.Assert(entities[22].IsDeleted).IsTrue("deleted state for 7  is a new change at end of list")
+			g.Assert(entities[21].IsDeleted).IsTrue("deleted state for 7  is a new change at end of list")
 
 			// read entities back
 			res, err = http.Get(dsUrl + "/entities")
@@ -272,7 +272,7 @@ func TestFullSync(t *testing.T) {
 			var entities []*server.Entity
 			err = json.Unmarshal(bodyBytes, &entities)
 			g.Assert(err).IsNil()
-			g.Assert(len(entities)).Eql(34, "expected 31 changes from before plus deletion of 5 and @context and @continuation")
+			g.Assert(len(entities)).Eql(34, "expected 31 changes from before plus deletion of id5 and @context and @continuation")
 			g.Assert(entities[32].IsDeleted).IsTrue("deleted state for 5  is a new change at end of list")
 		})
 		g.It("should reject new fullsync and while fullsync is running", func() {
