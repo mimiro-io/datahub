@@ -39,6 +39,7 @@ type result struct {
 	predicateID uint64
 	entityID    uint64
 	time        uint64
+	datasetID   uint32
 }
 
 // Store data structure
@@ -803,9 +804,10 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 			// continue if predicate is wrong
 			// for first rid of same entity return if not deleted.
 			// while rid is same continue.
-			var currentRID uint64 // the current rid
+			var currentRID uint64
 			currentRID = 0
 			candidates := 0
+			seenForDataset := make(map[uint32]uint64)
 			for outgoingIterator.Seek(searchBuffer); outgoingIterator.ValidForPrefix(prefixBuffer); outgoingIterator.Next() {
 				candidates++
 				item := outgoingIterator.Item()
@@ -828,14 +830,28 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 					continue
 				}
 
+				// get recorded time on relationship
+				// skip over all entries until et gt than query time
+				et := int64(binary.BigEndian.Uint64(k[18:]))
+				if et > queryTime {
+					continue
+				}
+
 				// get related
 				relatedID := binary.BigEndian.Uint64(k[10:])
-				if relatedID == currentRID {
-					continue
+
+				if relatedID != currentRID {
+					seenForDataset = make(map[uint32]uint64)
 				}
 
 				// set current to be this related object
 				currentRID = relatedID
+
+				if _, found := seenForDataset[datasetId]; found {
+					continue
+				} else {
+					seenForDataset[datasetId] = currentRID
+				}
 
 				// get predicate
 				predID := binary.BigEndian.Uint64(k[26:])
@@ -849,11 +865,8 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 					continue
 				}
 
-				// what is this???
-				et := binary.BigEndian.Uint64(k[18:])
-
 				// add to results
-				results = append(results, result{time: et, entityID: relatedID, predicateID: predID})
+				results = append(results, result{time: uint64(et), entityID: relatedID, predicateID: predID, datasetID: datasetId})
 			}
 		} else {
 			opts1 := badger.DefaultIteratorOptions
@@ -872,8 +885,9 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 			binary.BigEndian.PutUint16(prefixBuffer, OUTGOING_REF_INDEX)
 			binary.BigEndian.PutUint64(prefixBuffer[2:], rid)
 
-			var entityTime uint64 = 0 // used to know when we hit an old version
+			// var entityTime uint64 = 0 // used to know when we hit an old version
 			candidates := 0
+			datasetTimestamps := make(map[uint32]uint64)
 			for outgoingIterator.Seek(searchBuffer); outgoingIterator.ValidForPrefix(prefixBuffer); outgoingIterator.Next() {
 				candidates++
 				item := outgoingIterator.Item()
@@ -898,12 +912,20 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 				// get time
 				et := binary.BigEndian.Uint64(k[10:])
 
-				// if time has changed then we are onto previous version of entity
-				if entityTime != 0 && et != entityTime {
+				// if time has changed for given dataset id then carry on
+				if v, found := datasetTimestamps[datasetId]; found {
+					if v != et {
+						continue
+					}
+				} else {
+					datasetTimestamps[datasetId] = et
+				}
+
+				/* if entityTime != 0 && et != entityTime {
 					break
 				} else {
 					entityTime = et
-				}
+				} */
 
 				// get predicate
 				predID := binary.BigEndian.Uint64(k[18:])
