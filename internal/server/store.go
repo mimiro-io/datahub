@@ -885,7 +885,6 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 			binary.BigEndian.PutUint16(prefixBuffer, OUTGOING_REF_INDEX)
 			binary.BigEndian.PutUint64(prefixBuffer[2:], rid)
 
-			// var entityTime uint64 = 0 // used to know when we hit an old version
 			candidates := 0
 			datasetTimestamps := make(map[uint32]uint64)
 			for outgoingIterator.Seek(searchBuffer); outgoingIterator.ValidForPrefix(prefixBuffer); outgoingIterator.Next() {
@@ -920,12 +919,6 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 				} else {
 					datasetTimestamps[datasetId] = et
 				}
-
-				/* if entityTime != 0 && et != entityTime {
-					break
-				} else {
-					entityTime = et
-				} */
 
 				// get predicate
 				predID := binary.BigEndian.Uint64(k[18:])
