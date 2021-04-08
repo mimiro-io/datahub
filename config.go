@@ -77,6 +77,7 @@ func loadEnv(basePath *string, loadFromHome bool) (*conf.Env, error) {
 			GrantType:    viper.GetString("DL_JWT_GRANT_TYPE"),
 			Endpoint:     viper.GetString("DL_JWT_ENDPOINT"),
 		},
+		GcOnStartup: viper.GetBool("GC_ON_STARTUP"),
 	}, nil
 }
 
@@ -123,6 +124,7 @@ func parseEnv(basePath *string, profile string, logger *zap.SugaredLogger, loadF
 	viper.SetDefault("BACKUP_SCHEDULE", "*/5 * * * *") // every 5 mins
 	viper.SetDefault("BACKUP_USE_RSYNC", "true")
 	viper.SetDefault("SECRETS_MANAGER", "noop") // turned off by default
+	viper.SetDefault("GC_ON_STARTUP", "true")
 
 	viper.AutomaticEnv()
 

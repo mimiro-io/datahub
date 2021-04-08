@@ -29,6 +29,7 @@ type Env struct {
 	AgentHost      string
 	Auth           *AuthConfig
 	DlJwtConfig    *DatalayerJwtConfig
+	GcOnStartup    bool
 }
 
 type AuthConfig struct {

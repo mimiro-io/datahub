@@ -58,6 +58,7 @@ func main() {
 			web.NewJobsHandler,
 			web.NewNamespaceHandler,
 			server.NewBackupManager,
+			server.NewGarbageCollector,
 		),
 	)
 
