@@ -42,8 +42,9 @@ func TestFullSync(t *testing.T) {
 			os.Stderr = oldErr
 		})
 		g.After(func() {
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			err := app.Stop(ctx)
+			cancel()
 			g.Assert(err).IsNil()
 			err = os.RemoveAll(location)
 			g.Assert(err).IsNil()
@@ -155,7 +156,8 @@ func TestFullSync(t *testing.T) {
 			req, _ := http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
 			req.Header.Add("universal-data-api-full-sync-start", "true")
 			req.Header.Add("universal-data-api-full-sync-id", "42")
-			_, _ = http.DefaultClient.Do(req)
+			_, err := http.DefaultClient.Do(req)
+			g.Assert(err).IsNil()
 			cancel()
 
 			// 2nd batch
@@ -235,6 +237,14 @@ func TestFullSync(t *testing.T) {
 			cancel()
 			g.Assert(res.StatusCode).Eql(409, "request should be rejected because fullsync is going on")
 
+			// also try to add id 5 without sync-id. should still be rejected
+			payload = strings.NewReader(bananasFromTo(5, 5, false))
+			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ = http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+			res, err = http.DefaultClient.Do(req)
+			cancel()
+			g.Assert(res.StatusCode).Eql(409, "request should be rejected because fullsync is going on")
+
 			// 10 batches in parallel with correct sync-id
 			wg := sync.WaitGroup{}
 			for i := 6; i < 16; i++ {
@@ -275,7 +285,7 @@ func TestFullSync(t *testing.T) {
 			g.Assert(len(entities)).Eql(34, "expected 31 changes from before plus deletion of id5 and @context and @continuation")
 			g.Assert(entities[32].IsDeleted).IsTrue("deleted state for 5  is a new change at end of list")
 		})
-		g.It("should reject new fullsync and while fullsync is running", func() {
+		g.It("should abandon fullsync when new fullsync is started", func() {
 			// start a fullsync
 			payload := strings.NewReader(bananasFromTo(1, 1, false))
 			ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
@@ -298,16 +308,30 @@ func TestFullSync(t *testing.T) {
 			cancel()
 			g.Assert(err).IsNil()
 			g.Assert(res).IsNotZero()
-			g.Assert(res.StatusCode).Eql(409, "should be rejected because there is another sync running")
+			g.Assert(res.StatusCode).Eql(200)
 
-			// last batch with "end" signal
-			payload = strings.NewReader(bananasFromTo(16, 16, false))
+			// try to append to first fullsync, should be rejected
+			payload = strings.NewReader(bananasFromTo(2, 2, false))
 			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
 			req, _ = http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
 			req.Header.Add("universal-data-api-full-sync-id", "45")
-			req.Header.Add("universal-data-api-full-sync-end", "true")
-			_, _ = http.DefaultClient.Do(req)
+			res, err = http.DefaultClient.Do(req)
 			cancel()
+			g.Assert(err).IsNil()
+			g.Assert(res).IsNotZero()
+			g.Assert(res.StatusCode).Eql(409, "expect rejection since syncid 45 is not active anymore")
+
+			// complete second sync
+			payload = strings.NewReader(bananasFromTo(16, 16, false))
+			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ = http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-id", "46")
+			req.Header.Add("universal-data-api-full-sync-end", "true")
+			res, err = http.DefaultClient.Do(req)
+			cancel()
+			g.Assert(err).IsNil()
+			g.Assert(res).IsNotZero()
+			g.Assert(res.StatusCode).Eql(200, "sync 46 accept requests")
 		})
 		g.It("should abandon fullsync after a timeout period without new requests", func() {
 			// start a fullsync

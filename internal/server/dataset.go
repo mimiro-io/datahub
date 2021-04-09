@@ -63,14 +63,26 @@ func NewDataset(store *Store, id string, internalID uint32, subjectIdentifier st
 }
 
 // StartFullSync Indicates that a full sync is starting
-func (ds *Dataset) StartFullSync(fullSyncID string) error {
+func (ds *Dataset) StartFullSync() error {
 	if ds.fullSyncStarted {
-		se := NewStorageError("Full Sync In Progress", nil)
-		return se
+		if ds.fullSyncLease != nil && ds.fullSyncLease.cancel != nil {
+			ds.fullSyncLease.cancel()
+		}
+
+		ds.fullSyncLease = nil
+		ds.fullSyncID = ""
 	}
 
 	ds.fullSyncStarted = true
 	ds.fullSyncSeen = make(map[uint64]int)
+
+	return nil
+}
+
+func (ds *Dataset) StartFullSyncWithLease(fullSyncID string) error {
+	if err := ds.StartFullSync(); err != nil {
+		return err
+	}
 	ds.fullSyncID = fullSyncID
 
 	return ds.RefreshFullSyncLease(fullSyncID)
@@ -103,15 +115,13 @@ func (ds *Dataset) RefreshFullSyncLease(fullSyncID string) error {
 					ds.fullSyncSeen = make(map[uint64]int)
 					ds.fullSyncID = ""
 					ds.fullSyncLease = nil
-				}
-				// else, canceled by refresh. do nothing
+				} // else, canceled by refresh. do nothing
 			}()
 
 			return nil
 		}
 
 		return fmt.Errorf("given fullsyncId %v does not match running fullsync id %v", fullSyncID, ds.fullSyncID)
-
 	} else if fullSyncID != "" {
 		return fmt.Errorf("fullsync with sync-id %v is not running", fullSyncID)
 	}
@@ -119,8 +129,7 @@ func (ds *Dataset) RefreshFullSyncLease(fullSyncID string) error {
 	return nil
 }
 
-// CompleteFullSync Full sync completed - mark unseen entities as deleted
-func (ds *Dataset) CompleteFullSync() error {
+func (ds *Dataset) ReleaseFullSyncLease(fullSyncID string) error {
 	if ds.fullSyncLease == nil {
 		return errors.New("no active fullsync lease found, can't complete")
 	}
@@ -128,7 +137,11 @@ func (ds *Dataset) CompleteFullSync() error {
 	if ds.fullSyncLease != nil && ds.fullSyncLease.cancel != nil {
 		ds.fullSyncLease.cancel()
 	}
+	return nil
+}
 
+// CompleteFullSync Full sync completed - mark unseen entities as deleted
+func (ds *Dataset) CompleteFullSync() error {
 	defer func() {
 		ds.fullSyncStarted = false
 		ds.fullSyncSeen = make(map[uint64]int) // release sync state

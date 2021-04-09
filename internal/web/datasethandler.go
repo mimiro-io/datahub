@@ -276,7 +276,7 @@ func (handler *datasetHandler) storeEntitiesHandler(c echo.Context) error {
 	fsStart := c.Request().Header.Get("universal-data-api-full-sync-start")
 	fsEnd := c.Request().Header.Get("universal-data-api-full-sync-end")
 
-	return handler.processEntities(c, datasetName, "true"==fsStart, fsID, "true"==fsEnd)
+	return handler.processEntities(c, datasetName, fsStart == "true", fsID, "true" == fsEnd)
 }
 
 func (handler *datasetHandler) processEntities(c echo.Context, datasetName string, fullSyncStart bool, fullSyncID string, fullSyncEnd bool) error {
@@ -291,14 +291,11 @@ func (handler *datasetHandler) processEntities(c echo.Context, datasetName strin
 
 	// start new fullsync if requested
 	if fullSyncStart {
-		err = dataset.StartFullSync(fullSyncID)
+		err := dataset.StartFullSyncWithLease(fullSyncID)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusConflict, server.HttpFullsyncRunning.Error())
 		}
-	}
-
-	// renew lease for active fullsync, if fullsync is running
-	if dataset.FullSyncStarted() {
+	} else if dataset.FullSyncStarted() {
 		err = dataset.RefreshFullSyncLease(fullSyncID)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusConflict, server.HttpFullsyncRunning.Error())
@@ -336,9 +333,11 @@ func (handler *datasetHandler) processEntities(c echo.Context, datasetName strin
 	}
 
 	if fullSyncEnd {
-		err = dataset.CompleteFullSync()
-		if err != nil {
+		if err := dataset.ReleaseFullSyncLease(fullSyncID);err != nil {
 			return echo.NewHTTPError(http.StatusGone, server.HttpGenericErr.Error())
+		}
+		if err := dataset.CompleteFullSync(); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, server.HttpGenericErr.Error())
 		}
 	}
 	// we have to emit the dataset, so that subscribers can react to the event

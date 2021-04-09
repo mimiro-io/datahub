@@ -303,7 +303,7 @@ type datasetSink struct {
 
 func (datasetSink *datasetSink) startFullSync(runner *Runner) error {
 	dataset := datasetSink.DatasetManager.GetDataset(datasetSink.DatasetName)
-	return dataset.StartFullSync(datasetSink.DatasetName)
+	return dataset.StartFullSync()
 }
 
 func (datasetSink *datasetSink) endFullSync(runner *Runner) error {
@@ -320,12 +320,6 @@ func (datasetSink *datasetSink) processEntities(runner *Runner, entities []*serv
 	dataset := datasetSink.DatasetManager.GetDataset(datasetSink.DatasetName)
 
 	err := dataset.StoreEntities(entities)
-	if err == nil {
-		// refresh fullsync if necessary
-		if dataset.FullSyncStarted() {
-			err = dataset.RefreshFullSyncLease(datasetSink.DatasetName)
-		}
-	}
 
 	if err == nil {
 		// we emit the event so event handlers can react to it
