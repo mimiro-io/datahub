@@ -272,10 +272,14 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 // storeEntitiesHandler
 func (handler *datasetHandler) storeEntitiesHandler(c echo.Context) error {
 	datasetName := c.Param("dataset")
-	return handler.processEntities(c, datasetName)
+	fsID := c.Request().Header.Get("universal-data-api-full-sync-id")
+	fsStart := c.Request().Header.Get("universal-data-api-full-sync-start")
+	fsEnd := c.Request().Header.Get("universal-data-api-full-sync-end")
+
+	return handler.processEntities(c, datasetName, fsStart == "true", fsID, "true" == fsEnd)
 }
 
-func (handler *datasetHandler) processEntities(c echo.Context, datasetName string) error {
+func (handler *datasetHandler) processEntities(c echo.Context, datasetName string, fullSyncStart bool, fullSyncID string, fullSyncEnd bool) error {
 	var err error
 	// check dataset exists
 	ok := handler.datasetManager.IsDataset(datasetName)
@@ -284,6 +288,19 @@ func (handler *datasetHandler) processEntities(c echo.Context, datasetName strin
 	}
 
 	dataset := handler.datasetManager.GetDataset(datasetName)
+
+	// start new fullsync if requested
+	if fullSyncStart {
+		err := dataset.StartFullSyncWithLease(fullSyncID)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusConflict, server.HttpFullsyncErr.Error())
+		}
+	} else if dataset.FullSyncStarted() {
+		err = dataset.RefreshFullSyncLease(fullSyncID)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusConflict, server.HttpFullsyncErr.Error())
+		}
+	}
 
 	batchSize := 10
 	entities := make([]*server.Entity, 0)
@@ -315,6 +332,14 @@ func (handler *datasetHandler) processEntities(c echo.Context, datasetName strin
 		}
 	}
 
+	if fullSyncEnd {
+		if err := dataset.ReleaseFullSyncLease(fullSyncID);err != nil {
+			return echo.NewHTTPError(http.StatusGone, server.HttpGenericErr.Error())
+		}
+		if err := dataset.CompleteFullSync(); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, server.HttpGenericErr.Error())
+		}
+	}
 	// we have to emit the dataset, so that subscribers can react to the event
 	ctx := context.Background()
 	handler.eventBus.Emit(ctx, "dataset."+datasetName, nil)

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datahub
+package conf
 
 import (
 	"flag"
@@ -20,8 +20,6 @@ import (
 	"github.com/mimiro-io/datahub/internal/conf/secrets"
 	"os"
 	"strings"
-
-	"github.com/mimiro-io/datahub/internal/conf"
 
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -35,19 +33,19 @@ import (
 // switch to the correct logger
 // You can give it a basePath, this is great for testing, but by default
 // this is set to "."
-func NewEnv() (*conf.Env, error) {
+func NewEnv() (*Env, error) {
 	filePtr := flag.String("config", "", "Optional path to the config file")
 	flag.Parse()
 	return loadEnv(filePtr, true)
 }
 
-func loadEnv(basePath *string, loadFromHome bool) (*conf.Env, error) {
+func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 	profile, found := os.LookupEnv("PROFILE")
 	if !found {
 		profile = "local"
 	}
 
-	logger := conf.GetLogger(profile, zapcore.InfoLevel) // add a default logger while loading the env
+	logger := GetLogger(profile, zapcore.InfoLevel) // add a default logger while loading the env
 	logger.Infof("Loading logging profile: %s", profile)
 
 	err := parseEnv(basePath, profile, logger, loadFromHome)
@@ -55,7 +53,7 @@ func loadEnv(basePath *string, loadFromHome bool) (*conf.Env, error) {
 		return nil, err
 	}
 
-	return &conf.Env{
+	return &Env{
 		Logger:         logger,
 		Env:            profile,
 		Port:           viper.GetString("SERVER_PORT"),
@@ -64,13 +62,13 @@ func loadEnv(basePath *string, loadFromHome bool) (*conf.Env, error) {
 		BackupSchedule: viper.GetString("BACKUP_SCHEDULE"),
 		BackupRsync:    viper.GetBool("BACKUP_USE_RSYNC"),
 		AgentHost:      viper.GetString("DD_AGENT_HOST"),
-		Auth: &conf.AuthConfig{
+		Auth: &AuthConfig{
 			WellKnown:  viper.GetString("TOKEN_WELL_KNOWN"),
 			Audience:   viper.GetString("TOKEN_AUDIENCE"),
 			Issuer:     viper.GetString("TOKEN_ISSUER"),
 			Middleware: viper.GetString("AUTHORIZATION_MIDDLEWARE"),
 		},
-		DlJwtConfig: &conf.DatalayerJwtConfig{
+		DlJwtConfig: &DatalayerJwtConfig{
 			ClientId:     viper.GetString("DL_JWT_CLIENT_ID"),
 			ClientSecret: viper.GetString("DL_JWT_CLIENT_SECRET"),
 			Audience:     viper.GetString("DL_JWT_AUDIENCE"),
@@ -78,6 +76,7 @@ func loadEnv(basePath *string, loadFromHome bool) (*conf.Env, error) {
 			Endpoint:     viper.GetString("DL_JWT_ENDPOINT"),
 		},
 		GcOnStartup: viper.GetBool("GC_ON_STARTUP"),
+		FullsyncLeaseTimeout: viper.GetDuration("FULLSYNC_LEASE_TIMEOUT"),
 	}, nil
 }
 
@@ -125,6 +124,7 @@ func parseEnv(basePath *string, profile string, logger *zap.SugaredLogger, loadF
 	viper.SetDefault("BACKUP_USE_RSYNC", "true")
 	viper.SetDefault("SECRETS_MANAGER", "noop") // turned off by default
 	viper.SetDefault("GC_ON_STARTUP", "true")
+	viper.SetDefault("FULLSYNC_LEASE_TIMEOUT", "1h")
 
 	viper.AutomaticEnv()
 

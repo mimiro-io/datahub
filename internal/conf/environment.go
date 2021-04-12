@@ -16,6 +16,7 @@ package conf
 
 import (
 	"go.uber.org/zap"
+	"time"
 )
 
 type Env struct {
@@ -30,6 +31,7 @@ type Env struct {
 	Auth           *AuthConfig
 	DlJwtConfig    *DatalayerJwtConfig
 	GcOnStartup    bool
+	FullsyncLeaseTimeout time.Duration
 }
 
 type AuthConfig struct {

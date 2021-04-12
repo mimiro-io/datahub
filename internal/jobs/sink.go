@@ -316,15 +316,18 @@ func (datasetSink *datasetSink) processEntities(runner *Runner, entities []*serv
 	if !exists {
 		return errors.New("dataset is missing")
 	}
+
 	dataset := datasetSink.DatasetManager.GetDataset(datasetSink.DatasetName)
 
 	err := dataset.StoreEntities(entities)
+
 	if err == nil {
 		// we emit the event so event handlers can react to it
 		ctx := context.Background()
 		runner.eventBus.Emit(ctx, "dataset."+datasetSink.DatasetName, nil)
 		runner.eventBus.Emit(ctx, "dataset.core.Dataset", nil) // something has changed, should trigger this always
 	}
+
 	return err
 }
 
