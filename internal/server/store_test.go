@@ -17,7 +17,7 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v3"
 	"os"
 	"reflect"
 	"strconv"

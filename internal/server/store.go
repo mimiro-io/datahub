@@ -21,7 +21,6 @@ import (
 	"errors"
 	"os"
 	"reflect"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,7 +30,7 @@ import (
 	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx"
 
-	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v3"
 	"go.uber.org/zap"
 )
 
@@ -70,7 +69,7 @@ func (bl BadgerLogger) Debugf(format string, v ...interface{})   { bl.Logger.Deb
 // NewStore Create a new store
 func NewStore(lc fx.Lifecycle, env *conf.Env, statsdClient statsd.ClientInterface) *Store {
 	fsTimeout := env.FullsyncLeaseTimeout
-	if fsTimeout == 0 * time.Second {
+	if fsTimeout == 0*time.Second {
 		env.Logger.Warnf("No fullsync lease timeout set, fallback to 1h")
 		fsTimeout = 1 * time.Hour
 	}
@@ -336,11 +335,7 @@ func (s *Store) GetGlobalContext() *Context {
 func (s *Store) Open() error {
 	s.logger.Info("Open database")
 	opts := badger.DefaultOptions(s.storeLocation)
-	opts.MaxTableSize = 128 * 1024 * 1024
 	opts.Logger = BadgerLogger{Logger: s.logger.Named("badger")} // override the default getLogger
-	if runtime.GOOS == "windows" {
-		opts.Truncate = true
-	}
 	db, err := badger.Open(opts)
 	if err != nil {
 		s.logger.Error(err)
