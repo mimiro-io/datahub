@@ -48,5 +48,5 @@ var (
 	HttpContentStoreErr     = errors.New("failed updating the content")
 	HttpQueryParamErr       = errors.New("one or more of the query parameters failed its validation")
 	HttpGenericErr          = errors.New("internal failure")
-	HttpFullsyncRunning     = errors.New("cannot start full sync while another full sync is in process")
+	HttpFullsyncErr         = errors.New("an error occured trying to start or update a full sync")
 )

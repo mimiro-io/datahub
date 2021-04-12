@@ -293,12 +293,12 @@ func (handler *datasetHandler) processEntities(c echo.Context, datasetName strin
 	if fullSyncStart {
 		err := dataset.StartFullSyncWithLease(fullSyncID)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusConflict, server.HttpFullsyncRunning.Error())
+			return echo.NewHTTPError(http.StatusConflict, server.HttpFullsyncErr.Error())
 		}
 	} else if dataset.FullSyncStarted() {
 		err = dataset.RefreshFullSyncLease(fullSyncID)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusConflict, server.HttpFullsyncRunning.Error())
+			return echo.NewHTTPError(http.StatusConflict, server.HttpFullsyncErr.Error())
 		}
 	}
 
