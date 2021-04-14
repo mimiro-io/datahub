@@ -275,6 +275,8 @@ func (httpDatasetSink *httpDatasetSink) processEntities(runner *Runner, entities
 		}
 	}
 
+	req.Header.Add("Content-Type", "application/json")
+
 	res, err := client.Do(req)
 	if err != nil {
 		return err
