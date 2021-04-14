@@ -77,6 +77,7 @@ func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 		},
 		GcOnStartup: viper.GetBool("GC_ON_STARTUP"),
 		FullsyncLeaseTimeout: viper.GetDuration("FULLSYNC_LEASE_TIMEOUT"),
+		BlockCacheSize: viper.GetInt64("BLOCK_CACHE_SIZE"),
 	}, nil
 }
 

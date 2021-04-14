@@ -54,6 +54,7 @@ type Store struct {
 	idtxn                *badger.Txn            // rolling txn for ids
 	idmux                sync.Mutex
 	fullsyncLeaseTimeout time.Duration
+	blockCacheSize       int64
 }
 
 type BadgerLogger struct { // we use this to implement the Badger Logger interface
@@ -79,6 +80,7 @@ func NewStore(lc fx.Lifecycle, env *conf.Env, statsdClient statsd.ClientInterfac
 		logger:               env.Logger.Named("store"),
 		statsdClient:         statsdClient,
 		fullsyncLeaseTimeout: fsTimeout,
+		blockCacheSize:       env.BlockCacheSize,
 	}
 	store.NamespaceManager = NewNamespaceManager(store)
 
@@ -334,7 +336,13 @@ func (s *Store) GetGlobalContext() *Context {
 func (s *Store) Open() error {
 	s.logger.Info("Open database")
 	opts := badger.DefaultOptions(s.storeLocation)
-	opts.BlockCacheSize = int64(opts.BlockSize) * 1024 * 1024
+
+	if s.blockCacheSize > 0 {
+		opts.BlockCacheSize = s.blockCacheSize
+	} else {
+		opts.BlockCacheSize = int64(opts.BlockSize) * 1024 * 1024
+	}
+
 	s.logger.Infof("setting BlockCacheSize: %v", opts.BlockCacheSize)
 	opts.Logger = BadgerLogger{Logger: s.logger.Named("badger")} // override the default getLogger
 	db, err := badger.Open(opts)
