@@ -27,10 +27,9 @@ import (
 	"time"
 
 	"github.com/DataDog/datadog-go/statsd"
+	"github.com/dgraph-io/badger/v3"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx"
-
-	"github.com/dgraph-io/badger/v3"
 	"go.uber.org/zap"
 )
 
@@ -55,6 +54,7 @@ type Store struct {
 	idtxn                *badger.Txn            // rolling txn for ids
 	idmux                sync.Mutex
 	fullsyncLeaseTimeout time.Duration
+	blockCacheSize       int64
 }
 
 type BadgerLogger struct { // we use this to implement the Badger Logger interface
@@ -80,6 +80,7 @@ func NewStore(lc fx.Lifecycle, env *conf.Env, statsdClient statsd.ClientInterfac
 		logger:               env.Logger.Named("store"),
 		statsdClient:         statsdClient,
 		fullsyncLeaseTimeout: fsTimeout,
+		blockCacheSize:       env.BlockCacheSize,
 	}
 	store.NamespaceManager = NewNamespaceManager(store)
 
@@ -335,6 +336,14 @@ func (s *Store) GetGlobalContext() *Context {
 func (s *Store) Open() error {
 	s.logger.Info("Open database")
 	opts := badger.DefaultOptions(s.storeLocation)
+
+	if s.blockCacheSize > 0 {
+		opts.BlockCacheSize = s.blockCacheSize
+	} else {
+		opts.BlockCacheSize = int64(opts.BlockSize) * 1024 * 1024
+	}
+
+	s.logger.Infof("setting BlockCacheSize: %v", opts.BlockCacheSize)
 	opts.Logger = BadgerLogger{Logger: s.logger.Named("badger")} // override the default getLogger
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -346,25 +355,6 @@ func (s *Store) Open() error {
 
 	// get next internal id for dataset
 	nextDatasetIDBytes := s.readValue(STORE_NEXT_DATASET_ID_BYTES)
-	// ⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵ remove this ⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵⌵
-	if nextDatasetIDBytes == nil {
-		migrationKey := []byte("STORE_NEXT_DATASET_ID")
-		s.logger.Info("Could not find STORE_NEXT_DATASET_ID counter, trying to lookup value with old key")
-		nextDatasetIDBytes = s.readValue(migrationKey)
-		if nextDatasetIDBytes != nil {
-			err = s.storeValue(STORE_NEXT_DATASET_ID_BYTES, nextDatasetIDBytes)
-			if err != nil {
-				s.logger.Infof("Error persisting STORE_NEXT_DATASET_ID with new key: %v", err)
-			} else {
-				_ = s.deleteValue(migrationKey)
-				s.logger.Infof("Successfully migrated STORE_NEXT_DATASET_ID to new key. value was %v. also deleted old key",
-					binary.BigEndian.Uint32(nextDatasetIDBytes))
-			}
-		} else {
-			s.logger.Info("Could not find STORE_NEXT_DATASET_ID counter with old key either. assuming this is a new store")
-		}
-	}
-	// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^remove this ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 	if nextDatasetIDBytes == nil {
 		s.nextDatasetID = 1
 	} else {
