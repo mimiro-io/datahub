@@ -231,5 +231,33 @@ func TestEvents(t *testing.T) {
 			g.Assert(len(res.Entities)).Eql(1, "Job should have copied entity to target dataset")
 		})
 
+		g.It("Should deregister an onChange job when it's triggerType is changed", func() {
+			sj, err := scheduler.Parse([]byte((`{
+				"id" : "job1",
+				"triggers": [{"triggerType": "onchange", "jobType": "incremental", "monitoredDataset": "people"}],
+				"source" : { "Type" : "SampleSource" },
+				"sink" : { "Type" : "ConsoleSink" }
+			}`)))
+
+			g.Assert(err).IsNil()
+			err = scheduler.AddJob(sj)
+			g.Assert(err).IsNil()
+
+			g.Assert(eventBus.Bus.HandlerKeys()).Eql([]string{"job1"}, "job1 should have a subscription now")
+			g.Assert(len(scheduler.GetScheduleEntries().Entries)).IsZero("there should not be any cron jobs")
+
+			sj, err = scheduler.Parse([]byte((`{
+				"id" : "job1",
+				"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 24h"}],
+				"source" : { "Type" : "SampleSource" },
+				"sink" : { "Type" : "ConsoleSink" }
+			}`)))
+			g.Assert(err).IsNil()
+			err = scheduler.AddJob(sj)
+			g.Assert(err).IsNil()
+
+			g.Assert(len(eventBus.Bus.HandlerKeys())).IsZero("job1 should be deregistered")
+			g.Assert(len(scheduler.GetScheduleEntries().Entries)).IsNotZero("there should be a cron job now")
+		})
 	})
 }
