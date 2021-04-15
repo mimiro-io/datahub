@@ -15,6 +15,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -28,6 +29,16 @@ import (
 	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx/fxtest"
 )
+
+func TestJsonOmitOnEntity(m *testing.T) {
+	e := Entity{}
+	jsonData, _ := json.Marshal(e)
+	jsonStr := string(jsonData)
+	if jsonStr != "{\"refs\":null,\"props\":null}" {
+		m.FailNow()
+	}
+}
+
 
 func TestStreamParser(m *testing.T) {
 	g := goblin.Goblin(m)
@@ -192,6 +203,44 @@ func TestStreamParser(m *testing.T) {
 		})
 
 		g.It("Should handle nested entities", func() {
+			reader := strings.NewReader(` [ {
+					"id" : "@context",
+					"namespaces" : {
+						"_" : "http://data.mimiro.io/core/",
+						"people" : "http://data.mimiro.io/people/"
+					}
+				}, {
+					"id" : "people:23",
+					"props" : {
+						"address" : {
+							"props" : {
+								"line1" : "earth"
+							}
+						}
+					}
+				} ]`)
+
+			esp := NewEntityStreamParser(store)
+			entities := make([]*Entity, 0)
+			err := esp.ParseStream(reader, func(e *Entity) error {
+				entities = append(entities, e)
+				return nil
+			})
+			g.Assert(err).IsNil("Parsing produced unexpected error")
+			g.Assert(len(entities)).Eql(1, "Expected correnct number of entitites")
+			addressSeen := false
+			for k, v := range entities[0].Properties {
+				if strings.HasSuffix(k, "address") {
+					addressSeen = true
+					subEntity, castOK := v.(*Entity)
+					g.Assert(castOK).IsTrue("Expected address value to be another entity instance")
+					g.Assert(len(subEntity.Properties)).Eql(1, "Expected sub-entity to have one property (line1)")
+				}
+			}
+			g.Assert(addressSeen).IsTrue("Expected address property to be mapped")
+		})
+
+		g.It("Should handle nested entities with arrays", func() {
 			reader := strings.NewReader(` [ {
 					"id" : "@context",
 					"namespaces" : {
