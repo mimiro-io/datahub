@@ -15,7 +15,6 @@
 package server
 
 import (
-	"errors"
 	"fmt"
 )
 
@@ -39,14 +38,14 @@ func (e *StorageError) Error() string {
 
 // we define these errors to prevent leaking of internal details on the api
 var (
-	AttemptStoreEntitiesErr = errors.New("failed when attempting to store entities")
-	SinceParseErr           = errors.New("since should be an integer number")
-	HttpBodyMissingErr      = errors.New("body is missing or could not read")
-	HttpJobParsingErr       = errors.New("failed at parsing the job definition")
-	HttpJobSchedulingErr    = errors.New("failed at scheduling the job definition")
-	HttpJsonParsingErr      = errors.New("failed parsing the json body")
-	HttpContentStoreErr     = errors.New("failed updating the content")
-	HttpQueryParamErr       = errors.New("one or more of the query parameters failed its validation")
-	HttpGenericErr          = errors.New("internal failure")
-	HttpFullsyncErr         = errors.New("an error occured trying to start or update a full sync")
+	AttemptStoreEntitiesErr = func(detail error) error { return fmt.Errorf("failed when attempting to store entities: %w", detail) }
+	SinceParseErr           = func(detail error) error { return fmt.Errorf("since should be an integer number: %w", detail) }
+	HttpBodyMissingErr      = func(detail error) error { return fmt.Errorf("body is missing or could not read: %w", detail) }
+	HttpJobParsingErr       = func(detail error) error { return fmt.Errorf("failed at parsing the job definition: %w", detail) }
+	HttpJobSchedulingErr    = func(detail error) error { return fmt.Errorf("failed at scheduling the job definition: %w", detail) }
+	HttpJsonParsingErr      = func(detail error) error { return fmt.Errorf("failed parsing the json body: %w", detail) }
+	HttpContentStoreErr     = func(detail error) error { return fmt.Errorf("failed updating the content: %w", detail) }
+	HttpQueryParamErr       = func(detail error) error { return fmt.Errorf("one or more of the query parameters failed its validation: %w", detail) }
+	HttpGenericErr          = func(detail error) error { return fmt.Errorf("internal failure: %w", detail) }
+	HttpFullsyncErr         = func(detail error) error { return fmt.Errorf("an error occured trying to start or update a full sync: %w", detail) }
 )

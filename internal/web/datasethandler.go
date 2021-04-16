@@ -171,7 +171,7 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 	if limit != "" {
 		f, err := strconv.ParseInt(limit, 10, 64)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, server.HttpQueryParamErr.Error())
+			return echo.NewHTTPError(http.StatusBadRequest, server.HttpQueryParamErr(err).Error())
 		}
 		l = int(f)
 	}
@@ -180,7 +180,7 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 	if f != "" {
 		from, err = base64.StdEncoding.DecodeString(f)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, server.SinceParseErr.Error())
+			return echo.NewHTTPError(http.StatusBadRequest, server.SinceParseErr(err).Error())
 		}
 	}
 
@@ -231,14 +231,14 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 	if limit != "" {
 		f, err := strconv.ParseInt(limit, 10, 64)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, server.HttpQueryParamErr.Error())
+			return echo.NewHTTPError(http.StatusBadRequest, server.HttpQueryParamErr(err).Error())
 		}
 		l = int(f)
 	}
 
 	sinceNum, err := decodeSince(since)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.SinceParseErr.Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.SinceParseErr(err).Error())
 	}
 
 	// check dataset exists
@@ -293,12 +293,12 @@ func (handler *datasetHandler) processEntities(c echo.Context, datasetName strin
 	if fullSyncStart {
 		err := dataset.StartFullSyncWithLease(fullSyncID)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusConflict, server.HttpFullsyncErr.Error())
+			return echo.NewHTTPError(http.StatusConflict, server.HttpFullsyncErr(err).Error())
 		}
 	} else if dataset.FullSyncStarted() {
 		err = dataset.RefreshFullSyncLease(fullSyncID)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusConflict, server.HttpFullsyncErr.Error())
+			return echo.NewHTTPError(http.StatusConflict, server.HttpFullsyncErr(err).Error())
 		}
 	}
 
@@ -313,7 +313,7 @@ func (handler *datasetHandler) processEntities(c echo.Context, datasetName strin
 		if count == batchSize {
 			err := dataset.StoreEntities(entities)
 			if err != nil {
-				return echo.NewHTTPError(http.StatusInternalServerError, server.AttemptStoreEntitiesErr.Error())
+				return echo.NewHTTPError(http.StatusInternalServerError, server.AttemptStoreEntitiesErr(err).Error())
 			}
 			count = 0
 			entities = make([]*server.Entity, 0)
@@ -322,22 +322,22 @@ func (handler *datasetHandler) processEntities(c echo.Context, datasetName strin
 	})
 
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.AttemptStoreEntitiesErr.Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.AttemptStoreEntitiesErr(err).Error())
 	}
 
 	if count > 0 {
 		err := dataset.StoreEntities(entities)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, server.AttemptStoreEntitiesErr.Error())
+			return echo.NewHTTPError(http.StatusInternalServerError, server.AttemptStoreEntitiesErr(err).Error())
 		}
 	}
 
 	if fullSyncEnd {
 		if err := dataset.ReleaseFullSyncLease(fullSyncID);err != nil {
-			return echo.NewHTTPError(http.StatusGone, server.HttpGenericErr.Error())
+			return echo.NewHTTPError(http.StatusGone, server.HttpGenericErr(err).Error())
 		}
 		if err := dataset.CompleteFullSync(); err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, server.HttpGenericErr.Error())
+			return echo.NewHTTPError(http.StatusInternalServerError, server.HttpGenericErr(err).Error())
 		}
 	}
 	// we have to emit the dataset, so that subscribers can react to the event
