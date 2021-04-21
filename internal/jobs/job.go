@@ -94,9 +94,11 @@ func (job *job) Run() {
 		if err.Error() == "got job interrupt" { // if a job gets killed, this will trigger
 			job.runner.logger.Infof("Job '%s' was terminated", job.id)
 		} else {
+			_ = job.runner.statsdClient.Count("jobs.error", 1, tags, 1) // we only want to count runtime errors
 			job.runner.logger.Warnf("Failed running task for job '%s': %s", job.id, err.Error())
 		}
-
+	} else {
+		_ = job.runner.statsdClient.Count("jobs.success", 1, tags, 1)
 	}
 
 	timed := time.Since(ticket.runState.started)
