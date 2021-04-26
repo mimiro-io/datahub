@@ -342,6 +342,7 @@ func (s *Store) Open() error {
 	} else {
 		opts.BlockCacheSize = int64(opts.BlockSize) * 1024 * 1024
 	}
+	opts.MemTableSize = 128 * 1024 * 1024 //128MB
 
 	s.logger.Infof("setting BlockCacheSize: %v", opts.BlockCacheSize)
 	opts.Logger = BadgerLogger{Logger: s.logger.Named("badger")} // override the default getLogger

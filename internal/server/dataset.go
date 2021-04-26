@@ -279,53 +279,44 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 		// assume different from a previous version
 		isDifferent := true
 
+		datasetEntitiesLatestVersionKey := make([]byte, 14)
+		binary.BigEndian.PutUint16(datasetEntitiesLatestVersionKey, DATASET_LATEST_ENTITIES)
+		binary.BigEndian.PutUint32(datasetEntitiesLatestVersionKey[2:], ds.InternalID)
+		binary.BigEndian.PutUint64(datasetEntitiesLatestVersionKey[6:], rid)
+		// fixme: optimise to have txntime in key and not need a value
+
+		var previousEntityIdBuffer []byte
+		var prevEntity *Entity
+		var prevJsonData []byte
+
 		if !isnew {
-			opts1 := badger.DefaultIteratorOptions
-			opts1.PrefetchValues = false
-			opts1.Reverse = true
-			entityLocatorIterator := rtxn.NewIterator(opts1)
-			entityLocatorPrefixBuffer := make([]byte, 14)
-			copy(entityLocatorPrefixBuffer, entityIdBuffer[:14]) // fixme: optimise a bit with some buffer reuse.
-			entityLocatorPrefixBuffer = append(entityLocatorPrefixBuffer, 0xFF)
-
-			countAsNew := true
-
-			for entityLocatorIterator.Seek(entityLocatorPrefixBuffer); entityLocatorIterator.ValidForPrefix(entityLocatorPrefixBuffer[:14]); {
-				item := entityLocatorIterator.Item()
-				k := item.Key()
-				countAsNew = false // if it enters here, we find the existing item, and dont count it
-				existingEntityDataLength := binary.BigEndian.Uint16(k[22:])
-				if existingEntityDataLength == uint16(jsonLength) {
-					// load data as length is the same
-					err := item.Value(func(val []byte) error {
-						_ = ds.store.statsdClient.Count("ds.read.bytes", int64(len(val)), tags, 1)
-						existingEntity := &Entity{}
-						err := json.Unmarshal(val, existingEntity)
-						if err != nil {
-							return err
-						}
-
-						if reflect.DeepEqual(existingEntity.References, e.References) && reflect.DeepEqual(existingEntity.Properties, e.Properties) {
-							isDifferent = false
-						} else {
-							isDifferent = true
-						}
-						return nil
-					})
-
-					if err != nil {
-						return err
-					}
-				} else {
-					isDifferent = true
+			if previousEntityIdBufferValue, err := rtxn.Get(datasetEntitiesLatestVersionKey); err == nil {
+				previousEntityIdBuffer, err = previousEntityIdBufferValue.ValueCopy(nil)
+				if err != nil {
+					return err
 				}
-
-				// only need the first one we find
-				break
+				prevJsonDataValue, err := rtxn.Get(previousEntityIdBuffer)
+				if err != nil {
+					return err
+				}
+				prevJsonData, err = prevJsonDataValue.ValueCopy(nil)
+				_ = ds.store.statsdClient.Count("ds.read.bytes", prevJsonDataValue.ValueSize(), tags, 1)
+				if err != nil {
+					return err
+				}
+				prevEntity = &Entity{}
+				err = json.Unmarshal(prevJsonData, prevEntity)
+				if err != nil {
+					return err
+				}
 			}
-			entityLocatorIterator.Close()
-
-			if countAsNew {
+			if prevEntity != nil {
+				if  len(prevJsonData) == jsonLength &&
+					reflect.DeepEqual(prevEntity.References, e.References) &&
+					reflect.DeepEqual(prevEntity.Properties, e.Properties) {
+					isDifferent = false
+				}
+			} else {
 				newitems++
 			}
 		}
@@ -356,11 +347,6 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 		}
 
 		// dataset all latest entities
-		datasetEntitiesLatestVersionKey := make([]byte, 14)
-		binary.BigEndian.PutUint16(datasetEntitiesLatestVersionKey, DATASET_LATEST_ENTITIES)
-		binary.BigEndian.PutUint32(datasetEntitiesLatestVersionKey[2:], ds.InternalID)
-		binary.BigEndian.PutUint64(datasetEntitiesLatestVersionKey[6:], rid)
-		// fixme: optimise to have txntime in key and not need a value
 		err = txn.Set(datasetEntitiesLatestVersionKey, entityIdBuffer)
 		if err != nil {
 			return err
@@ -427,54 +413,35 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 
 		} else {
 
-			// iterate previous outgoing refs
-			opts1 := badger.DefaultIteratorOptions
-			opts1.PrefetchValues = false
-			opts1.Reverse = true
-			outgoingIterator := rtxn.NewIterator(opts1)
-
-			// search prefix buffer
-			searchPrefixBuffer := make([]byte, 10)
-			binary.BigEndian.PutUint16(searchPrefixBuffer, OUTGOING_REF_INDEX)
-			binary.BigEndian.PutUint64(searchPrefixBuffer[2:], rid)
-
 			oldRefs := make(map[uint64]uint64)
+			if prevEntity != nil {
+				// go through previous state
+				// check for no longer there rels
+				for k, stringOrArrayValue := range prevEntity.References {
+					// need to check if v is string or []string
+					refs, isArray := stringOrArrayValue.([]interface{})
+					if !isArray {
+						s := stringOrArrayValue.(interface{})
+						refs = []interface{}{s}
+					}
 
-			searcherPrefixBuffer := append(searchPrefixBuffer, 0xFF)
+					for _, ref := range refs {
+						// get predicate
+						predid, _, err := ds.store.assertIDForURI(k, idCache)
+						if err != nil {
+							return err
+						}
 
-			// check for no longer there rels
-			var entityTime uint64 = 0
-			for outgoingIterator.Seek(searcherPrefixBuffer); outgoingIterator.ValidForPrefix(searchPrefixBuffer); outgoingIterator.Next() {
-				item := outgoingIterator.Item()
-				k := item.Key()
+						// get related
+						relatedid, _, err := ds.store.assertIDForURI(ref.(string), idCache)
+						if err != nil {
+							return err
+						}
 
-				// get time
-				et := binary.BigEndian.Uint64(k[10:])
-
-				// get dataset
-				datasetId := binary.BigEndian.Uint32(k[36:])
-				if datasetId != ds.InternalID {
-					continue
+						oldRefs[predid] = relatedid
+					}
 				}
-
-				// if time has changed for entities in this dataset then we are onto previous version of entity
-				if entityTime != 0 && et != entityTime {
-					break
-				} else {
-					entityTime = et
-				}
-
-				// get predicate
-				predID := binary.BigEndian.Uint64(k[18:])
-
-				// get related
-				relatedID := binary.BigEndian.Uint64(k[26:])
-
-				oldRefs[predID] = relatedID
 			}
-
-			// close iterator as we need another one.
-			outgoingIterator.Close()
 
 			// go through new state
 			for k, stringOrArrayValue := range e.References {
