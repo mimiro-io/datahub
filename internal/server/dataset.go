@@ -287,6 +287,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 
 		var previousEntityIdBuffer []byte
 		var prevEntity *Entity
+		var prevJsonData []byte
 		if previousEntityIdBufferValue, err := rtxn.Get(datasetEntitiesLatestVersionKey); err == nil {
 			previousEntityIdBuffer, err = previousEntityIdBufferValue.ValueCopy(nil)
 			if err != nil {
@@ -296,7 +297,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 			if err != nil {
 				return err
 			}
-			prevJsonData, err := prevJsonDataValue.ValueCopy(nil)
+			prevJsonData, err = prevJsonDataValue.ValueCopy(nil)
 			_ = ds.store.statsdClient.Count("ds.read.bytes", prevJsonDataValue.ValueSize(), tags, 1)
 			if err != nil {
 				return err
@@ -310,7 +311,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 
 		if !isnew {
 			if prevEntity != nil {
-				if prevEntity.IsDeleted == e.IsDeleted &&
+				if  len(prevJsonData) == jsonLength &&
 					reflect.DeepEqual(prevEntity.References, e.References) &&
 					reflect.DeepEqual(prevEntity.Properties, e.Properties) {
 					isDifferent = false
