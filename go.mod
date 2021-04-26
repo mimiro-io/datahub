@@ -21,6 +21,7 @@ require (
 	github.com/gojektech/heimdall/v6 v6.1.0
 	github.com/golang/protobuf v1.4.3 // indirect
 	github.com/google/uuid v1.1.4
+	github.com/json-iterator/go v1.1.6
 	github.com/juliangruber/go-intersect v1.0.0
 	github.com/labstack/echo/v4 v4.1.17
 	github.com/magiconair/properties v1.8.5 // indirect

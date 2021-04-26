@@ -18,7 +18,6 @@ import (
 	"context"
 	b64 "encoding/base64"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -265,7 +264,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 			ds.fullSyncSeen[e.InternalID] = 1
 		}
 
-		jsonData, _ := json.Marshal(e)
+		jsonData, _ := jiter.Marshal(e)
 		jsonLength := len(jsonData)
 
 		_ = ds.store.statsdClient.Count("ds.processed.bytes", int64(jsonLength), tags, 1)
@@ -305,13 +304,13 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 					return err
 				}
 				prevEntity = &Entity{}
-				err = json.Unmarshal(prevJsonData, prevEntity)
+				err = jiter.Unmarshal(prevJsonData, prevEntity)
 				if err != nil {
 					return err
 				}
 			}
 			if prevEntity != nil {
-				if  len(prevJsonData) == jsonLength &&
+				if len(prevJsonData) == jsonLength &&
 					reflect.DeepEqual(prevEntity.References, e.References) &&
 					reflect.DeepEqual(prevEntity.Properties, e.Properties) {
 					isDifferent = false
@@ -552,7 +551,7 @@ func (ds *Dataset) updateDataset(newItemCount int64, entities []*Entity) error {
 				if found {
 					dataset := dsInterface.(*Dataset)
 					dataset.PublicNamespaces = newNamespacesArray
-					jsonData, err := json.Marshal(dataset)
+					jsonData, err := jiter.Marshal(dataset)
 					if err != nil {
 						return err
 					}
@@ -651,7 +650,7 @@ func (ds *Dataset) GetEntities(from string, count int) (*EntitiesResult, error) 
 func (ds *Dataset) MapEntities(from string, count int, processEntity func(entity *Entity) error) (string, error) {
 	continuationToken, err := ds.MapEntitiesRaw(from, count, func(entityJson []byte) error {
 		e := &Entity{}
-		err := json.Unmarshal(entityJson, e)
+		err := jiter.Unmarshal(entityJson, e)
 		if err != nil {
 			return err
 		}
@@ -760,7 +759,7 @@ func (ds *Dataset) GetChanges(since uint64, count int) (*Changes, error) {
 func (ds *Dataset) ProcessChanges(since uint64, count int, processChangedEntity func(entity *Entity)) (uint64, error) {
 	return ds.ProcessChangesRaw(since, count, func(jsonData []byte) error {
 		entity := &Entity{}
-		err := json.Unmarshal(jsonData, entity)
+		err := jiter.Unmarshal(jsonData, entity)
 		if err != nil {
 			return err
 		}

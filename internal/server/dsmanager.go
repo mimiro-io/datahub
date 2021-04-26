@@ -17,7 +17,6 @@ package server
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"strings"
 
@@ -100,7 +99,7 @@ func (dsm *DsManager) CreateDataset(name string) (*Dataset, error) {
 		return nil, err
 	}
 
-	jsonData, _ := json.Marshal(ds)
+	jsonData, _ := jiter.Marshal(ds)
 	err = dsm.store.storeValue(ds.getStorageKey(), jsonData)
 	if err != nil {
 		return nil, err
@@ -203,7 +202,7 @@ func (dsm *DsManager) GetDatasetDetails(name string) (*Entity, bool, error) {
 	found := false
 	_, err := dataset.MapEntitiesRaw("", 1000, func(jsonData []byte) error {
 		e := &Entity{}
-		err := json.Unmarshal(jsonData, e)
+		err := jiter.Unmarshal(jsonData, e)
 		if err == nil {
 			// e.ID is in the format 'ns0:datasetname'. we must extract value after prefix to match requested name
 			idElements := strings.SplitN(e.ID, ":", 2)

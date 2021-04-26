@@ -145,9 +145,10 @@ func TestDatasetManager(t *testing.T) {
 
 		g.It("Should store and overwrite and restore datasets at same pace", func() {
 			// create datasets
+			g.Timeout(15 * time.Second)
 			ds, _ := dsm.CreateDataset("people0")
 
-			batchSize := 100
+			batchSize := 10000
 			iterationSize := 10
 			totalcnt := 0
 			uniq := 0
@@ -189,7 +190,7 @@ func TestDatasetManager(t *testing.T) {
 						ts := time.Now()
 						totalcnt += len(entities)
 						_ = ds.StoreEntities(entities)
-						//t.Log("StoreEntities of batch took ", time.Now().Sub(ts))
+						t.Log("StoreEntities of batch took ", time.Now().Sub(ts))
 						times = append(times, time.Now().Sub(ts))
 					}
 				}
