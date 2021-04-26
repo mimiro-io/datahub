@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"github.com/goccy/go-json"
 	"strings"
 
 	"github.com/mimiro-io/datahub/internal/conf"
@@ -99,7 +100,7 @@ func (dsm *DsManager) CreateDataset(name string) (*Dataset, error) {
 		return nil, err
 	}
 
-	jsonData, _ := jiter.Marshal(ds)
+	jsonData, _ := json.Marshal(ds)
 	err = dsm.store.storeValue(ds.getStorageKey(), jsonData)
 	if err != nil {
 		return nil, err
@@ -202,7 +203,7 @@ func (dsm *DsManager) GetDatasetDetails(name string) (*Entity, bool, error) {
 	found := false
 	_, err := dataset.MapEntitiesRaw("", 1000, func(jsonData []byte) error {
 		e := &Entity{}
-		err := jiter.Unmarshal(jsonData, e)
+		err := json.Unmarshal(jsonData, e)
 		if err == nil {
 			// e.ID is in the format 'ns0:datasetname'. we must extract value after prefix to match requested name
 			idElements := strings.SplitN(e.ID, ":", 2)

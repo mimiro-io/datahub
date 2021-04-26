@@ -30,10 +30,8 @@ import (
 	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+ "github.com/goccy/go-json"
 )
-import jsoniter "github.com/json-iterator/go"
-
-var jiter = jsoniter.ConfigFastest
 
 type result struct {
 	predicateID uint64
@@ -599,7 +597,7 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(internalId uint64, at int64
 				e := &Entity{}
 				e.Properties = make(map[string]interface{})
 				e.References = make(map[string]interface{})
-				err := jiter.Unmarshal(prevValueBytes, e)
+				err := json.Unmarshal(prevValueBytes, e)
 				if err != nil {
 					return nil, err
 				}
@@ -617,7 +615,7 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(internalId uint64, at int64
 		e := &Entity{}
 		e.Properties = make(map[string]interface{})
 		e.References = make(map[string]interface{})
-		err := jiter.Unmarshal(prevValueBytes, e)
+		err := json.Unmarshal(prevValueBytes, e)
 		if err != nil {
 			return nil, err
 		}
@@ -1155,7 +1153,7 @@ func (s *Store) readValue(key []byte) []byte {
 }
 
 func (s *Store) StoreObject(collection CollectionIndex, id string, data interface{}) error {
-	b, err := jiter.Marshal(data)
+	b, err := json.Marshal(data)
 	if err != nil {
 		s.logger.Error(err)
 		return err
@@ -1182,7 +1180,7 @@ func (s *Store) GetObject(collection CollectionIndex, id string, obj interface{}
 		return nil
 	}
 
-	err := jiter.Unmarshal(data, obj)
+	err := json.Unmarshal(data, obj)
 	if err != nil {
 		s.logger.Errorw("GetObject error: %", err.Error())
 		obj = nil
@@ -1214,7 +1212,7 @@ func (s *Store) iterateObjects(prefix []byte, t reflect.Type, visitFunc func(int
 			err := item.Value(func(v []byte) error {
 				o := reflect.New(t)
 				i := o.Interface()
-				err := jiter.Unmarshal(v, i)
+				err := json.Unmarshal(v, i)
 				if err != nil {
 					return err
 				}

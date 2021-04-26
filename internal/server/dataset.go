@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/goccy/go-json"
 	"reflect"
 	"sync"
 	"time"
@@ -264,7 +265,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 			ds.fullSyncSeen[e.InternalID] = 1
 		}
 
-		jsonData, _ := jiter.Marshal(e)
+		jsonData, _ := json.Marshal(e)
 		jsonLength := len(jsonData)
 
 		_ = ds.store.statsdClient.Count("ds.processed.bytes", int64(jsonLength), tags, 1)
@@ -304,7 +305,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 					return err
 				}
 				prevEntity = &Entity{}
-				err = jiter.Unmarshal(prevJsonData, prevEntity)
+				err = json.Unmarshal(prevJsonData, prevEntity)
 				if err != nil {
 					return err
 				}
@@ -551,7 +552,7 @@ func (ds *Dataset) updateDataset(newItemCount int64, entities []*Entity) error {
 				if found {
 					dataset := dsInterface.(*Dataset)
 					dataset.PublicNamespaces = newNamespacesArray
-					jsonData, err := jiter.Marshal(dataset)
+					jsonData, err := json.Marshal(dataset)
 					if err != nil {
 						return err
 					}
@@ -650,7 +651,7 @@ func (ds *Dataset) GetEntities(from string, count int) (*EntitiesResult, error) 
 func (ds *Dataset) MapEntities(from string, count int, processEntity func(entity *Entity) error) (string, error) {
 	continuationToken, err := ds.MapEntitiesRaw(from, count, func(entityJson []byte) error {
 		e := &Entity{}
-		err := jiter.Unmarshal(entityJson, e)
+		err := json.Unmarshal(entityJson, e)
 		if err != nil {
 			return err
 		}
@@ -759,7 +760,7 @@ func (ds *Dataset) GetChanges(since uint64, count int) (*Changes, error) {
 func (ds *Dataset) ProcessChanges(since uint64, count int, processChangedEntity func(entity *Entity)) (uint64, error) {
 	return ds.ProcessChangesRaw(since, count, func(jsonData []byte) error {
 		entity := &Entity{}
-		err := jiter.Unmarshal(jsonData, entity)
+		err := json.Unmarshal(jsonData, entity)
 		if err != nil {
 			return err
 		}
