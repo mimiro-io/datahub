@@ -19,3 +19,10 @@ license:
 test:
 	go vet ./...
 	go test ./... -v
+
+
+bench:
+	#go test -run=NOTHING -bench=. -count=5 ./internal/server > bench.txt
+	GOBIN="$$PWD/bin" go get -u golang.org/x/perf/cmd/benchstat
+	./bin/benchstat last_bench.txt bench.txt > benchcmp.txt
+
