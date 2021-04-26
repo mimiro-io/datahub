@@ -288,28 +288,28 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 		var previousEntityIdBuffer []byte
 		var prevEntity *Entity
 		var prevJsonData []byte
-		if previousEntityIdBufferValue, err := rtxn.Get(datasetEntitiesLatestVersionKey); err == nil {
-			previousEntityIdBuffer, err = previousEntityIdBufferValue.ValueCopy(nil)
-			if err != nil {
-				return err
-			}
-			prevJsonDataValue, err := rtxn.Get(previousEntityIdBuffer)
-			if err != nil {
-				return err
-			}
-			prevJsonData, err = prevJsonDataValue.ValueCopy(nil)
-			_ = ds.store.statsdClient.Count("ds.read.bytes", prevJsonDataValue.ValueSize(), tags, 1)
-			if err != nil {
-				return err
-			}
-			prevEntity = &Entity{}
-			err = json.Unmarshal(prevJsonData, prevEntity)
-			if err != nil {
-				return err
-			}
-		}
 
 		if !isnew {
+			if previousEntityIdBufferValue, err := rtxn.Get(datasetEntitiesLatestVersionKey); err == nil {
+				previousEntityIdBuffer, err = previousEntityIdBufferValue.ValueCopy(nil)
+				if err != nil {
+					return err
+				}
+				prevJsonDataValue, err := rtxn.Get(previousEntityIdBuffer)
+				if err != nil {
+					return err
+				}
+				prevJsonData, err = prevJsonDataValue.ValueCopy(nil)
+				_ = ds.store.statsdClient.Count("ds.read.bytes", prevJsonDataValue.ValueSize(), tags, 1)
+				if err != nil {
+					return err
+				}
+				prevEntity = &Entity{}
+				err = json.Unmarshal(prevJsonData, prevEntity)
+				if err != nil {
+					return err
+				}
+			}
 			if prevEntity != nil {
 				if  len(prevJsonData) == jsonLength &&
 					reflect.DeepEqual(prevEntity.References, e.References) &&
