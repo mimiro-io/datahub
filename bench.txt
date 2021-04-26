@@ -1,0 +1,11 @@
+goos: linux
+goarch: amd64
+pkg: github.com/mimiro-io/datahub/internal/server
+cpu: Intel(R) Core(TM) i9-10885H CPU @ 2.40GHz
+BenchmarkDatasetStoreEntities-16    	      43	  25936611 ns/op	12602306 B/op	  174660 allocs/op
+BenchmarkDatasetStoreEntities-16    	      46	  26263735 ns/op	12273075 B/op	  174667 allocs/op
+BenchmarkDatasetStoreEntities-16    	      46	  26074717 ns/op	12240979 B/op	  174663 allocs/op
+BenchmarkDatasetStoreEntities-16    	      45	  25745946 ns/op	12374928 B/op	  174667 allocs/op
+BenchmarkDatasetStoreEntities-16    	      45	  25831172 ns/op	12353031 B/op	  174661 allocs/op
+PASS
+ok  	github.com/mimiro-io/datahub/internal/server	11.700s
