@@ -17,7 +17,7 @@ package jobs
 import (
 	"bytes"
 	"context"
-	"github.com/goccy/go-json"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"

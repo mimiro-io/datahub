@@ -15,7 +15,7 @@
 package server
 
 import (
-	"github.com/goccy/go-json"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"

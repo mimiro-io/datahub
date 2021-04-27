@@ -16,7 +16,7 @@ package middlewares
 
 import (
 	"bytes"
-	"github.com/goccy/go-json"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"

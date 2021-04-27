@@ -15,7 +15,7 @@
 package content
 
 import (
-	"github.com/goccy/go-json"
+	"encoding/json"
 	"os"
 	"strconv"
 	"testing"
