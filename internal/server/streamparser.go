@@ -16,8 +16,8 @@ package server
 
 import (
 	"errors"
-	"github.com/goccy/go-json"
 	"io"
+	"encoding/json"
 )
 
 type EntityStreamParser struct {

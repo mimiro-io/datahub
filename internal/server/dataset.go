@@ -20,7 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/goccy/go-json"
+	"encoding/json"
 	"reflect"
 	"sync"
 	"time"

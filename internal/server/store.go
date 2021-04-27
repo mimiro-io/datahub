@@ -30,7 +30,7 @@ import (
 	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
- "github.com/goccy/go-json"
+	"encoding/json"
 )
 
 type result struct {

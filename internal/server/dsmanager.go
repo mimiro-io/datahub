@@ -18,7 +18,8 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"github.com/goccy/go-json"
+	//"github.com/goccy/go-json"
+	"encoding/json"
 	"strings"
 
 	"github.com/mimiro-io/datahub/internal/conf"
