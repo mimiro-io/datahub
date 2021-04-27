@@ -16,7 +16,7 @@ package security
 
 import (
 	"bytes"
-	"encoding/json"
+	"github.com/goccy/go-json"
 	"fmt"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"net/http"

@@ -17,7 +17,7 @@ package jobs
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/json"
+	"github.com/goccy/go-json"
 	"errors"
 	"io/ioutil"
 	"net/http"

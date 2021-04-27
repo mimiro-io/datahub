@@ -16,7 +16,7 @@ package web
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/goccy/go-json"
 	"errors"
 	"io/ioutil"
 	"net/http"

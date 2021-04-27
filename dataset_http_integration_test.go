@@ -2,7 +2,7 @@ package datahub
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/goccy/go-json"
 	"fmt"
 	"github.com/franela/goblin"
 	"github.com/mimiro-io/datahub/internal/server"
