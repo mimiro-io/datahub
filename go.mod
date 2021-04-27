@@ -18,6 +18,7 @@ require (
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/goburrow/cache v0.1.1
+	github.com/goccy/go-json v0.4.13
 	github.com/gojektech/heimdall/v6 v6.1.0
 	github.com/golang/protobuf v1.4.3 // indirect
 	github.com/google/uuid v1.1.4
@@ -38,6 +39,7 @@ require (
 	go.uber.org/fx v1.13.1
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.16.0
+	golang.org/x/perf v0.0.0-20210220033136-40a54f11e909 // indirect
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
 	golang.org/x/sys v0.0.0-20210324051608-47abb6519492 // indirect
 	golang.org/x/text v0.3.5 // indirect

@@ -1,0 +1,66 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+    
+jobs:
+  Benchmark:
+    runs-on: ubuntu-latest
+    steps:
+    
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - uses: actions/setup-go@v2
+        with:
+          go-version: '^1.16.0' # The Go version to download (if necessary) and use.
+
+      - uses: actions/cache@v2
+        with:
+            # In order:
+            # * Module download cache
+            # * Build cache (Linux)
+            # * Build cache (Mac)
+            # * Build cache (Windows)
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+            ~/Library/Caches/go-build
+            %LocalAppData%\go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: run benchmark
+        run:  |
+         make bench
+         cat test/bench.txt
+         echo 'res<<EOF' >> $GITHUB_ENV
+         cat test/benchcmp.txt >> $GITHUB_ENV
+         echo 'EOF' >> $GITHUB_ENV
+
+      - name: Comment bench result
+        if: github.ref != 'refs/heads/master'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          recreate: true
+          message: |
+            Benchmark diff against last_bench.txt ( master )
+            ```
+            ${{ env.res }}
+            ```
+
+      - name: Update benchmark baseline
+        if: github.ref == 'refs/heads/master'
+        run: |
+         rm last_bench.txt
+         mv test/bench.txt last_bench.txt
+
+      - name: Commit changes
+        uses: EndBug/add-and-commit@v7
+        with:
+          message: 'update benchmark baseline'
+          add: 'last_bench.txt'
