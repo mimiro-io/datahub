@@ -17,8 +17,8 @@ package server
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
-	"github.com/goccy/go-json"
 	"strings"
 
 	"github.com/mimiro-io/datahub/internal/conf"

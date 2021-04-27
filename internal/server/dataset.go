@@ -18,9 +18,9 @@ import (
 	"context"
 	b64 "encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/goccy/go-json"
 	"reflect"
 	"sync"
 	"time"
@@ -311,7 +311,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 				}
 			}
 			if prevEntity != nil {
-				if len(prevJsonData) == jsonLength &&
+				if  len(prevJsonData) == jsonLength &&
 					reflect.DeepEqual(prevEntity.References, e.References) &&
 					reflect.DeepEqual(prevEntity.Properties, e.Properties) {
 					isDifferent = false

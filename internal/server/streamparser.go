@@ -15,8 +15,8 @@
 package server
 
 import (
+	"encoding/json"
 	"errors"
-	"github.com/goccy/go-json"
 	"io"
 )
 

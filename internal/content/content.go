@@ -15,7 +15,7 @@
 package content
 
 import (
-	"github.com/goccy/go-json"
+	"encoding/json"
 
 	"github.com/DataDog/datadog-go/statsd"
 	"github.com/mimiro-io/datahub/internal/conf"

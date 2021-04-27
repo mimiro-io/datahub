@@ -17,7 +17,7 @@ package web
 import (
 	"context"
 	"encoding/base64"
-	"github.com/goccy/go-json"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
