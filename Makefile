@@ -16,13 +16,13 @@ docker-test:
 license:
 	go get -u github.com/google/addlicense; addlicense -c "MIMIRO AS" $(shell find . -iname "*.go")
 
+bench:
+	mkdir -p test
+	go test -run=NOTHING -bench=. -count=10 ./internal/server > test/bench.txt
+	GOBIN="$$PWD/bin" go get -u golang.org/x/perf/cmd/benchstat
+	bin/benchstat last_bench.txt test/bench.txt > test/benchcmp.txt
+
 test:
 	go vet ./...
 	go test ./... -v
-
-
-bench:
-	#go test -run=NOTHING -bench=. -count=5 ./internal/server > bench.txt
-	GOBIN="$$PWD/bin" go get -u golang.org/x/perf/cmd/benchstat
-	./bin/benchstat last_bench.txt bench.txt > benchcmp.txt
 
