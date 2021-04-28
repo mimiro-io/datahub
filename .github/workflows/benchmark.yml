@@ -14,6 +14,7 @@ jobs:
 
       - name: Retrieve last_bench.txt
         run: |
+          git fetch master
           git restore --source master -- last_bench.txt
 
       - uses: actions/setup-go@v2
