@@ -2,15 +2,15 @@ goos: linux
 goarch: amd64
 pkg: github.com/mimiro-io/datahub/internal/server
 cpu: Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz
-BenchmarkDatasetStoreEntities-2   	      24	  54531804 ns/op	17090474 B/op	  204881 allocs/op
-BenchmarkDatasetStoreEntities-2   	      20	  51270284 ns/op	18823668 B/op	  204712 allocs/op
-BenchmarkDatasetStoreEntities-2   	      24	  49945905 ns/op	17091983 B/op	  204891 allocs/op
-BenchmarkDatasetStoreEntities-2   	      20	  50745380 ns/op	18823077 B/op	  204712 allocs/op
-BenchmarkDatasetStoreEntities-2   	      24	  51534130 ns/op	17091980 B/op	  204886 allocs/op
-BenchmarkDatasetStoreEntities-2   	      24	  48817717 ns/op	17091924 B/op	  204889 allocs/op
-BenchmarkDatasetStoreEntities-2   	      24	  48685958 ns/op	17092170 B/op	  204886 allocs/op
-BenchmarkDatasetStoreEntities-2   	      24	  46040433 ns/op	17091025 B/op	  204884 allocs/op
-BenchmarkDatasetStoreEntities-2   	      21	  48382395 ns/op	18330528 B/op	  204767 allocs/op
-BenchmarkDatasetStoreEntities-2   	      20	  50593303 ns/op	18822350 B/op	  204707 allocs/op
+BenchmarkDatasetStoreEntities-2               24          54531804 ns/op        17090474 B/op     204881 allocs/op
+BenchmarkDatasetStoreEntities-2               20          51270284 ns/op        18823668 B/op     204712 allocs/op
+BenchmarkDatasetStoreEntities-2               24          49945905 ns/op        17091983 B/op     204891 allocs/op
+BenchmarkDatasetStoreEntities-2               20          50745380 ns/op        18823077 B/op     204712 allocs/op
+BenchmarkDatasetStoreEntities-2               24          51534130 ns/op        17091980 B/op     204886 allocs/op
+BenchmarkDatasetStoreEntities-2               24          48817717 ns/op        17091924 B/op     204889 allocs/op
+BenchmarkDatasetStoreEntities-2               24          48685958 ns/op        17092170 B/op     204886 allocs/op
+BenchmarkDatasetStoreEntities-2               24          46040433 ns/op        17091025 B/op     204884 allocs/op
+BenchmarkDatasetStoreEntities-2               21          48382395 ns/op        18330528 B/op     204767 allocs/op
+BenchmarkDatasetStoreEntities-2               20          50593303 ns/op        18822350 B/op     204707 allocs/op
 PASS
-ok  	github.com/mimiro-io/datahub/internal/server	18.932s
+ok      github.com/mimiro-io/datahub/internal/server    18.932s

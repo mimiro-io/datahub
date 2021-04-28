@@ -3,19 +3,19 @@ name: Benchmark
 on:
   pull_request:
     branches: [ master ]
-    
+
 jobs:
   Benchmark:
     runs-on: ubuntu-latest
     steps:
-    
+
       - name: Checkout code
         uses: actions/checkout@v2
 
       - name: Retrieve last_bench.txt
         run: |
           git fetch origin master
-          git show origin/master:last_bench.txt || echo "could not find last_bench.txt in master"
+          x=$( git show origin/master:last_bench.txt ) && if [ "$x" != "" ]; then echo "$x" > foo; fi || echo "not found"
 
       - uses: actions/setup-go@v2
         with:
