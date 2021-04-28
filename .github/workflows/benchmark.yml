@@ -1,8 +1,6 @@
 name: Benchmark
 
 on:
-  push:
-    branches: [ master ]
   pull_request:
     branches: [ master ]
     
@@ -13,6 +11,10 @@ jobs:
     
       - name: Checkout code
         uses: actions/checkout@v2
+
+      - name: Checkout last_bench.txt from master
+        run: |
+          git show master:last_bench.txt > last_bench.txt
 
       - uses: actions/setup-go@v2
         with:
@@ -33,17 +35,15 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
-
       - name: run benchmark
         run:  |
          make bench
          cat test/bench.txt
+         cat last_bench.txt
          echo 'res<<EOF' >> $GITHUB_ENV
          cat test/benchcmp.txt >> $GITHUB_ENV
          echo 'EOF' >> $GITHUB_ENV
-
       - name: Comment bench result
-        if: github.ref != 'refs/heads/master'
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           recreate: true
@@ -52,13 +52,10 @@ jobs:
             ```
             ${{ env.res }}
             ```
-
       - name: Update benchmark baseline
-        if: github.ref == 'refs/heads/master'
         run: |
          rm last_bench.txt
          mv test/bench.txt last_bench.txt
-
       - name: Commit changes
         uses: EndBug/add-and-commit@v7
         with:
