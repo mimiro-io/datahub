@@ -16,17 +16,17 @@ jobs:
         uses: actions/checkout@v2
         with:
             ref: master
-            path: master
+            path: ../dhmaster
 
       - name: Retrieve last_bench.txt
         run: |
           pwd
-          ls
-          ls master
-          cd master
+          ls ../dhmaster
+          cd ../dhmaster
           git status
           git branch
-          git show master:last_bench.txt > ../last_bench.txt
+          git show master:last_bench.txt > ../datahub/last_bench.txt
+          cd ../datahub
 
       - uses: actions/setup-go@v2
         with:
