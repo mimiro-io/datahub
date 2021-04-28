@@ -25,7 +25,7 @@ jobs:
           cd dhmaster
           git status
           git branch
-          git show master:last_bench.txt > ../datahub/last_bench.txt
+          git show master:last_bench.txt > ../last_bench.txt
           cd ..
           rm -rf dhmaster
 
