@@ -12,22 +12,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Checkout last_bench.txt from master
-        uses: actions/checkout@v2
-        with:
-            ref: master
-            path: dhmaster
-
       - name: Retrieve last_bench.txt
         run: |
-          pwd
-          ls dhmaster
-          cd dhmaster
-          git status
-          git branch
-          git show master:last_bench.txt > ../last_bench.txt
-          cd ..
-          rm -rf dhmaster
+          git restore --source master -- last_bench.txt
 
       - uses: actions/setup-go@v2
         with:
