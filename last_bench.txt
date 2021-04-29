@@ -1,0 +1,16 @@
+goos: linux
+goarch: amd64
+pkg: github.com/mimiro-io/datahub/internal/server
+cpu: Intel(R) Xeon(R) Platinum 8171M CPU @ 2.60GHz
+BenchmarkDatasetStoreEntities-2   	      26	  44021987 ns/op	16034169 B/op	  204692 allocs/op
+BenchmarkDatasetStoreEntities-2   	      27	  41860260 ns/op	15737715 B/op	  204718 allocs/op
+BenchmarkDatasetStoreEntities-2   	      28	  40987606 ns/op	15460696 B/op	  204738 allocs/op
+BenchmarkDatasetStoreEntities-2   	      28	  41716328 ns/op	15461044 B/op	  204741 allocs/op
+BenchmarkDatasetStoreEntities-2   	      27	  42111163 ns/op	15737109 B/op	  204715 allocs/op
+BenchmarkDatasetStoreEntities-2   	      30	  41686110 ns/op	14967383 B/op	  204794 allocs/op
+BenchmarkDatasetStoreEntities-2   	      28	  41352173 ns/op	15460579 B/op	  204738 allocs/op
+BenchmarkDatasetStoreEntities-2   	      28	  41376893 ns/op	15461552 B/op	  204742 allocs/op
+BenchmarkDatasetStoreEntities-2   	      28	  42569455 ns/op	15462253 B/op	  204744 allocs/op
+BenchmarkDatasetStoreEntities-2   	      28	  40975688 ns/op	15463320 B/op	  204750 allocs/op
+PASS
+ok  	github.com/mimiro-io/datahub/internal/server	21.809s
