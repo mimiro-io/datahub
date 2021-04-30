@@ -139,6 +139,16 @@ type JavascriptTransform struct {
 	Logger  *zap.SugaredLogger
 }
 
+func (javascriptTransform *JavascriptTransform) MakeTransaction() *server.Transaction {
+	txn := &server.Transaction{}
+	txn.DatasetEntities = make(map[string][]*server.Entity)
+	return txn
+}
+
+func (javascriptTransform *JavascriptTransform) RunTransaction(txn *server.Transaction) {
+	javascriptTransform.Store.ExecuteTransaction(txn)
+}
+
 func (javascriptTransform *JavascriptTransform) Log(thing interface{}) {
 	javascriptTransform.Logger.Info(thing)
 }
