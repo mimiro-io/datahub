@@ -648,6 +648,23 @@ id = GetId(e);
 
 returns value `ns0:bob`
 
+#### SetId
+
+`SetId(entity, id)` takes a parameter of type `Entity` and a string with an id, and updates the id of the entity.
+
+Example:
+
+```javascript
+var e = NewEntity();
+SetId(e, PrefixField("ns0", 42));
+
+Log("Id is now: " + GetId(e));
+```
+```text
+ INFO  - Id is now: ns0:42
+```
+
+
 #### GetNamespacePrefix
 
 URIs are often represented as CURIEs. CURIEs are formed of a prefix part and local part. The prefix is key that corresponds to an expansion. To resolve a CURIE into a full URI the local part of appended to the prefix expansion.
@@ -719,6 +736,22 @@ var personTypePrefix = GetNamespacePrefix("http://data.mimiro.io/schema/person/"
 personName = GetProperty(person, personTypePrefix, "name");
 ```
 
+The `GetProperty` function can also take an optional extra defaultValue
+
+```javascript
+var e = NewEntity();
+
+// field1 is missing
+var value = GetProperty(e, "ns0", "field1", "my default value");
+
+Log(value);
+
+```
+```text
+ INFO  - my default value
+```
+
+
 #### SetProperty
 
 To set the value of a named property on an entity use the SetProperty function.
@@ -727,6 +760,27 @@ To set the value of a named property on an entity use the SetProperty function.
 var personTypePrefix = GetNamespacePrefix("http://data.mimiro.io/schema/person/");
 
 SetProperty(person, personTypePrefix, "name", "bobby");
+```
+
+#### SetDeleted / GetDeleted
+
+`SetDeleted` takes a parameter `entity` of type Entity, and a boolean flag, and updates the deleted state on the Entity.
+
+`GetDeleted` takes a single parameter `entity` of type Entity, and returns the deleted state of the Entity. If entity is 
+missing or null, this function returns undefined.
+
+Example:
+
+```javascript
+var e = NewEntity()
+
+SetDeleted(e, true);
+var deleted = GetDeleted(e);
+
+Log("Deleted: " + ToString(deleted));
+```
+```text
+ INFO  - Deleted: true
 ```
 
 #### RenameProperty
