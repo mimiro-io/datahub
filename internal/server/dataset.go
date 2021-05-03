@@ -211,8 +211,12 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 
 	// get lock - only one writer to a dataset log
 	ds.writeLock.Lock()
+	writeLockStart := time.Now()
 	// release lock at end regardless
-	defer ds.writeLock.Unlock()
+	defer func() {
+		_ = ds.store.statsdClient.TimeInMilliseconds("ds.writeLock.time", float64(time.Since(writeLockStart).Nanoseconds())/1000, tags, 1)
+		ds.writeLock.Unlock()
+	}()
 
 	// need this to ensure time moves forward in high perf environments.
 	time.Sleep(time.Nanosecond * 1)
@@ -248,6 +252,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 
 	for _, e := range entities {
 
+		_ = ds.store.statsdClient.Incr("ds.entities.rate", tags, 1)
 		// entityIdBuffer buffer for lookup in main index
 		// index_id;rid;dataset;time => blob
 		// unit16;unit64;uint32;uint64
@@ -311,7 +316,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 				}
 			}
 			if prevEntity != nil {
-				if  len(prevJsonData) == jsonLength &&
+				if len(prevJsonData) == jsonLength &&
 					reflect.DeepEqual(prevEntity.References, e.References) &&
 					reflect.DeepEqual(prevEntity.Properties, e.Properties) {
 					isDifferent = false
@@ -521,7 +526,9 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 		return err
 	}
 
+	commitTime := time.Now()
 	err = txn.Commit()
+	_ = ds.store.statsdClient.TimeInMilliseconds("ds.commit.time", float64(time.Since(commitTime).Nanoseconds())/1000, tags, 1)
 	if err != nil {
 		return err
 	}
