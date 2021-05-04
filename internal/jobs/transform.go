@@ -19,6 +19,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"github.com/DataDog/datadog-go/statsd"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -185,10 +186,12 @@ func newJavascriptTransform(log *zap.SugaredLogger, code64 string, store *server
 }
 
 type JavascriptTransform struct {
-	Store   *server.Store
-	Code    []byte
-	Runtime *goja.Runtime
-	Logger  *zap.SugaredLogger
+	Store        *server.Store
+	Code         []byte
+	Runtime      *goja.Runtime
+	Logger       *zap.SugaredLogger
+	statsDClient statsd.ClientInterface
+	statsDTags   []string
 }
 
 func (javascriptTransform *JavascriptTransform) Log(thing interface{}) {
@@ -212,17 +215,27 @@ func (javascriptTransform *JavascriptTransform) NewEntity() *server.Entity {
 }
 
 func (javascriptTransform *JavascriptTransform) GetNamespacePrefix(urlExpansion string) string {
+	ts := time.Now()
+
 	prefix, _ := javascriptTransform.Store.NamespaceManager.GetPrefixMappingForExpansion(urlExpansion)
+	_ = javascriptTransform.statsDClient.Count("transform.GetNamespacePrefix.time",
+		int64(time.Since(ts)), javascriptTransform.statsDTags, 1)
 	return prefix
 }
 
 func (javascriptTransform *JavascriptTransform) AssertNamespacePrefix(urlExpansion string) string {
+	ts := time.Now()
 	prefix, _ := javascriptTransform.Store.NamespaceManager.AssertPrefixMappingForExpansion(urlExpansion)
+	_ = javascriptTransform.statsDClient.Count("transform.AssertNamespacePrefix.time",
+		int64(time.Since(ts)), javascriptTransform.statsDTags, 1)
 	return prefix
 }
 
 func (javascriptTransform *JavascriptTransform) Query(startingEntities []string, predicate string, inverse bool, datasets []string) [][]interface{} {
+	ts := time.Now()
 	results, err := javascriptTransform.Store.GetManyRelatedEntities(startingEntities, predicate, inverse, datasets)
+	_ = javascriptTransform.statsDClient.Count("transform.Query.time",
+		int64(time.Since(ts)), javascriptTransform.statsDTags, 1)
 	if err != nil {
 		return nil
 	}
@@ -230,7 +243,10 @@ func (javascriptTransform *JavascriptTransform) Query(startingEntities []string,
 }
 
 func (javascriptTransform *JavascriptTransform) ById(entityId string, datasets []string) *server.Entity {
+	ts := time.Now()
 	entity, err := javascriptTransform.Store.GetEntity(entityId, datasets)
+	_ = javascriptTransform.statsDClient.Count("transform.ById.time",
+		int64(time.Since(ts)), javascriptTransform.statsDTags, 1)
 	if err != nil {
 		return nil
 	}
@@ -262,7 +278,8 @@ func (javascriptTransform *JavascriptTransform) transformEntities(runner *Runner
 
 	var transformFunc func(entities []*server.Entity) (interface{}, error)
 	err := javascriptTransform.Runtime.ExportTo(javascriptTransform.Runtime.Get("transform_entities"), &transformFunc)
-
+	javascriptTransform.statsDClient = runner.statsdClient
+	javascriptTransform.statsDTags = []string{"application:datahub"}
 	if err != nil {
 		return nil, err
 	}
