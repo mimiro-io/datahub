@@ -413,7 +413,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 
 		} else {
 
-			oldRefs := make(map[uint64]uint64)
+			oldRefs := make(map[uint64][]uint64)
 			if prevEntity != nil {
 				// go through previous state
 				// check for no longer there rels
@@ -438,79 +438,142 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 							return err
 						}
 
-						oldRefs[predid] = relatedid
+						if refs, ok := oldRefs[predid]; ok {
+							refs = append(refs, relatedid)
+							oldRefs[predid] = refs
+						} else {
+							refs := []uint64 { relatedid}
+							oldRefs[predid] = refs
+						}
 					}
 				}
 			}
 
-			// go through new state
-			for k, stringOrArrayValue := range e.References {
+			if e.IsDeleted {
+				for p, referencedIds := range oldRefs {
+					for _, e := range referencedIds {
+						incomingBuffer := make([]byte, 40)
+						outgoingBuffer := make([]byte, 40)
 
-				// need to check if v is string or []string
-				refs, isArray := stringOrArrayValue.([]string)
-				if !isArray {
-					refs = []string{stringOrArrayValue.(string)}
+						binary.BigEndian.PutUint16(incomingBuffer, INCOMING_REF_INDEX)
+						binary.BigEndian.PutUint64(incomingBuffer[2:], e)
+						binary.BigEndian.PutUint64(incomingBuffer[10:], rid)
+						binary.BigEndian.PutUint64(incomingBuffer[18:], uint64(txnTime))
+						binary.BigEndian.PutUint64(incomingBuffer[26:], p)
+						binary.BigEndian.PutUint16(incomingBuffer[34:], 1) // is deleted
+						binary.BigEndian.PutUint32(incomingBuffer[36:], ds.InternalID)
+						err := txn.Set(incomingBuffer, []byte(""))
+						if err != nil {
+							return err
+						}
+
+						binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
+						binary.BigEndian.PutUint64(outgoingBuffer[2:], rid)
+						binary.BigEndian.PutUint64(outgoingBuffer[10:], uint64(txnTime))
+						binary.BigEndian.PutUint64(outgoingBuffer[18:], p)
+						binary.BigEndian.PutUint64(outgoingBuffer[26:], e)
+						binary.BigEndian.PutUint16(outgoingBuffer[34:], 1) // deleted.
+						binary.BigEndian.PutUint32(outgoingBuffer[36:], ds.InternalID)
+						err = txn.Set(outgoingBuffer, []byte(""))
+						if err != nil {
+							return err
+						}
+					}
+				}
+			} else {
+				// go through new state
+				for k, stringOrArrayValue := range e.References {
+
+					// need to check if v is string or []string
+					refs, isArray := stringOrArrayValue.([]string)
+					if !isArray {
+						refs = []string{stringOrArrayValue.(string)}
+					}
+
+					for _, ref := range refs {
+						outgoingBuffer := make([]byte, 40)
+						incomingBuffer := make([]byte, 40)
+
+						// assert uint64 id for predicate
+						predid, _, err := ds.store.assertIDForURI(k, idCache)
+						if err != nil {
+							return err
+						}
+
+						// assert uint64 id for related entity URI
+						relatedid, _, err := ds.store.assertIDForURI(ref, idCache)
+						if err != nil {
+							return err
+						}
+
+						binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
+						binary.BigEndian.PutUint64(outgoingBuffer[2:], rid)
+						binary.BigEndian.PutUint64(outgoingBuffer[10:], uint64(txnTime))
+						binary.BigEndian.PutUint64(outgoingBuffer[18:], predid)
+						binary.BigEndian.PutUint64(outgoingBuffer[26:], relatedid)
+						binary.BigEndian.PutUint16(outgoingBuffer[34:], 0) // deleted.
+						binary.BigEndian.PutUint32(outgoingBuffer[36:], ds.InternalID)
+						err = txn.Set(outgoingBuffer, []byte(""))
+						if err != nil {
+							return err
+						}
+
+						binary.BigEndian.PutUint16(incomingBuffer, INCOMING_REF_INDEX)
+						binary.BigEndian.PutUint64(incomingBuffer[2:], relatedid)
+						binary.BigEndian.PutUint64(incomingBuffer[10:], rid)
+						binary.BigEndian.PutUint64(incomingBuffer[18:], uint64(txnTime))
+						binary.BigEndian.PutUint64(incomingBuffer[26:], predid)
+						binary.BigEndian.PutUint16(incomingBuffer[34:], 0) // deleted.
+						binary.BigEndian.PutUint32(incomingBuffer[36:], ds.InternalID)
+						err = txn.Set(incomingBuffer, []byte(""))
+						if err != nil {
+							return err
+						}
+
+						if refs, ok := oldRefs[predid]; ok {
+							newrefs := make([]uint64, 0)
+							for _, refid := range refs {
+								if refid != relatedid {
+									newrefs = append(newrefs, refid)
+								}
+							}
+
+							oldRefs[predid] = newrefs
+						}
+
+					}
 				}
 
-				for _, ref := range refs {
-					outgoingBuffer := make([]byte, 40)
-					incomingBuffer := make([]byte, 40)
+				// iterate remaining keys of old and add them as deleted for incoming refs
+				for p, referencedIds := range oldRefs {
+					for _, e := range referencedIds {
+						incomingBuffer := make([]byte, 40)
+						outgoingBuffer := make([]byte, 40)
 
-					// assert uint64 id for predicate
-					predid, _, err := ds.store.assertIDForURI(k, idCache)
-					if err != nil {
-						return err
+						binary.BigEndian.PutUint16(incomingBuffer, INCOMING_REF_INDEX)
+						binary.BigEndian.PutUint64(incomingBuffer[2:], e)
+						binary.BigEndian.PutUint64(incomingBuffer[10:], rid)
+						binary.BigEndian.PutUint64(incomingBuffer[18:], uint64(txnTime))
+						binary.BigEndian.PutUint64(incomingBuffer[26:], p)
+						binary.BigEndian.PutUint16(incomingBuffer[34:], 1) // is deleted
+						binary.BigEndian.PutUint32(incomingBuffer[36:], ds.InternalID)
+						err := txn.Set(incomingBuffer, []byte(""))
+						if err != nil {
+							return err
+						}
+
+						binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
+						binary.BigEndian.PutUint64(outgoingBuffer[2:], rid)
+						binary.BigEndian.PutUint64(outgoingBuffer[10:], uint64(txnTime))
+						binary.BigEndian.PutUint64(outgoingBuffer[18:], p)
+						binary.BigEndian.PutUint64(outgoingBuffer[26:], e)
+						binary.BigEndian.PutUint16(outgoingBuffer[34:], 1) // deleted.
+						binary.BigEndian.PutUint32(outgoingBuffer[36:], ds.InternalID)
+						err = txn.Set(outgoingBuffer, []byte(""))
+						if err != nil {
+							return err
+						}
 					}
-
-					// assert uint64 id for related entity URI
-					relatedid, _, err := ds.store.assertIDForURI(ref, idCache)
-					if err != nil {
-						return err
-					}
-
-					binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
-					binary.BigEndian.PutUint64(outgoingBuffer[2:], rid)
-					binary.BigEndian.PutUint64(outgoingBuffer[10:], uint64(txnTime))
-					binary.BigEndian.PutUint64(outgoingBuffer[18:], predid)
-					binary.BigEndian.PutUint64(outgoingBuffer[26:], relatedid)
-					binary.BigEndian.PutUint16(outgoingBuffer[34:], 0) // deleted.
-					binary.BigEndian.PutUint32(outgoingBuffer[36:], ds.InternalID)
-					err = txn.Set(outgoingBuffer, []byte(""))
-					if err != nil {
-						return err
-					}
-
-					binary.BigEndian.PutUint16(incomingBuffer, INCOMING_REF_INDEX)
-					binary.BigEndian.PutUint64(incomingBuffer[2:], relatedid)
-					binary.BigEndian.PutUint64(incomingBuffer[10:], rid)
-					binary.BigEndian.PutUint64(incomingBuffer[18:], uint64(txnTime))
-					binary.BigEndian.PutUint64(incomingBuffer[26:], predid)
-					binary.BigEndian.PutUint16(incomingBuffer[34:], 0) // deleted.
-					binary.BigEndian.PutUint32(incomingBuffer[36:], ds.InternalID)
-					err = txn.Set(incomingBuffer, []byte(""))
-					if err != nil {
-						return err
-					}
-
-					// delete key from current state
-					delete(oldRefs, predid)
-				}
-			}
-
-			// iterate remaining keys of old and add them as deleted for incoming
-			for p, e := range oldRefs {
-				incomingBuffer := make([]byte, 40)
-
-				binary.BigEndian.PutUint16(incomingBuffer, INCOMING_REF_INDEX)
-				binary.BigEndian.PutUint64(incomingBuffer[2:], e)
-				binary.BigEndian.PutUint64(incomingBuffer[10:], rid)
-				binary.BigEndian.PutUint64(incomingBuffer[18:], uint64(txnTime))
-				binary.BigEndian.PutUint64(incomingBuffer[26:], p)
-				binary.BigEndian.PutUint16(incomingBuffer[34:], 1) // is deleted
-				binary.BigEndian.PutUint32(incomingBuffer[36:], ds.InternalID)
-				err := txn.Set(incomingBuffer, []byte(""))
-				if err != nil {
-					return err
 				}
 			}
 		}
