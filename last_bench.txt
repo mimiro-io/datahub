@@ -1,16 +1,16 @@
 goos: linux
 goarch: amd64
 pkg: github.com/mimiro-io/datahub/internal/server
-cpu: Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz
-BenchmarkDatasetStoreEntities-2   	      21	  52075207 ns/op	17935135 B/op	  204492 allocs/op
-BenchmarkDatasetStoreEntities-2   	      25	  49832341 ns/op	16352411 B/op	  204652 allocs/op
-BenchmarkDatasetStoreEntities-2   	      25	  48481331 ns/op	16351663 B/op	  204649 allocs/op
-BenchmarkDatasetStoreEntities-2   	      25	  48549131 ns/op	16350466 B/op	  204643 allocs/op
-BenchmarkDatasetStoreEntities-2   	      25	  47872260 ns/op	16353501 B/op	  204656 allocs/op
-BenchmarkDatasetStoreEntities-2   	      25	  48816181 ns/op	16352374 B/op	  204652 allocs/op
-BenchmarkDatasetStoreEntities-2   	      25	  48527707 ns/op	16353877 B/op	  204658 allocs/op
-BenchmarkDatasetStoreEntities-2   	      24	  48060474 ns/op	16697943 B/op	  204616 allocs/op
-BenchmarkDatasetStoreEntities-2   	      24	  47574303 ns/op	16699457 B/op	  204623 allocs/op
-BenchmarkDatasetStoreEntities-2   	      25	  47648574 ns/op	16371696 B/op	  204653 allocs/op
+cpu: Intel(R) Xeon(R) Platinum 8171M CPU @ 2.60GHz
+BenchmarkDatasetStoreEntities-2   	      25	  47555693 ns/op	16402840 B/op	  208012 allocs/op
+BenchmarkDatasetStoreEntities-2   	      25	  43516213 ns/op	16381477 B/op	  208003 allocs/op
+BenchmarkDatasetStoreEntities-2   	      26	  44891125 ns/op	16065706 B/op	  208041 allocs/op
+BenchmarkDatasetStoreEntities-2   	      26	  44831769 ns/op	16064768 B/op	  208037 allocs/op
+BenchmarkDatasetStoreEntities-2   	      26	  44149590 ns/op	16062268 B/op	  208026 allocs/op
+BenchmarkDatasetStoreEntities-2   	      27	  44722238 ns/op	15767401 B/op	  208083 allocs/op
+BenchmarkDatasetStoreEntities-2   	      27	  45546414 ns/op	15785911 B/op	  208085 allocs/op
+BenchmarkDatasetStoreEntities-2   	      26	  44254450 ns/op	16082943 B/op	  208035 allocs/op
+BenchmarkDatasetStoreEntities-2   	      26	  44141799 ns/op	16063773 B/op	  208032 allocs/op
+BenchmarkDatasetStoreEntities-2   	      25	  45261842 ns/op	16384002 B/op	  208015 allocs/op
 PASS
-ok  	github.com/mimiro-io/datahub/internal/server	23.445s
+ok  	github.com/mimiro-io/datahub/internal/server	21.832s
