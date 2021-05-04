@@ -214,7 +214,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 	writeLockStart := time.Now()
 	// release lock at end regardless
 	defer func() {
-		_ = ds.store.statsdClient.Gauge("ds.writeLock.time", float64(time.Since(writeLockStart).Nanoseconds()), tags, 1)
+		_ = ds.store.statsdClient.Count("ds.writeLock.time", time.Since(writeLockStart).Nanoseconds(), tags, 1)
 		ds.writeLock.Unlock()
 	}()
 
@@ -527,14 +527,14 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 
 	commitTime := time.Now()
 	err = txn.Commit()
-	_ = ds.store.statsdClient.Gauge("ds.commit.time", float64(time.Since(commitTime).Nanoseconds()), tags, 1)
+	_ = ds.store.statsdClient.Count("ds.commit.time", time.Since(commitTime).Nanoseconds(), tags, 1)
 	if err != nil {
 		return err
 	}
 
 	updateDsTime := time.Now()
 	err = ds.updateDataset(newitems, entities)
-	_ = ds.store.statsdClient.Gauge("ds.updateDataset.time", float64(time.Since(updateDsTime).Nanoseconds()), tags, 1)
+	_ = ds.store.statsdClient.Count("ds.updateDataset.time", time.Since(updateDsTime).Nanoseconds(), tags, 1)
 	if err != nil {
 		return err
 	}
