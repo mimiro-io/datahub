@@ -68,6 +68,59 @@ func TestStoreRelations(test *testing.T) {
 			_ = os.RemoveAll(storeLocation)
 		})
 
+		g.It("Should delete the correct old outgoing references in array after entity modified", func() {
+			g.Timeout(time.Hour * 1)
+			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
+			friendsDS, _ := dsm.CreateDataset("friends")
+
+			_ = friendsDS.StoreEntities([]*Entity{
+				NewEntityFromMap(map[string]interface{}{
+					"id":    peopleNamespacePrefix + ":person-1",
+					"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Lisa"},
+					"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": []string{ peopleNamespacePrefix + ":person-3", peopleNamespacePrefix + ":person-2"}}}),
+			})
+
+			// check that we can query outgoing
+			result, err := store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			g.Assert(err).IsNil()
+			g.Assert(len(result)).Eql(2)
+
+			// check that we can query incoming
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-2"}, peopleNamespacePrefix+":Friend", true, nil)
+			g.Assert(err).IsNil()
+			g.Assert(len(result)).Eql(1)
+
+			// update lisa
+			e := NewEntityFromMap(map[string]interface{}{
+				"id":    peopleNamespacePrefix + ":person-1",
+				"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Lisa"},
+				"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-3"}})
+
+			_ = friendsDS.StoreEntities([]*Entity{
+				e,
+			})
+
+			// check that outgoing related entities is 0
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			g.Assert(err).IsNil()
+			g.Assert(len(result)).Eql(1)
+
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-3"}, peopleNamespacePrefix+":Friend", true, nil)
+			g.Assert(err).IsNil()
+			g.Assert(len(result)).Eql(1)
+
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-2"}, peopleNamespacePrefix+":Friend", true, nil)
+			g.Assert(err).IsNil()
+			g.Assert(len(result)).Eql(0)
+
+		})
+
+
 		g.It("Should delete the correct old outgoing references after entity modified", func() {
 			g.Timeout(time.Hour * 1)
 			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
