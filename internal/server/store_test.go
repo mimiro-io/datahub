@@ -34,7 +34,6 @@ import (
 	"go.uber.org/zap"
 )
 
-
 func TestStoreRelations(test *testing.T) {
 	g := goblin.Goblin(test)
 	g.Describe("The dataset storage", func() {
@@ -69,7 +68,6 @@ func TestStoreRelations(test *testing.T) {
 		})
 
 		g.It("Should delete the correct old outgoing references in array after entity modified", func() {
-			g.Timeout(time.Hour * 1)
 			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
 			friendsDS, _ := dsm.CreateDataset("friends")
 
@@ -77,7 +75,7 @@ func TestStoreRelations(test *testing.T) {
 				NewEntityFromMap(map[string]interface{}{
 					"id":    peopleNamespacePrefix + ":person-1",
 					"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Lisa"},
-					"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": []string{ peopleNamespacePrefix + ":person-3", peopleNamespacePrefix + ":person-2"}}}),
+					"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": []string{peopleNamespacePrefix + ":person-3", peopleNamespacePrefix + ":person-2"}}}),
 			})
 
 			// check that we can query outgoing
@@ -120,9 +118,7 @@ func TestStoreRelations(test *testing.T) {
 
 		})
 
-
 		g.It("Should delete the correct old outgoing references after entity modified", func() {
-			g.Timeout(time.Hour * 1)
 			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
 			friendsDS, _ := dsm.CreateDataset("friends")
 
@@ -159,7 +155,6 @@ func TestStoreRelations(test *testing.T) {
 		})
 
 		g.It("Should delete the correct incoming and outgoing references after entity deleted", func() {
-			g.Timeout(time.Hour * 1)
 			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
 			friendsDS, _ := dsm.CreateDataset("friends")
 
@@ -198,7 +193,7 @@ func TestStoreRelations(test *testing.T) {
 			e.IsDeleted = true
 
 			_ = friendsDS.StoreEntities([]*Entity{
-					e,
+				e,
 			})
 
 			// check that outgoing related entities is 0
@@ -290,8 +285,6 @@ func TestStoreRelations(test *testing.T) {
 		})
 
 		g.It("Should build query results", func() {
-			g.Timeout(time.Hour)
-
 			// create dataset
 			ds, err := dsm.CreateDataset("people")
 
@@ -379,228 +372,6 @@ func TestStoreRelations(test *testing.T) {
 			g.Assert(err).IsNil()
 			g.Assert(len(invresults)).Eql(0)
 		})
-		g.It("Should respect dataset scope in queries", func() {
-			g.Timeout(time.Hour)
-
-			// namespaces
-			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
-			companyNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/company/")
-			modelNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/model/")
-			rdfNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(RdfNamespaceExpansion)
-
-			type TestModel struct {
-				person      int   //id of a person
-				workhistory []int //list of company-ids
-				currentwork int   //id of a company
-			}
-
-			testdata := []TestModel{
-				{person: 1, workhistory: []int{}, currentwork: 1},
-				{person: 2, workhistory: []int{1}, currentwork: 2},
-				{person: 3, workhistory: []int{2}, currentwork: 1},
-				{person: 4, workhistory: []int{1, 2}, currentwork: 3},
-				{person: 5, workhistory: []int{3}, currentwork: 1},
-			}
-
-			type TestCase struct {
-				CaseID                     int
-				startURI                   string
-				predicate                  string
-				inverse                    bool
-				datasets                   []string
-				expectedRelationCount      int
-				firstRelationID            string
-				firstRelationPropertyName  string
-				firstRelationPropertyValue interface{}
-				firstRelationPropertyCheck interface{} // nil, true or false
-				extraCheck                 func(e *Entity, g *goblin.G)
-			}
-
-			const PEOPLE = "people"
-			const COMPANIES = "companies"
-			const HISTORY = "history"
-			testMatrix := []TestCase{
-				//no constraints, resolving company should work
-				{CaseID: 1, startURI: peopleNamespacePrefix + ":person-1", predicate: "http://data.mimiro.io/people/worksfor",
-					inverse: false, datasets: []string{},
-					expectedRelationCount: 2, firstRelationID: "ns4:company-1", firstRelationPropertyName: "ns4:Name", firstRelationPropertyValue: "Company 1"},
-
-				//constraint on "people" only. we should find the relation to a company in "people",
-				//but resolving the company should be omitted because we lack access to the "companies" dataset
-				{CaseID: 2, startURI: peopleNamespacePrefix + ":person-1", predicate: "http://data.mimiro.io/people/worksfor",
-					inverse: false, datasets: []string{PEOPLE},
-					expectedRelationCount: 1, firstRelationID: "ns4:company-1", firstRelationPropertyName: "ns4:Name", firstRelationPropertyValue: nil},
-
-				//constraint on "companies". we cannot access outgoing refs in the "people" or "history" datasets, therefore we should not find anything
-				{CaseID: 3, startURI: peopleNamespacePrefix + ":person-1", predicate: "http://data.mimiro.io/people/worksfor",
-					inverse: false, datasets: []string{COMPANIES},
-					expectedRelationCount: 0},
-
-				//constraint on bogus dataset. due to implementation, this dataset filter will be ignored, query behaves as unrestricted
-				//TODO: this can be discussed. Producing an error would make Queries less unpredictable. But ignoring invalid input makes the API more approachable
-				{CaseID: 4, startURI: peopleNamespacePrefix + ":person-1", predicate: "http://data.mimiro.io/people/worksfor",
-					inverse: false, datasets: []string{"bogus"},
-					expectedRelationCount: 2, firstRelationID: "ns4:company-1", firstRelationPropertyName: "ns4:Name", firstRelationPropertyValue: "Company 1"},
-
-				//constraint on history dataset. we should find an outgoing relatoin from history to a company,
-				//but company resolving should be disabled since we lack access to the companies dataset
-				{CaseID: 5, startURI: peopleNamespacePrefix + ":person-1", predicate: "http://data.mimiro.io/people/worksfor",
-					inverse: false, datasets: []string{HISTORY},
-					expectedRelationCount: 1, firstRelationID: "ns4:company-1", firstRelationPropertyName: "ns4:Name", firstRelationPropertyValue: nil},
-
-				//inverse query for "company-1", no datasets restriction. should find 3 people with resolved entities
-				{CaseID: 6, startURI: companyNamespacePrefix + ":company-1", predicate: "http://data.mimiro.io/people/worksfor",
-					inverse: true, datasets: []string{},
-					expectedRelationCount: 6, firstRelationID: "ns3:person-1", firstRelationPropertyName: "ns3:Name", firstRelationPropertyValue: "Person 1",
-					extraCheck: func(e *Entity, g *goblin.G) {
-						//we should find 4 refs for the first resolved person, from both history and people datasets
-						g.Assert(len(e.References)).Eql(4)
-					},
-				},
-
-				//inverse query for "company-1" with only "people" accessible.
-				//should still find 3 people (incoming relation is owned by people dataset, which we have access to)
-				//people should be resolved
-				//but resolved relations in people should only be "people" data with no "history" refs merged in
-				{CaseID: 7, startURI: companyNamespacePrefix + ":company-1", predicate: "http://data.mimiro.io/people/worksfor",
-					inverse: true, datasets: []string{PEOPLE},
-					expectedRelationCount: 3, firstRelationID: "ns3:person-1", firstRelationPropertyName: "ns3:Name", firstRelationPropertyCheck: true,
-					extraCheck: func(e *Entity, g *goblin.G) {
-						//make sure we only have two refs returned (worksfor + type), confirming that history refs have not been accessed
-						g.Assert(len(e.References)).Eql(2)
-					},
-				},
-
-				//inverse query for "company-1" with restriction to "companies" dataset.
-				//all incoming relations are stored in either history or people dataset.
-				//with access limited to companies dataset, we should not find incoming relations
-				{CaseID: 8, startURI: companyNamespacePrefix + ":company-1", predicate: "http://data.mimiro.io/people/worksfor",
-					inverse: true, datasets: []string{COMPANIES}, expectedRelationCount: 0,
-				},
-
-				//find person-4 and follow its workedfor relations without restriction
-				//should find 2 companies in "history" dataset, and fully resolve the company entities
-				{CaseID: 9, startURI: peopleNamespacePrefix + ":person-4", predicate: "http://data.mimiro.io/people/workedfor",
-					inverse: false, datasets: []string{}, expectedRelationCount: 2, firstRelationID: "ns4:company-1",
-					firstRelationPropertyName: "ns4:Name", firstRelationPropertyValue: "Company 1",
-				},
-
-				//find person-4 and follow its workedfor relations in dataset "history"
-				//should find 2 companies in "history" dataset,
-				//but not fully resolve the company entities because we lack access to "company"
-				{CaseID: 10, startURI: peopleNamespacePrefix + ":person-4", predicate: "http://data.mimiro.io/people/workedfor",
-					inverse: false, datasets: []string{HISTORY}, expectedRelationCount: 2, firstRelationID: "ns4:company-2",
-					firstRelationPropertyName: "ns4:Name", firstRelationPropertyValue: nil,
-				},
-
-				//find company-2 and inversely follow workedfor relations without restriction
-				//should find person 3 and 4 in "history" dataset, and fully resolve the person entities
-				{CaseID: 11, startURI: companyNamespacePrefix + ":company-2", predicate: "http://data.mimiro.io/people/workedfor",
-					inverse: true, datasets: []string{}, expectedRelationCount: 2, firstRelationID: "ns3:person-3",
-					firstRelationPropertyName: "ns3:Name", firstRelationPropertyValue: "Person 3",
-					extraCheck: func(e *Entity, g *goblin.G) {
-						//There should be 4 references both from history and people
-						if len(e.References) != 4 {
-							g.Failf("Expected %v refs in inversely found person from both people and history datasets, actual: %v", 2, len(e.References))
-						}
-						//check that reference values are merged from all datasets. type should be list of type refs from both people and history
-						if reflect.DeepEqual(e.References["ns2:type"], []string{"ns5:Person", "ns5:Employment"}) {
-							g.Failf("Expected Person+Employment as type ref values, but found %v", e.References["ns2:type"])
-						}
-					},
-				},
-
-				//find company-2 and inversely follow workedfor relations with filter on history
-				//should find person 3 and 4 in "history" dataset, but not fully resolve the person entities
-				{CaseID: 12, startURI: companyNamespacePrefix + ":company-2", predicate: "http://data.mimiro.io/people/workedfor",
-					inverse: true, datasets: []string{HISTORY}, expectedRelationCount: 2, firstRelationID: "ns3:person-3",
-					firstRelationPropertyName: "ns3:Name", firstRelationPropertyValue: nil,
-					extraCheck: func(e *Entity, g *goblin.G) {
-						//there should be 4 refs from the history entity
-						if len(e.References) != 4 {
-							g.Failf("Case 12 :: Expected %v refs in inversely found person from history dataset only, actual: %v", 4, len(e.References))
-						}
-						//but we should only find type=Employment now. not Person
-						if e.References["ns2:type"] != "ns5:Employment" {
-							g.Failf("Expected ns5:Employment as type ref value, but found %v", e.References["ns2:type"])
-						}
-					},
-				},
-
-				//find company-2 and inversely follow workedfor relations with filter on people and companies
-				//should not find any relations since history access is not allowed, and workedfor is only stored there
-				{CaseID: 13, startURI: companyNamespacePrefix + ":company-2", predicate: "http://data.mimiro.io/people/workedfor",
-					inverse: true, datasets: []string{PEOPLE, COMPANIES}, expectedRelationCount: 0,
-				},
-			}
-
-			// create dataset
-			peopleDataset, _ := dsm.CreateDataset(PEOPLE)
-			companiesDataset, _ := dsm.CreateDataset(COMPANIES)
-			employmentHistoryDataset, _ := dsm.CreateDataset(HISTORY)
-
-			for _, td := range testdata {
-				cid := companyNamespacePrefix + ":company-" + strconv.Itoa(td.currentwork)
-				_ = companiesDataset.StoreEntities([]*Entity{NewEntityFromMap(map[string]interface{}{
-					"id":    cid,
-					"props": map[string]interface{}{companyNamespacePrefix + ":Name": "Company " + strconv.Itoa(td.currentwork)},
-					"refs":  map[string]interface{}{rdfNamespacePrefix + ":type": modelNamespacePrefix + ":Company"}})})
-
-				pid := peopleNamespacePrefix + ":person-" + strconv.Itoa(td.person)
-				_ = peopleDataset.StoreEntities([]*Entity{NewEntityFromMap(map[string]interface{}{
-					"id":    pid,
-					"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Person " + strconv.Itoa(td.person)},
-					"refs": map[string]interface{}{
-						rdfNamespacePrefix + ":type":        modelNamespacePrefix + ":Person",
-						peopleNamespacePrefix + ":worksfor": companyNamespacePrefix + ":company-" + strconv.Itoa(td.currentwork),
-					}})})
-
-				var workHistory []string
-				for _, histId := range td.workhistory {
-					workHistory = append(workHistory, companyNamespacePrefix+":company-"+strconv.Itoa(histId))
-				}
-				_ = employmentHistoryDataset.StoreEntities([]*Entity{NewEntityFromMap(map[string]interface{}{
-					"id":    pid,
-					"props": map[string]interface{}{},
-					"refs": map[string]interface{}{
-						rdfNamespacePrefix + ":type":         modelNamespacePrefix + ":Employment",
-						peopleNamespacePrefix + ":Employee":  pid,
-						peopleNamespacePrefix + ":worksfor":  companyNamespacePrefix + ":company-" + strconv.Itoa(td.currentwork),
-						peopleNamespacePrefix + ":workedfor": workHistory,
-					}})})
-			}
-
-			for _, tc := range testMatrix {
-				result, _ := store.GetManyRelatedEntities([]string{tc.startURI}, tc.predicate, tc.inverse, tc.datasets)
-				g.Assert(len(result)).Eql(tc.expectedRelationCount, "Case "+strconv.Itoa(tc.CaseID))
-				if tc.expectedRelationCount == 0 {
-					continue
-				}
-				/*
-					for _, r := range result {
-						e := r[2].(*Entity)
-						t.Logf("%v",e)
-						t.Logf("%v :: %v, props: %v, refs: %v", tc.CaseID, e.ID, e.Properties, e.References)
-					}
-				*/
-				entity := result[0][2].(*Entity)
-				g.Assert(entity.ID).Eql(tc.firstRelationID, fmt.Sprintf("Case %v :: startURI was %v; dataset constraints were %v", tc.CaseID, tc.startURI, tc.datasets))
-				observedPropVal := entity.Properties[tc.firstRelationPropertyName]
-				if tc.firstRelationPropertyCheck == nil {
-					g.Assert(observedPropVal).Eql(tc.firstRelationPropertyValue,
-						fmt.Sprintf("Case %v :: should resolve Relation property %v as %v, actually observed value: %v",
-							tc.CaseID, tc.firstRelationPropertyName, tc.firstRelationPropertyValue, observedPropVal))
-				}
-				if tc.firstRelationPropertyCheck != nil && (observedPropVal == nil) == tc.firstRelationPropertyCheck {
-					g.Failf("Case %v :: should resolve Relation property %v : %v, actually observed value: %v",
-						tc.CaseID, tc.firstRelationPropertyName, tc.firstRelationPropertyCheck, observedPropVal)
-				}
-				if tc.extraCheck != nil {
-					tc.extraCheck(entity, g)
-				}
-			}
-		})
-
 	})
 }
 
@@ -1383,233 +1154,274 @@ func TestStore(test *testing.T) {
 			result, err := store.GetManyRelatedEntities(queryIds, "http://data.mimiro.io/people/worksfor", false, []string{})
 			g.Assert(len(result)).Eql(1)
 		})
+	})
+}
 
-		g.It("Should respect dataset scope in queries", func() {
+func TestDatasetScope(test *testing.T) {
+	g := goblin.Goblin(test)
+	g.Describe("Scoped storage functions", func() {
+		testCnt := 0
+		var dsm *DsManager
+		var store *Store
+		var storeLocation string
+		var peopleNamespacePrefix string
+		var companyNamespacePrefix string
+		const PEOPLE = "people"
+		const COMPANIES = "companies"
+		const HISTORY = "history"
+		g.BeforeEach(func() {
+			testCnt += 1
+			storeLocation = fmt.Sprintf("./test_store_dsscope_%v", testCnt)
+			err := os.RemoveAll(storeLocation)
+			g.Assert(err).IsNil("should be allowed to clean testfiles in " + storeLocation)
+			e := &conf.Env{
+				Logger:        zap.NewNop().Sugar(),
+				StoreLocation: storeLocation,
+			}
+
+			devNull, _ := os.Open("/dev/null")
+			oldErr := os.Stderr
+			os.Stderr = devNull
+			lc := fxtest.NewLifecycle(test)
+			store = NewStore(lc, e, &statsd.NoOpClient{})
+			dsm = NewDsManager(lc, e, store, NoOpBus())
+
+			err = lc.Start(context.Background())
+			g.Assert(err).IsNil()
+			os.Stderr = oldErr
+
 			// namespaces
-			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
-			companyNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/company/")
+			peopleNamespacePrefix, _ = store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
+			companyNamespacePrefix, _ = store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/company/")
 			modelNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/model/")
 			rdfNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(RdfNamespaceExpansion)
-
-			type TestModel struct {
-				person      int   //id of a person
-				workhistory []int //list of company-ids
-				currentwork int   //id of a company
-			}
-
-			testdata := []TestModel{
-				{person: 1, workhistory: []int{}, currentwork: 1},
-				{person: 2, workhistory: []int{1}, currentwork: 2},
-				{person: 3, workhistory: []int{2}, currentwork: 1},
-				{person: 4, workhistory: []int{1, 2}, currentwork: 3},
-				{person: 5, workhistory: []int{3}, currentwork: 1},
-			}
-
-			type TestCase struct {
-				CaseID                     int
-				startURI                   string
-				predicate                  string
-				inverse                    bool
-				datasets                   []string
-				expectedRelationCount      int
-				firstRelationID            string
-				firstRelationPropertyName  string
-				firstRelationPropertyValue interface{}
-				firstRelationPropertyCheck interface{} // nil, true or false
-				extraCheck                 func(e *Entity, g *goblin.G)
-			}
-
-			const PEOPLE = "people"
-			const COMPANIES = "companies"
-			const HISTORY = "history"
-			testMatrix := []TestCase{
-				//no constraints, resolving company should work
-				{CaseID: 1, startURI: peopleNamespacePrefix + ":person-1", predicate: "http://data.mimiro.io/people/worksfor",
-					inverse: false, datasets: []string{},
-					expectedRelationCount: 2, firstRelationID: "ns4:company-1", firstRelationPropertyName: "ns4:Name", firstRelationPropertyValue: "Company 1"},
-
-				//constraint on "people" only. we should find the relation to a company in "people",
-				//but resolving the company should be omitted because we lack access to the "companies" dataset
-				{CaseID: 2, startURI: peopleNamespacePrefix + ":person-1", predicate: "http://data.mimiro.io/people/worksfor",
-					inverse: false, datasets: []string{PEOPLE},
-					expectedRelationCount: 1, firstRelationID: "ns4:company-1", firstRelationPropertyName: "ns4:Name", firstRelationPropertyValue: nil},
-
-				//constraint on "companies". we cannot access outgoing refs in the "people" or "history" datasets, therefore we should not find anything
-				{CaseID: 3, startURI: peopleNamespacePrefix + ":person-1", predicate: "http://data.mimiro.io/people/worksfor",
-					inverse: false, datasets: []string{COMPANIES},
-					expectedRelationCount: 0},
-
-				//constraint on bogus dataset. due to implementation, this dataset filter will be ignored, query behaves as unrestricted
-				//TODO: this can be discussed. Producing an error would make Queries less unpredictable. But ignoring invalid input makes the API more approachable
-				{CaseID: 4, startURI: peopleNamespacePrefix + ":person-1", predicate: "http://data.mimiro.io/people/worksfor",
-					inverse: false, datasets: []string{"bogus"},
-					expectedRelationCount: 2, firstRelationID: "ns4:company-1", firstRelationPropertyName: "ns4:Name", firstRelationPropertyValue: "Company 1"},
-
-				//constraint on history dataset. we should find an outgoing relatoin from history to a company,
-				//but company resolving should be disabled since we lack access to the companies dataset
-				{CaseID: 5, startURI: peopleNamespacePrefix + ":person-1", predicate: "http://data.mimiro.io/people/worksfor",
-					inverse: false, datasets: []string{HISTORY},
-					expectedRelationCount: 1, firstRelationID: "ns4:company-1", firstRelationPropertyName: "ns4:Name", firstRelationPropertyValue: nil},
-
-				//inverse query for "company-1", no datasets restriction. should find 3 people with resolved entities
-				{CaseID: 6, startURI: companyNamespacePrefix + ":company-1", predicate: "http://data.mimiro.io/people/worksfor",
-					inverse: true, datasets: []string{},
-					expectedRelationCount: 6, firstRelationID: "ns3:person-1", firstRelationPropertyName: "ns3:Name", firstRelationPropertyValue: "Person 1",
-					extraCheck: func(e *Entity, g *goblin.G) {
-						//we should find 4 refs for the first resolved person, from both history and people datasets
-						g.Assert(len(e.References)).Eql(4)
-					},
-				},
-
-				//inverse query for "company-1" with only "people" accessible.
-				//should still find 3 people (incoming relation is owned by people dataset, which we have access to)
-				//people should be resolved
-				//but resolved relations in people should only be "people" data with no "history" refs merged in
-				{CaseID: 7, startURI: companyNamespacePrefix + ":company-1", predicate: "http://data.mimiro.io/people/worksfor",
-					inverse: true, datasets: []string{PEOPLE},
-					expectedRelationCount: 3, firstRelationID: "ns3:person-1", firstRelationPropertyName: "ns3:Name", firstRelationPropertyCheck: true,
-					extraCheck: func(e *Entity, g *goblin.G) {
-						//make sure we only have two refs returned (worksfor + type), confirming that history refs have not been accessed
-						g.Assert(len(e.References)).Eql(2)
-					},
-				},
-
-				//inverse query for "company-1" with restriction to "companies" dataset.
-				//all incoming relations are stored in either history or people dataset.
-				//with access limited to companies dataset, we should not find incoming relations
-				{CaseID: 8, startURI: companyNamespacePrefix + ":company-1", predicate: "http://data.mimiro.io/people/worksfor",
-					inverse: true, datasets: []string{COMPANIES}, expectedRelationCount: 0,
-				},
-
-				//find person-4 and follow its workedfor relations without restriction
-				//should find 2 companies in "history" dataset, and fully resolve the company entities
-				{CaseID: 9, startURI: peopleNamespacePrefix + ":person-4", predicate: "http://data.mimiro.io/people/workedfor",
-					inverse: false, datasets: []string{}, expectedRelationCount: 2, firstRelationID: "ns4:company-1",
-					firstRelationPropertyName: "ns4:Name", firstRelationPropertyValue: "Company 1",
-				},
-
-				//find person-4 and follow its workedfor relations in dataset "history"
-				//should find 2 companies in "history" dataset,
-				//but not fully resolve the company entities because we lack access to "company"
-				{CaseID: 10, startURI: peopleNamespacePrefix + ":person-4", predicate: "http://data.mimiro.io/people/workedfor",
-					inverse: false, datasets: []string{HISTORY}, expectedRelationCount: 2, firstRelationID: "ns4:company-2",
-					firstRelationPropertyName: "ns4:Name", firstRelationPropertyValue: nil,
-				},
-
-				//find company-2 and inversely follow workedfor relations without restriction
-				//should find person 3 and 4 in "history" dataset, and fully resolve the person entities
-				{CaseID: 11, startURI: companyNamespacePrefix + ":company-2", predicate: "http://data.mimiro.io/people/workedfor",
-					inverse: true, datasets: []string{}, expectedRelationCount: 2, firstRelationID: "ns3:person-3",
-					firstRelationPropertyName: "ns3:Name", firstRelationPropertyValue: "Person 3",
-					extraCheck: func(e *Entity, g *goblin.G) {
-						//There should be 4 references both from history and people
-						if len(e.References) != 4 {
-							g.Failf("Expected %v refs in inversely found person from both people and history datasets, actual: %v", 2, len(e.References))
-						}
-						//check that reference values are merged from all datasets. type should be list of type refs from both people and history
-						if reflect.DeepEqual(e.References["ns2:type"], []string{"ns5:Person", "ns5:Employment"}) {
-							g.Failf("Expected Person+Employment as type ref values, but found %v", e.References["ns2:type"])
-						}
-					},
-				},
-
-				//find company-2 and inversely follow workedfor relations with filter on history
-				//should find person 3 and 4 in "history" dataset, but not fully resolve the person entities
-				{CaseID: 12, startURI: companyNamespacePrefix + ":company-2", predicate: "http://data.mimiro.io/people/workedfor",
-					inverse: true, datasets: []string{HISTORY}, expectedRelationCount: 2, firstRelationID: "ns3:person-3",
-					firstRelationPropertyName: "ns3:Name", firstRelationPropertyValue: nil,
-					extraCheck: func(e *Entity, g *goblin.G) {
-						//there should be 4 refs from the history entity
-						if len(e.References) != 4 {
-							g.Failf("Case 12 :: Expected %v refs in inversely found person from history dataset only, actual: %v", 4, len(e.References))
-						}
-						//but we should only find type=Employment now. not Person
-						if e.References["ns2:type"] != "ns5:Employment" {
-							g.Failf("Expected ns5:Employment as type ref value, but found %v", e.References["ns2:type"])
-						}
-					},
-				},
-
-				//find company-2 and inversely follow workedfor relations with filter on people and companies
-				//should not find any relations since history access is not allowed, and workedfor is only stored there
-				{CaseID: 13, startURI: companyNamespacePrefix + ":company-2", predicate: "http://data.mimiro.io/people/workedfor",
-					inverse: true, datasets: []string{PEOPLE, COMPANIES}, expectedRelationCount: 0,
-				},
-			}
-
 			// create dataset
 			peopleDataset, _ := dsm.CreateDataset(PEOPLE)
 			companiesDataset, _ := dsm.CreateDataset(COMPANIES)
 			employmentHistoryDataset, _ := dsm.CreateDataset(HISTORY)
 
-			for _, td := range testdata {
-				cid := companyNamespacePrefix + ":company-" + strconv.Itoa(td.currentwork)
+			/* Install the following setup
+			{person: 1, workhistory: []int{}, currentwork: 1},
+			{person: 2, workhistory: []int{1}, currentwork: 2},
+			{person: 3, workhistory: []int{2}, currentwork: 1},
+			{person: 4, workhistory: []int{1, 2}, currentwork: 3},
+			{person: 5, workhistory: []int{3}, currentwork: 1},
+			*/
+			//insert companies
+			for _, companyId := range []int{1, 2, 3} {
+				cid := companyNamespacePrefix + ":company-" + strconv.Itoa(companyId)
 				_ = companiesDataset.StoreEntities([]*Entity{NewEntityFromMap(map[string]interface{}{
 					"id":    cid,
-					"props": map[string]interface{}{companyNamespacePrefix + ":Name": "Company " + strconv.Itoa(td.currentwork)},
+					"props": map[string]interface{}{companyNamespacePrefix + ":Name": "Company " + strconv.Itoa(companyId)},
 					"refs":  map[string]interface{}{rdfNamespacePrefix + ":type": modelNamespacePrefix + ":Company"}})})
+			}
 
-				pid := peopleNamespacePrefix + ":person-" + strconv.Itoa(td.person)
+			// insert people with worksfor relations
+			currentWork := []int{1, 2, 1, 3, 1}
+			for personId, workId := range currentWork {
+				pid := peopleNamespacePrefix + ":person-" + strconv.Itoa(personId+1)
 				_ = peopleDataset.StoreEntities([]*Entity{NewEntityFromMap(map[string]interface{}{
 					"id":    pid,
-					"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Person " + strconv.Itoa(td.person)},
+					"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Person " + strconv.Itoa(personId+1)},
 					"refs": map[string]interface{}{
 						rdfNamespacePrefix + ":type":        modelNamespacePrefix + ":Person",
-						peopleNamespacePrefix + ":worksfor": companyNamespacePrefix + ":company-" + strconv.Itoa(td.currentwork),
+						peopleNamespacePrefix + ":worksfor": companyNamespacePrefix + ":company-" + strconv.Itoa(workId),
 					}})})
+			}
 
+			//insert workHistory
+			for personId, workHistIds := range [][]int{{}, {1}, {2}, {1, 2}, {3}} {
 				var workHistory []string
-				for _, histId := range td.workhistory {
+				for _, histId := range workHistIds {
 					workHistory = append(workHistory, companyNamespacePrefix+":company-"+strconv.Itoa(histId))
 				}
-				_ = employmentHistoryDataset.StoreEntities([]*Entity{NewEntityFromMap(map[string]interface{}{
+				pid := peopleNamespacePrefix + ":person-" + strconv.Itoa(personId+1)
+				entity := NewEntityFromMap(map[string]interface{}{
 					"id":    pid,
 					"props": map[string]interface{}{},
 					"refs": map[string]interface{}{
 						rdfNamespacePrefix + ":type":         modelNamespacePrefix + ":Employment",
-						peopleNamespacePrefix + ":Employee":  pid,
-						peopleNamespacePrefix + ":worksfor":  companyNamespacePrefix + ":company-" + strconv.Itoa(td.currentwork),
+						peopleNamespacePrefix + ":Employee":  strconv.Itoa(personId + 1),
+						peopleNamespacePrefix + ":worksfor":  companyNamespacePrefix + ":company-" + strconv.Itoa(currentWork[personId]),
 						peopleNamespacePrefix + ":workedfor": workHistory,
-					}})})
+					}})
+				_ = employmentHistoryDataset.StoreEntities([]*Entity{entity})
 			}
+		})
+		g.AfterEach(func() {
+			dsm.DeleteDataset(PEOPLE)
+			dsm.DeleteDataset(COMPANIES)
+			dsm.DeleteDataset(HISTORY)
+			_ = store.Close()
+			_ = os.RemoveAll(storeLocation)
+		})
 
-			for _, tc := range testMatrix {
-				result, _ := store.GetManyRelatedEntities([]string{tc.startURI}, tc.predicate, tc.inverse, tc.datasets)
-				g.Assert(len(result)).Eql(tc.expectedRelationCount, "Case "+strconv.Itoa(tc.CaseID))
-				if tc.expectedRelationCount == 0 {
-					continue
-				}
-				/*
-					for _, r := range result {
-						e := r[2].(*Entity)
-						t.Logf("%v",e)
-						t.Logf("%v :: %v, props: %v, refs: %v", tc.CaseID, e.ID, e.Properties, e.References)
-					}
-				*/
-				entity := result[0][2].(*Entity)
-				g.Assert(entity.ID).Eql(tc.firstRelationID, fmt.Sprintf("Case %v :: startURI was %v; dataset constraints were %v", tc.CaseID, tc.startURI, tc.datasets))
-				observedPropVal := entity.Properties[tc.firstRelationPropertyName]
-				if tc.firstRelationPropertyCheck == nil {
-					g.Assert(observedPropVal).Eql(tc.firstRelationPropertyValue,
-						fmt.Sprintf("Case %v :: should resolve Relation property %v as %v, actually observed value: %v",
-							tc.CaseID, tc.firstRelationPropertyName, tc.firstRelationPropertyValue, observedPropVal))
-				}
-				if tc.firstRelationPropertyCheck != nil && (observedPropVal == nil) == tc.firstRelationPropertyCheck {
-					g.Failf("Case %v :: should resolve Relation property %v : %v, actually observed value: %v",
-						tc.CaseID, tc.firstRelationPropertyName, tc.firstRelationPropertyCheck, observedPropVal)
-				}
-				if tc.extraCheck != nil {
-					tc.extraCheck(entity, g)
-				}
+		g.It("Should return all of an entity's relations when no dataset constraints are applied", func() {
+			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"},
+				"http://data.mimiro.io/people/worksfor", false, []string{})
+			g.Assert(len(result)).Eql(2,
+				"expected 2 relations to be found. one from people, one from workhistory")
+
+			entity := result[0][2].(*Entity)
+			g.Assert(entity.ID).Eql("ns4:company-1", "first relation ID should be found")
+			g.Assert(entity.Properties["ns4:Name"]).Eql("Company 1", "first relation property should be resolved")
+		})
+
+		g.It("Should return only relation ID if access to relation dataset is not given", func() {
+			//constraint on "people" only. we should find the relation to a company in "people",
+			//but resolving the company should be omitted because we lack access to the "companies" dataset
+			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"},
+				"http://data.mimiro.io/people/worksfor", false, []string{PEOPLE})
+			g.Assert(len(result)).Eql(1, "expected 1 relation to be found in people dataset (not in workHistory)")
+
+			entity := result[0][2].(*Entity)
+			g.Assert(entity.ID).Eql("ns4:company-1", "first relation ID should be found")
+			g.Assert(entity.Properties["ns4:Name"]).IsNil("first relation property should NOT be resolved")
+		})
+
+		g.It("Should not find outgoing relations if the datasets owning these relations are disallowed", func() {
+			//constraint on "companies". we cannot access outgoing refs in the "people" or "history" datasets, therefore we should not find anything
+			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"},
+				"http://data.mimiro.io/people/worksfor", false, []string{COMPANIES})
+			g.Assert(len(result)).Eql(0, "expected 0 relation to be found (people and history are excluded)")
+		})
+
+		g.It("Should treat a list of (all) unknown datasets like an empty scope list", func() {
+			//constraint on bogus dataset. due to implementation, this dataset filter will be ignored, query behaves as unrestricted
+			//TODO: this can be discussed. Producing an error would make Queries less unpredictable. But ignoring invalid input makes the API more approachable
+			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"},
+				"http://data.mimiro.io/people/worksfor", false, []string{"bogus"})
+			g.Assert(len(result)).Eql(2, "expected 2 relations")
+
+			entity := result[0][2].(*Entity)
+			g.Assert(entity.ID).Eql("ns4:company-1", "first relation ID should be found")
+			g.Assert(entity.Properties["ns4:Name"]).Eql("Company 1", "first relation property should be resolved")
+		})
+
+		g.It("Should find relations in secondary datasets if main dataset is disallowed", func() {
+			//constraint on history dataset. we should find an outgoing relation from history to a company,
+			//but company resolving should be disabled since we lack access to the companies dataset
+			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"},
+				"http://data.mimiro.io/people/worksfor", false, []string{HISTORY})
+			g.Assert(len(result)).Eql(1, "expected 1 relation to be found in people dataset (not in workHistory)")
+
+			entity := result[0][2].(*Entity)
+			g.Assert(entity.ID).Eql("ns4:company-1", "first relation ID should be found")
+			g.Assert(entity.Properties["ns4:Name"]).IsNil("first relation property should NOT be resolved")
+
+		})
+
+		g.It("Should return all incoming relations of an entity in inverse query, when no scope is given", func() {
+			//inverse query for "company-1", no datasets restriction. should find 3 people with resolved entities
+			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-1"},
+				"http://data.mimiro.io/people/worksfor", true, []string{})
+			g.Assert(len(result)).Eql(6, "expected 6 relation to be found 3 owned by people and 3 owned by history")
+
+			entity := result[0][2].(*Entity)
+			g.Assert(entity.ID).Eql("ns3:person-5", "first relation ID should be found")
+			g.Assert(entity.Properties["ns3:Name"]).Eql("Person 5", "first relation property should be resolved")
+			g.Assert(len(entity.References)).Eql(4)
+			//verify that history entity has been merged in by checking for "workedfor"
+			g.Assert(entity.References["ns3:workedfor"].([]interface{})[0]).Eql("ns4:company-3", "inverse query should find company-3 in history following 'worksfor' to person-5's employment enity")
+		})
+
+		g.It("Should omit disallowed datasets when resolving found entities", func() {
+			//inverse query for "company-1" with only "people" accessible.
+			//should still find 3 people (incoming relation is owned by people dataset, which we have access to)
+			//people should be resolved
+			//but resolved relations in people should only be "people" data with no "history" refs merged in
+			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-1"},
+				"http://data.mimiro.io/people/worksfor", true, []string{PEOPLE})
+			g.Assert(len(result)).Eql(3, "expected 3 relations to be found in people dataset (not in workHistory)")
+
+			entity := result[0][2].(*Entity)
+			g.Assert(entity.ID).Eql("ns3:person-5", "first relation ID should be found")
+			g.Assert(entity.Properties["ns3:Name"]).Eql("Person 5", "first relation property should be resolved")
+			//make sure we only have two refs returned (worksfor + type), confirming that history refs have not been accessed
+			g.Assert(len(entity.References)).Eql(2)
+		})
+
+		g.It("Should not return results if the relation-owning datasets are disallowed", func() {
+			//inverse query for "company-1" with restriction to "companies" dataset.
+			//all incoming relations are stored in either history or people dataset.
+			//with access limited to companies dataset, we should not find incoming relations
+			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-1"},
+				"http://data.mimiro.io/people/worksfor", true, []string{COMPANIES})
+			g.Assert(len(result)).Eql(0)
+		})
+
+		g.It("Should resolve all elements in relation arrays, when no scope restriction is given", func() {
+			//find person-4 and follow its workedfor relations without restriction
+			//should find 2 companies in "history" dataset, and fully resolve the company entities
+			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-4"},
+				"http://data.mimiro.io/people/workedfor", false, []string{})
+			g.Assert(len(result)).Eql(2, "expected 2 relations to be found in history dataset")
+
+			entity := result[0][2].(*Entity)
+			g.Assert(entity.ID).Eql("ns4:company-2", "first relation ID should be found")
+			g.Assert(entity.Properties["ns4:Name"]).Eql("Company 2", "first relation property should be resolved")
+		})
+
+		g.It("Should find, but not resolve all relations in an array if relation dataset is disallowed", func() {
+			//find person-4 and follow its workedfor relations in dataset "history"
+			//should find 2 companies in "history" dataset,
+			//but not fully resolve the company entities because we lack access to "company"
+			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-4"},
+				"http://data.mimiro.io/people/workedfor", false, []string{HISTORY})
+			g.Assert(len(result)).Eql(2, "expected 2 relations to be found in history dataset")
+
+			entity := result[0][2].(*Entity)
+			g.Assert(entity.ID).Eql("ns4:company-2", "first relation ID should be found")
+			g.Assert(entity.Properties["ns4:Name"]).IsNil("companies dataset is not accessible, therefor name should be nil")
+		})
+
+		g.It("Should inversely find all relations in an array", func() {
+			//find company-2 and inversely follow workedfor relations without restriction
+			//should find person 3 and 4 in "history" dataset, and fully resolve the person entities
+			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-2"},
+				"http://data.mimiro.io/people/workedfor", true, []string{})
+			g.Assert(len(result)).Eql(2, "expected 2 people to be found from history dataset")
+
+			entity := result[0][2].(*Entity)
+			g.Assert(entity.ID).Eql("ns3:person-4", "first relation ID should be found")
+			g.Assert(entity.Properties["ns3:Name"]).Eql("Person 4", "first relation property should be resolved")
+			//There should be 4 references both from history and people
+			g.Assert(len(entity.References)).Eql(4, "Expected 4 refs in inversly found person from people and history datasets")
+			//check that reference values are merged from all datasets. type should be list of type refs from both people and history
+			if reflect.DeepEqual(entity.References["ns2:type"], []string{"ns5:Person", "ns5:Employment"}) {
+				g.Failf("Expected Person+Employment as type ref values, but found %v", entity.References["ns2:type"])
 			}
+		})
+
+		g.It("Should inversely find all relations in array, but not resolve the relation-intities if no access", func() {
+			//find company-2 and inversely follow workedfor relations with filter on history
+			//should find person 3 and 4 in "history" dataset, but not fully resolve the person entities
+			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-2"},
+				"http://data.mimiro.io/people/workedfor", true, []string{HISTORY})
+			g.Assert(len(result)).Eql(2, "expected 2 people to be found from history dataset")
+
+			entity := result[0][2].(*Entity)
+			g.Assert(entity.ID).Eql("ns3:person-4", "first relation ID should be found")
+			g.Assert(entity.Properties["ns3:Name"]).IsNil("Person 4 should not be resolved since access to people is missing")
+			//There should be 4 references both from history and people
+			g.Assert(len(entity.References)).Eql(4, "Expected 4 refs in inversly found person from history dataset")
+			//check that reference values are merged from all datasets. type should be list of type refs from both people and history
+			g.Assert(entity.References["ns2:type"]).Eql("ns5:Employment", "Expected only Employment type, not Person type")
+		})
+
+		g.It("Should not inversly find array relations if relation-owning dataset is disallowed", func() {
+			//find company-2 and inversely follow workedfor relations with filter on people and companies
+			//should not find any relations since history access is not allowed, and workedfor is only stored there
+			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-2"},
+				"http://data.mimiro.io/people/workedfor", true, []string{PEOPLE, COMPANIES})
+			g.Assert(len(result)).Eql(0)
 		})
 
 		g.It("Should respect dataset scope in GetEntity (single lookup query)", func() {
 			// namespaces
-			peopleNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
-			employeeNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/employee/")
-			modelNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/model/")
-			rdfNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion(RdfNamespaceExpansion)
+			employeeNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/employee/")
+			modelNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/model/")
+			rdfNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(RdfNamespaceExpansion)
 
 			// create dataset
 			const PEOPLE = "people"
@@ -1650,39 +1462,24 @@ func TestStore(test *testing.T) {
 					}})})
 
 			//first no datasets restriction, check that props from both employee and people dataset are merged
-			result, _ := store.GetEntity(peopleNamespacePrefix+":person-1", []string{})
-			if result.Properties["ns4:Title"] != "President" {
-				g.Errorf("expected to merge property employees:Title into result with value 'President',"+
-					" but found %v", result.Properties["ns4:Title"])
-			}
-			if result.Properties["ns3:Name"] != "Lisa" {
-				g.Errorf("expected to find property people:Name in result with value 'Lisa',"+
-					" but found %v", result.Properties["ns3:Name"])
-			}
+			result, err := store.GetEntity(peopleNamespacePrefix+":person-1", []string{})
+			g.Assert(err).IsNil()
+			g.Assert(result.Properties[employeeNamespacePrefix+":Title"]).Eql("President",
+				"expected to merge property employees:Title into result with value 'President'")
+			g.Assert(result.Properties[peopleNamespacePrefix+":Name"]).Eql("Lisa")
 
 			//now, restrict on dataset "people"
 			result, _ = store.GetEntity(peopleNamespacePrefix+":person-2", []string{PEOPLE})
 			//we should not find the Title from the employees dataset
-			if result.Properties["ns4:Title"] != nil {
-				g.Errorf("did not expect employees:Title to be set, but found %v", result.Properties["ns4:Title"])
-			}
+			g.Assert(result.Properties[employeeNamespacePrefix+":Title"]).IsNil()
 			//people:Name should be found though
-			if result.Properties["ns3:Name"] != "Bob" {
-				g.Errorf("expected to find property people:Name in result with value 'Bob',"+
-					" but found %v", result.Properties["ns3:Name"])
-			}
+			g.Assert(result.Properties[peopleNamespacePrefix+":Name"]).Eql("Bob")
 
 			//now, restrict on dataset "employees". now Name should be gone but title should be found
 			result, _ = store.GetEntity(peopleNamespacePrefix+":person-2", []string{EMPLOYEES})
-			if result.Properties["ns4:Title"] != "Vice President" {
-				g.Errorf("expected to merge property employees:Title into result with value 'Vice President',"+
-					" but found %v", result.Properties["ns4:Title"])
-			}
-			if result.Properties["ns3:Name"] != nil {
-				g.Errorf("did not expect people:Name in result, but found %v", result.Properties["ns3:Name"])
-			}
-
-			g.Assert(err).IsNil()
+			g.Assert(result.Properties[employeeNamespacePrefix+":Title"]).Eql("Vice President",
+				"expected to merge property employees:Title into result with value 'Vice President'")
+			g.Assert(result.Properties[peopleNamespacePrefix+":Name"]).IsNil()
 		})
 	})
 }
