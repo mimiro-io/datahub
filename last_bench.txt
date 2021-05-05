@@ -2,15 +2,15 @@ goos: linux
 goarch: amd64
 pkg: github.com/mimiro-io/datahub/internal/server
 cpu: Intel(R) Xeon(R) Platinum 8171M CPU @ 2.60GHz
-BenchmarkDatasetStoreEntities-2   	      25	  47555693 ns/op	16402840 B/op	  208012 allocs/op
-BenchmarkDatasetStoreEntities-2   	      25	  43516213 ns/op	16381477 B/op	  208003 allocs/op
-BenchmarkDatasetStoreEntities-2   	      26	  44891125 ns/op	16065706 B/op	  208041 allocs/op
-BenchmarkDatasetStoreEntities-2   	      26	  44831769 ns/op	16064768 B/op	  208037 allocs/op
-BenchmarkDatasetStoreEntities-2   	      26	  44149590 ns/op	16062268 B/op	  208026 allocs/op
-BenchmarkDatasetStoreEntities-2   	      27	  44722238 ns/op	15767401 B/op	  208083 allocs/op
-BenchmarkDatasetStoreEntities-2   	      27	  45546414 ns/op	15785911 B/op	  208085 allocs/op
-BenchmarkDatasetStoreEntities-2   	      26	  44254450 ns/op	16082943 B/op	  208035 allocs/op
-BenchmarkDatasetStoreEntities-2   	      26	  44141799 ns/op	16063773 B/op	  208032 allocs/op
-BenchmarkDatasetStoreEntities-2   	      25	  45261842 ns/op	16384002 B/op	  208015 allocs/op
+BenchmarkDatasetStoreEntities-2   	      27	  47087836 ns/op	15768098 B/op	  208086 allocs/op
+BenchmarkDatasetStoreEntities-2   	      25	  48219414 ns/op	16384709 B/op	  208017 allocs/op
+BenchmarkDatasetStoreEntities-2   	      25	  48684256 ns/op	16384354 B/op	  208014 allocs/op
+BenchmarkDatasetStoreEntities-2   	      25	  48895172 ns/op	16385404 B/op	  208020 allocs/op
+BenchmarkDatasetStoreEntities-2   	      25	  50310046 ns/op	16385656 B/op	  208022 allocs/op
+BenchmarkDatasetStoreEntities-2   	      24	  49759541 ns/op	16730101 B/op	  207955 allocs/op
+BenchmarkDatasetStoreEntities-2   	      25	  50315315 ns/op	16384063 B/op	  208014 allocs/op
+BenchmarkDatasetStoreEntities-2   	      24	  48315049 ns/op	16727581 B/op	  207945 allocs/op
+BenchmarkDatasetStoreEntities-2   	      25	  49283800 ns/op	16384136 B/op	  208015 allocs/op
+BenchmarkDatasetStoreEntities-2   	      24	  49035632 ns/op	16728326 B/op	  207948 allocs/op
 PASS
-ok  	github.com/mimiro-io/datahub/internal/server	21.832s
+ok  	github.com/mimiro-io/datahub/internal/server	23.056s
