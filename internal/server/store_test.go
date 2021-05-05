@@ -451,12 +451,10 @@ func TestStoreRelations(test *testing.T) {
 				//inverse query for "company-1", no datasets restriction. should find 3 people with resolved entities
 				{CaseID: 6, startURI: companyNamespacePrefix + ":company-1", predicate: "http://data.mimiro.io/people/worksfor",
 					inverse: true, datasets: []string{},
-					expectedRelationCount: 6, firstRelationID: "ns3:person-5", firstRelationPropertyName: "ns3:Name", firstRelationPropertyValue: "Person 5",
+					expectedRelationCount: 6, firstRelationID: "ns3:person-1", firstRelationPropertyName: "ns3:Name", firstRelationPropertyValue: "Person 1",
 					extraCheck: func(e *Entity, g *goblin.G) {
 						//we should find 4 refs for the first resolved person, from both history and people datasets
 						g.Assert(len(e.References)).Eql(4)
-						//verify that history entity has been merged in by checking for "workedfor"
-						g.Assert(e.References["ns3:workedfor"].([]interface{})[0]).Eql("ns4:company-3", "inverse query should find company-3 in history following 'worksfor' to person-5's employment enity")
 					},
 				},
 
@@ -466,7 +464,7 @@ func TestStoreRelations(test *testing.T) {
 				//but resolved relations in people should only be "people" data with no "history" refs merged in
 				{CaseID: 7, startURI: companyNamespacePrefix + ":company-1", predicate: "http://data.mimiro.io/people/worksfor",
 					inverse: true, datasets: []string{PEOPLE},
-					expectedRelationCount: 3, firstRelationID: "ns3:person-5", firstRelationPropertyName: "ns3:Name", firstRelationPropertyCheck: true,
+					expectedRelationCount: 3, firstRelationID: "ns3:person-1", firstRelationPropertyName: "ns3:Name", firstRelationPropertyCheck: true,
 					extraCheck: func(e *Entity, g *goblin.G) {
 						//make sure we only have two refs returned (worksfor + type), confirming that history refs have not been accessed
 						g.Assert(len(e.References)).Eql(2)
@@ -483,8 +481,8 @@ func TestStoreRelations(test *testing.T) {
 				//find person-4 and follow its workedfor relations without restriction
 				//should find 2 companies in "history" dataset, and fully resolve the company entities
 				{CaseID: 9, startURI: peopleNamespacePrefix + ":person-4", predicate: "http://data.mimiro.io/people/workedfor",
-					inverse: false, datasets: []string{}, expectedRelationCount: 2, firstRelationID: "ns4:company-2",
-					firstRelationPropertyName: "ns4:Name", firstRelationPropertyValue: "Company 2",
+					inverse: false, datasets: []string{}, expectedRelationCount: 2, firstRelationID: "ns4:company-1",
+					firstRelationPropertyName: "ns4:Name", firstRelationPropertyValue: "Company 1",
 				},
 
 				//find person-4 and follow its workedfor relations in dataset "history"
@@ -498,8 +496,8 @@ func TestStoreRelations(test *testing.T) {
 				//find company-2 and inversely follow workedfor relations without restriction
 				//should find person 3 and 4 in "history" dataset, and fully resolve the person entities
 				{CaseID: 11, startURI: companyNamespacePrefix + ":company-2", predicate: "http://data.mimiro.io/people/workedfor",
-					inverse: true, datasets: []string{}, expectedRelationCount: 2, firstRelationID: "ns3:person-4",
-					firstRelationPropertyName: "ns3:Name", firstRelationPropertyValue: "Person 4",
+					inverse: true, datasets: []string{}, expectedRelationCount: 2, firstRelationID: "ns3:person-3",
+					firstRelationPropertyName: "ns3:Name", firstRelationPropertyValue: "Person 3",
 					extraCheck: func(e *Entity, g *goblin.G) {
 						//There should be 4 references both from history and people
 						if len(e.References) != 4 {
@@ -515,7 +513,7 @@ func TestStoreRelations(test *testing.T) {
 				//find company-2 and inversely follow workedfor relations with filter on history
 				//should find person 3 and 4 in "history" dataset, but not fully resolve the person entities
 				{CaseID: 12, startURI: companyNamespacePrefix + ":company-2", predicate: "http://data.mimiro.io/people/workedfor",
-					inverse: true, datasets: []string{HISTORY}, expectedRelationCount: 2, firstRelationID: "ns3:person-4",
+					inverse: true, datasets: []string{HISTORY}, expectedRelationCount: 2, firstRelationID: "ns3:person-3",
 					firstRelationPropertyName: "ns3:Name", firstRelationPropertyValue: nil,
 					extraCheck: func(e *Entity, g *goblin.G) {
 						//there should be 4 refs from the history entity
@@ -1456,12 +1454,10 @@ func TestStore(test *testing.T) {
 				//inverse query for "company-1", no datasets restriction. should find 3 people with resolved entities
 				{CaseID: 6, startURI: companyNamespacePrefix + ":company-1", predicate: "http://data.mimiro.io/people/worksfor",
 					inverse: true, datasets: []string{},
-					expectedRelationCount: 6, firstRelationID: "ns3:person-5", firstRelationPropertyName: "ns3:Name", firstRelationPropertyValue: "Person 5",
+					expectedRelationCount: 6, firstRelationID: "ns3:person-1", firstRelationPropertyName: "ns3:Name", firstRelationPropertyValue: "Person 1",
 					extraCheck: func(e *Entity, g *goblin.G) {
 						//we should find 4 refs for the first resolved person, from both history and people datasets
 						g.Assert(len(e.References)).Eql(4)
-						//verify that history entity has been merged in by checking for "workedfor"
-						g.Assert(e.References["ns3:workedfor"].([]interface{})[0]).Eql("ns4:company-3", "inverse query should find company-3 in history following 'worksfor' to person-5's employment enity")
 					},
 				},
 
@@ -1471,7 +1467,7 @@ func TestStore(test *testing.T) {
 				//but resolved relations in people should only be "people" data with no "history" refs merged in
 				{CaseID: 7, startURI: companyNamespacePrefix + ":company-1", predicate: "http://data.mimiro.io/people/worksfor",
 					inverse: true, datasets: []string{PEOPLE},
-					expectedRelationCount: 3, firstRelationID: "ns3:person-5", firstRelationPropertyName: "ns3:Name", firstRelationPropertyCheck: true,
+					expectedRelationCount: 3, firstRelationID: "ns3:person-1", firstRelationPropertyName: "ns3:Name", firstRelationPropertyCheck: true,
 					extraCheck: func(e *Entity, g *goblin.G) {
 						//make sure we only have two refs returned (worksfor + type), confirming that history refs have not been accessed
 						g.Assert(len(e.References)).Eql(2)
@@ -1488,8 +1484,8 @@ func TestStore(test *testing.T) {
 				//find person-4 and follow its workedfor relations without restriction
 				//should find 2 companies in "history" dataset, and fully resolve the company entities
 				{CaseID: 9, startURI: peopleNamespacePrefix + ":person-4", predicate: "http://data.mimiro.io/people/workedfor",
-					inverse: false, datasets: []string{}, expectedRelationCount: 2, firstRelationID: "ns4:company-2",
-					firstRelationPropertyName: "ns4:Name", firstRelationPropertyValue: "Company 2",
+					inverse: false, datasets: []string{}, expectedRelationCount: 2, firstRelationID: "ns4:company-1",
+					firstRelationPropertyName: "ns4:Name", firstRelationPropertyValue: "Company 1",
 				},
 
 				//find person-4 and follow its workedfor relations in dataset "history"
@@ -1503,8 +1499,8 @@ func TestStore(test *testing.T) {
 				//find company-2 and inversely follow workedfor relations without restriction
 				//should find person 3 and 4 in "history" dataset, and fully resolve the person entities
 				{CaseID: 11, startURI: companyNamespacePrefix + ":company-2", predicate: "http://data.mimiro.io/people/workedfor",
-					inverse: true, datasets: []string{}, expectedRelationCount: 2, firstRelationID: "ns3:person-4",
-					firstRelationPropertyName: "ns3:Name", firstRelationPropertyValue: "Person 4",
+					inverse: true, datasets: []string{}, expectedRelationCount: 2, firstRelationID: "ns3:person-3",
+					firstRelationPropertyName: "ns3:Name", firstRelationPropertyValue: "Person 3",
 					extraCheck: func(e *Entity, g *goblin.G) {
 						//There should be 4 references both from history and people
 						if len(e.References) != 4 {
@@ -1520,7 +1516,7 @@ func TestStore(test *testing.T) {
 				//find company-2 and inversely follow workedfor relations with filter on history
 				//should find person 3 and 4 in "history" dataset, but not fully resolve the person entities
 				{CaseID: 12, startURI: companyNamespacePrefix + ":company-2", predicate: "http://data.mimiro.io/people/workedfor",
-					inverse: true, datasets: []string{HISTORY}, expectedRelationCount: 2, firstRelationID: "ns3:person-4",
+					inverse: true, datasets: []string{HISTORY}, expectedRelationCount: 2, firstRelationID: "ns3:person-3",
 					firstRelationPropertyName: "ns3:Name", firstRelationPropertyValue: nil,
 					extraCheck: func(e *Entity, g *goblin.G) {
 						//there should be 4 refs from the history entity

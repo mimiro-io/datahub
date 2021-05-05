@@ -722,13 +722,13 @@ func (s *Store) GetRelatedEntities(uri string, predicate string, inverse bool, d
 	return s.GetRelatedEntitiesAtTime(uri, predicate, inverse, datasets, queryTime)
 }
 
-func (s *Store) GetRelated(uri string, predicate string, inverse bool, datasets []string) ([]result, error) {
+func (s *Store) GetRelated(uri string, predicate string, inverse bool, datasets []string) ([]*result, error) {
 	queryTime := time.Now().UnixNano()
 	targetDatasetIds := s.datasetsToInternalIDs(datasets)
 	return s.GetRelatedAtTime(uri, predicate, inverse, targetDatasetIds, queryTime)
 }
 
-func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, targetDatasetIds []uint32, queryTime int64) ([]result, error) {
+func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, targetDatasetIds []uint32, queryTime int64) ([]*result, error) {
 	var resourceCurie, predCurie string
 	var err error
 
@@ -752,7 +752,7 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 		}
 	}
 
-	results := make([]result, 0)
+	results := make([]*result, 0)
 
 	// lookup pred and id
 	err = s.database.View(func(txn *badger.Txn) error {
@@ -779,32 +779,23 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 		}
 
 		if inverse {
-			opts1 := badger.DefaultIteratorOptions
-			opts1.PrefetchValues = false
-			opts1.Reverse = true
-			outgoingIterator := txn.NewIterator(opts1)
-			defer outgoingIterator.Close()
-
+			// define search prefix
 			searchBuffer := make([]byte, 10)
 			binary.BigEndian.PutUint16(searchBuffer, INCOMING_REF_INDEX)
 			binary.BigEndian.PutUint64(searchBuffer[2:], rid)
-			searchBuffer = append(searchBuffer, 0xFF)
-			// incoming buffer ic-indexid:relatedid:rid:time:pred::deleted => nil
 
-			prefixBuffer := make([]byte, 10)
-			binary.BigEndian.PutUint16(prefixBuffer, INCOMING_REF_INDEX)
-			binary.BigEndian.PutUint64(prefixBuffer[2:], rid)
+			opts1 := badger.DefaultIteratorOptions
+			opts1.PrefetchValues = false
+			opts1.Prefix = searchBuffer
+			// opts1.Reverse = true
+			outgoingIterator := txn.NewIterator(opts1)
+			defer outgoingIterator.Close()
 
-			// iterate all incoming refs
-			// continue if predicate is wrong
-			// for first rid of same entity return if not deleted.
-			// while rid is same continue.
 			var currentRID uint64
 			currentRID = 0
-			candidates := 0
-			seenForDataset := make(map[uint32]uint64)
-			for outgoingIterator.Seek(searchBuffer); outgoingIterator.ValidForPrefix(prefixBuffer); outgoingIterator.Next() {
-				candidates++
+			tmpResult := make(map[[12]byte]*result)
+
+			for outgoingIterator.Seek(searchBuffer); outgoingIterator.ValidForPrefix(searchBuffer); outgoingIterator.Next() {
 				item := outgoingIterator.Item()
 				k := item.Key()
 
@@ -826,7 +817,7 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 				}
 
 				// get recorded time on relationship
-				// skip over all entries until et gt than query time
+				// if rel recorded time gt than query time then continue
 				et := int64(binary.BigEndian.Uint64(k[18:]))
 				if et > queryTime {
 					continue
@@ -836,17 +827,17 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 				relatedID := binary.BigEndian.Uint64(k[10:])
 
 				if relatedID != currentRID {
-					seenForDataset = make(map[uint32]uint64)
+					// add to results
+					if currentRID != 0 {
+						for _, v := range tmpResult {
+							results = append(results, v)
+						}
+					}
+					tmpResult = make(map[[12]byte]*result)
 				}
 
 				// set current to be this related object
 				currentRID = relatedID
-
-				if _, found := seenForDataset[datasetId]; found {
-					continue
-				} else {
-					seenForDataset[datasetId] = currentRID
-				}
 
 				// get predicate
 				predID := binary.BigEndian.Uint64(k[26:])
@@ -854,36 +845,50 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 					continue
 				}
 
+				// make result key
+				var rkey[12]byte
+				binary.BigEndian.PutUint32(rkey[0:], datasetId)
+				binary.BigEndian.PutUint64(rkey[4:], predID)
+
 				// check is deleted
 				del := binary.BigEndian.Uint16(k[34:])
 				if del == 1 {
-					continue
+					// remove result from tmp for this
+					delete(tmpResult, rkey)
+				} else {
+					tmpResult[rkey] = &result{time: uint64(et), entityID: relatedID, predicateID: predID, datasetID: datasetId}
 				}
+			}
 
-				// add to results
-				results = append(results, result{time: uint64(et), entityID: relatedID, predicateID: predID, datasetID: datasetId})
+			// add the last batch of pending tmp results
+			if currentRID != 0 {
+				for _, v := range tmpResult {
+					results = append(results, v)
+				}
 			}
 		} else {
+			/*  binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
+				binary.BigEndian.PutUint64(outgoingBuffer[2:], rid)
+				binary.BigEndian.PutUint64(outgoingBuffer[10:], uint64(txnTime))
+				binary.BigEndian.PutUint64(outgoingBuffer[18:], predid)
+				binary.BigEndian.PutUint64(outgoingBuffer[26:], relatedid)
+				binary.BigEndian.PutUint16(outgoingBuffer[34:], 0) // deleted.
+				binary.BigEndian.PutUint32(outgoingBuffer[36:], ds.InternalID) */
+
+			searchBuffer := make([]byte, 10)
+			binary.BigEndian.PutUint16(searchBuffer, OUTGOING_REF_INDEX)
+			binary.BigEndian.PutUint64(searchBuffer[2:], rid)
+
+			// key is pid, ds, rid
+			tmpResult := make(map[[20]byte]*result)
+
 			opts1 := badger.DefaultIteratorOptions
 			opts1.PrefetchValues = false
-			opts1.Reverse = true
+			opts1.Prefix = searchBuffer
 			outgoingIterator := txn.NewIterator(opts1)
 			defer outgoingIterator.Close()
 
-			searchBuffer := make([]byte, 18)
-			binary.BigEndian.PutUint16(searchBuffer, OUTGOING_REF_INDEX)
-			binary.BigEndian.PutUint64(searchBuffer[2:], rid)
-			binary.BigEndian.PutUint64(searchBuffer[10:], uint64(queryTime))
-			searchBuffer = append(searchBuffer, 0xFF) // add the wildcard so we get equals matches as well
-
-			prefixBuffer := make([]byte, 10)
-			binary.BigEndian.PutUint16(prefixBuffer, OUTGOING_REF_INDEX)
-			binary.BigEndian.PutUint64(prefixBuffer[2:], rid)
-
-			candidates := 0
-			datasetTimestamps := make(map[uint32]uint64)
-			for outgoingIterator.Seek(searchBuffer); outgoingIterator.ValidForPrefix(prefixBuffer); outgoingIterator.Next() {
-				candidates++
+			for outgoingIterator.Seek(searchBuffer); outgoingIterator.ValidForPrefix(searchBuffer); outgoingIterator.Next() {
 				item := outgoingIterator.Item()
 				k := item.Key()
 
@@ -903,16 +908,12 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 					continue
 				}
 
-				// get time
-				et := binary.BigEndian.Uint64(k[10:])
-
-				// if time has changed for given dataset id then carry on
-				if v, found := datasetTimestamps[datasetId]; found {
-					if v != et {
-						continue
-					}
-				} else {
-					datasetTimestamps[datasetId] = et
+				// get recorded time on relationship
+				// if rel recorded time gt than query time then continue
+				et := int64(binary.BigEndian.Uint64(k[10:]))
+				if et > queryTime {
+					// we can use break here
+					break
 				}
 
 				// get predicate
@@ -921,19 +922,30 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 					continue
 				}
 
-				del := binary.BigEndian.Uint16(k[34:])
-				if del == 1 {
-					continue
-				}
-
 				// get related
 				relatedID := binary.BigEndian.Uint64(k[26:])
 
-				// add to results
-				results = append(results, result{time: et, entityID: relatedID, predicateID: predID})
+				var rkey[20]byte
+				binary.BigEndian.PutUint32(rkey[0:], datasetId)
+				binary.BigEndian.PutUint64(rkey[4:], predID)
+				binary.BigEndian.PutUint64(rkey[12:], relatedID)
+
+				// get deleted
+				del := binary.BigEndian.Uint16(k[34:])
+				if del == 1 {
+					delete(tmpResult, rkey)
+				} else {
+					tmpResult[rkey] = &result{time: uint64(et), entityID: relatedID, predicateID: predID}
+				}
+			}
+
+			results = make([]*result, len(tmpResult))
+			i := 0
+			for _,v := range tmpResult {
+				results[i] = v
+				i++
 			}
 		}
-
 		return nil
 	})
 
