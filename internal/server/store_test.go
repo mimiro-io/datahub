@@ -1262,7 +1262,8 @@ func TestDatasetScope(test *testing.T) {
 			g.Assert(len(result)).Eql(2,
 				"expected 2 relations to be found. one from people, one from workhistory")
 
-			entity := result[0][2].(*Entity)
+			entity := findEntity(result, "ns4:company-1")
+			g.Assert(entity).IsNotNil()
 			g.Assert(entity.ID).Eql("ns4:company-1", "first relation ID should be found")
 			g.Assert(entity.Properties["ns4:Name"]).Eql("Company 1", "first relation property should be resolved")
 		})
@@ -1274,7 +1275,8 @@ func TestDatasetScope(test *testing.T) {
 				"http://data.mimiro.io/people/worksfor", false, []string{PEOPLE})
 			g.Assert(len(result)).Eql(1, "expected 1 relation to be found in people dataset (not in workHistory)")
 
-			entity := result[0][2].(*Entity)
+			entity := findEntity(result, "ns4:company-1")
+			g.Assert(entity).IsNotNil()
 			g.Assert(entity.ID).Eql("ns4:company-1", "first relation ID should be found")
 			g.Assert(entity.Properties["ns4:Name"]).IsNil("first relation property should NOT be resolved")
 		})
@@ -1293,7 +1295,8 @@ func TestDatasetScope(test *testing.T) {
 				"http://data.mimiro.io/people/worksfor", false, []string{"bogus"})
 			g.Assert(len(result)).Eql(2, "expected 2 relations")
 
-			entity := result[0][2].(*Entity)
+			entity := findEntity(result, "ns4:company-1")
+			g.Assert(entity).IsNotNil()
 			g.Assert(entity.ID).Eql("ns4:company-1", "first relation ID should be found")
 			g.Assert(entity.Properties["ns4:Name"]).Eql("Company 1", "first relation property should be resolved")
 		})
@@ -1305,7 +1308,8 @@ func TestDatasetScope(test *testing.T) {
 				"http://data.mimiro.io/people/worksfor", false, []string{HISTORY})
 			g.Assert(len(result)).Eql(1, "expected 1 relation to be found in people dataset (not in workHistory)")
 
-			entity := result[0][2].(*Entity)
+			entity := findEntity(result, "ns4:company-1")
+			g.Assert(entity).IsNotNil()
 			g.Assert(entity.ID).Eql("ns4:company-1", "first relation ID should be found")
 			g.Assert(entity.Properties["ns4:Name"]).IsNil("first relation property should NOT be resolved")
 
@@ -1316,13 +1320,15 @@ func TestDatasetScope(test *testing.T) {
 			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-1"},
 				"http://data.mimiro.io/people/worksfor", true, []string{})
 			g.Assert(len(result)).Eql(6, "expected 6 relation to be found 3 owned by people and 3 owned by history")
-
-			entity := result[0][2].(*Entity)
-			g.Assert(entity.ID).Eql("ns3:person-5", "first relation ID should be found")
+			entity := findEntity(result, "ns3:person-5")
+			g.Assert(entity).IsNotNil()
 			g.Assert(entity.Properties["ns3:Name"]).Eql("Person 5", "first relation property should be resolved")
 			g.Assert(len(entity.References)).Eql(4)
 			//verify that history entity has been merged in by checking for "workedfor"
-			g.Assert(entity.References["ns3:workedfor"].([]interface{})[0]).Eql("ns4:company-3", "inverse query should find company-3 in history following 'worksfor' to person-5's employment enity")
+			g.Assert(entity.References["ns3:workedfor"].([]interface{})[0]).Eql("ns4:company-3",
+				"inverse query should find company-3 in history following 'worksfor' to person-5's employment enity")
+			//verify that worksfor is duplicated - since the relation is merged together from people and history
+			g.Assert(entity.References["ns3:worksfor"]).Eql([]interface{}{"ns4:company-1", "ns4:company-1"})
 		})
 
 		g.It("Should omit disallowed datasets when resolving found entities", func() {
@@ -1334,7 +1340,8 @@ func TestDatasetScope(test *testing.T) {
 				"http://data.mimiro.io/people/worksfor", true, []string{PEOPLE})
 			g.Assert(len(result)).Eql(3, "expected 3 relations to be found in people dataset (not in workHistory)")
 
-			entity := result[0][2].(*Entity)
+			entity := findEntity(result, "ns3:person-5")
+			g.Assert(entity).IsNotNil()
 			g.Assert(entity.ID).Eql("ns3:person-5", "first relation ID should be found")
 			g.Assert(entity.Properties["ns3:Name"]).Eql("Person 5", "first relation property should be resolved")
 			//make sure we only have two refs returned (worksfor + type), confirming that history refs have not been accessed
@@ -1357,7 +1364,8 @@ func TestDatasetScope(test *testing.T) {
 				"http://data.mimiro.io/people/workedfor", false, []string{})
 			g.Assert(len(result)).Eql(2, "expected 2 relations to be found in history dataset")
 
-			entity := result[0][2].(*Entity)
+			entity := findEntity(result, "ns4:company-2")
+			g.Assert(entity).IsNotNil()
 			g.Assert(entity.ID).Eql("ns4:company-2", "first relation ID should be found")
 			g.Assert(entity.Properties["ns4:Name"]).Eql("Company 2", "first relation property should be resolved")
 		})
@@ -1370,7 +1378,8 @@ func TestDatasetScope(test *testing.T) {
 				"http://data.mimiro.io/people/workedfor", false, []string{HISTORY})
 			g.Assert(len(result)).Eql(2, "expected 2 relations to be found in history dataset")
 
-			entity := result[0][2].(*Entity)
+			entity := findEntity(result, "ns4:company-2")
+			g.Assert(entity).IsNotNil()
 			g.Assert(entity.ID).Eql("ns4:company-2", "first relation ID should be found")
 			g.Assert(entity.Properties["ns4:Name"]).IsNil("companies dataset is not accessible, therefor name should be nil")
 		})
@@ -1382,7 +1391,8 @@ func TestDatasetScope(test *testing.T) {
 				"http://data.mimiro.io/people/workedfor", true, []string{})
 			g.Assert(len(result)).Eql(2, "expected 2 people to be found from history dataset")
 
-			entity := result[0][2].(*Entity)
+			entity := findEntity(result, "ns3:person-4")
+			g.Assert(entity).IsNotNil()
 			g.Assert(entity.ID).Eql("ns3:person-4", "first relation ID should be found")
 			g.Assert(entity.Properties["ns3:Name"]).Eql("Person 4", "first relation property should be resolved")
 			//There should be 4 references both from history and people
@@ -1400,7 +1410,8 @@ func TestDatasetScope(test *testing.T) {
 				"http://data.mimiro.io/people/workedfor", true, []string{HISTORY})
 			g.Assert(len(result)).Eql(2, "expected 2 people to be found from history dataset")
 
-			entity := result[0][2].(*Entity)
+			entity := findEntity(result, "ns3:person-4")
+			g.Assert(entity).IsNotNil()
 			g.Assert(entity.ID).Eql("ns3:person-4", "first relation ID should be found")
 			g.Assert(entity.Properties["ns3:Name"]).IsNil("Person 4 should not be resolved since access to people is missing")
 			//There should be 4 references both from history and people
@@ -1482,6 +1493,18 @@ func TestDatasetScope(test *testing.T) {
 			g.Assert(result.Properties[peopleNamespacePrefix+":Name"]).IsNil()
 		})
 	})
+}
+
+func findEntity(result [][]interface{}, id string) *Entity {
+	var entity *Entity
+	for _, r := range result {
+		currentEntity := r[2].(*Entity)
+		if currentEntity.ID == id {
+			entity = currentEntity
+			break
+		}
+	}
+	return entity
 }
 
 func count(b *badger.DB) int {
