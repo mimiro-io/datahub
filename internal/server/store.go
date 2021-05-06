@@ -722,13 +722,13 @@ func (s *Store) GetRelatedEntities(uri string, predicate string, inverse bool, d
 	return s.GetRelatedEntitiesAtTime(uri, predicate, inverse, datasets, queryTime)
 }
 
-func (s *Store) GetRelated(uri string, predicate string, inverse bool, datasets []string) ([]*result, error) {
+func (s *Store) GetRelated(uri string, predicate string, inverse bool, datasets []string) ([]result, error) {
 	queryTime := time.Now().UnixNano()
 	targetDatasetIds := s.datasetsToInternalIDs(datasets)
 	return s.GetRelatedAtTime(uri, predicate, inverse, targetDatasetIds, queryTime)
 }
 
-func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, targetDatasetIds []uint32, queryTime int64) ([]*result, error) {
+func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, targetDatasetIds []uint32, queryTime int64) ([]result, error) {
 	var resourceCurie, predCurie string
 	var err error
 
@@ -752,7 +752,7 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 		}
 	}
 
-	results := make([]*result, 0)
+	results := make([]result, 0)
 
 	// lookup pred and id
 	err = s.database.View(func(txn *badger.Txn) error {
@@ -793,7 +793,7 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 
 			var currentRID uint64
 			currentRID = 0
-			tmpResult := make(map[[12]byte]*result)
+			tmpResult := make(map[[12]byte]result)
 
 			for outgoingIterator.Seek(searchBuffer); outgoingIterator.ValidForPrefix(searchBuffer); outgoingIterator.Next() {
 				item := outgoingIterator.Item()
@@ -833,7 +833,7 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 							results = append(results, v)
 						}
 					}
-					tmpResult = make(map[[12]byte]*result)
+					tmpResult = make(map[[12]byte]result)
 				}
 
 				// set current to be this related object
@@ -856,7 +856,7 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 					// remove result from tmp for this
 					delete(tmpResult, rkey)
 				} else {
-					tmpResult[rkey] = &result{time: uint64(et), entityID: relatedID, predicateID: predID, datasetID: datasetId}
+					tmpResult[rkey] = result{time: uint64(et), entityID: relatedID, predicateID: predID, datasetID: datasetId}
 				}
 			}
 
@@ -880,7 +880,7 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 			binary.BigEndian.PutUint64(searchBuffer[2:], rid)
 
 			// key is pid, ds, rid
-			tmpResult := make(map[[20]byte]*result)
+			tmpResult := make(map[[20]byte]result)
 
 			opts1 := badger.DefaultIteratorOptions
 			opts1.PrefetchValues = false
@@ -935,11 +935,11 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 				if del == 1 {
 					delete(tmpResult, rkey)
 				} else {
-					tmpResult[rkey] = &result{time: uint64(et), entityID: relatedID, predicateID: predID}
+					tmpResult[rkey] = result{time: uint64(et), entityID: relatedID, predicateID: predID}
 				}
 			}
 
-			results = make([]*result, len(tmpResult))
+			results = make([]result, len(tmpResult))
 			i := 0
 			for _,v := range tmpResult {
 				results[i] = v
