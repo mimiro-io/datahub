@@ -49,7 +49,7 @@ jobs:
           severity: 'CRITICAL,HIGH'         
 
       - name: Push Unstable Image to DockerHub
-        id: dockerhub_push
+        id: dockerhub_push_unstable
         if: github.ref == 'refs/heads/master' && github.event_name == 'push'
         uses: docker/build-push-action@v2
         with:
@@ -57,7 +57,7 @@ jobs:
           tags: mimiro/datahub:${{ steps.get_version.outputs.version }}-unstable    
     
       - name: Push Stable Image to DockerHub upon publishing github release
-        id: dockerhub_push
+        id: dockerhub_push_stable
         if: github.ref == 'refs/heads/master' && github.event_name == 'release'
         uses: docker/build-push-action@v2
         with:
