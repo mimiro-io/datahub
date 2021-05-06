@@ -19,8 +19,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"github.com/DataDog/datadog-go/statsd"
 	"fmt"
+	"github.com/DataDog/datadog-go/statsd"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -218,24 +218,24 @@ func (javascriptTransform *JavascriptTransform) GetNamespacePrefix(urlExpansion 
 	ts := time.Now()
 
 	prefix, _ := javascriptTransform.Store.NamespaceManager.GetPrefixMappingForExpansion(urlExpansion)
-	_ = javascriptTransform.statsDClient.Count("transform.GetNamespacePrefix.time",
-		int64(time.Since(ts)), javascriptTransform.statsDTags, 1)
+	_ = javascriptTransform.statsDClient.Timing("transform.GetNamespacePrefix.time",
+		time.Since(ts), javascriptTransform.statsDTags, 1)
 	return prefix
 }
 
 func (javascriptTransform *JavascriptTransform) AssertNamespacePrefix(urlExpansion string) string {
 	ts := time.Now()
 	prefix, _ := javascriptTransform.Store.NamespaceManager.AssertPrefixMappingForExpansion(urlExpansion)
-	_ = javascriptTransform.statsDClient.Count("transform.AssertNamespacePrefix.time",
-		int64(time.Since(ts)), javascriptTransform.statsDTags, 1)
+	_ = javascriptTransform.statsDClient.Timing("transform.AssertNamespacePrefix.time",
+		time.Since(ts), javascriptTransform.statsDTags, 1)
 	return prefix
 }
 
 func (javascriptTransform *JavascriptTransform) Query(startingEntities []string, predicate string, inverse bool, datasets []string) [][]interface{} {
 	ts := time.Now()
 	results, err := javascriptTransform.Store.GetManyRelatedEntities(startingEntities, predicate, inverse, datasets)
-	_ = javascriptTransform.statsDClient.Count("transform.Query.time",
-		int64(time.Since(ts)), javascriptTransform.statsDTags, 1)
+	_ = javascriptTransform.statsDClient.Timing("transform.Query.time",
+		time.Since(ts), javascriptTransform.statsDTags, 1)
 	if err != nil {
 		return nil
 	}
@@ -245,8 +245,8 @@ func (javascriptTransform *JavascriptTransform) Query(startingEntities []string,
 func (javascriptTransform *JavascriptTransform) ById(entityId string, datasets []string) *server.Entity {
 	ts := time.Now()
 	entity, err := javascriptTransform.Store.GetEntity(entityId, datasets)
-	_ = javascriptTransform.statsDClient.Count("transform.ById.time",
-		int64(time.Since(ts)), javascriptTransform.statsDTags, 1)
+	_ = javascriptTransform.statsDClient.Timing("transform.ById.time",
+		time.Since(ts), javascriptTransform.statsDTags, 1)
 	if err != nil {
 		return nil
 	}
