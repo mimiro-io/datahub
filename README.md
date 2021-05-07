@@ -55,6 +55,8 @@ To run the data hub in docker:
 docker run -d --name mimiro-datahub -p 8080:8080 local/mimiro-datahub
 ```
 
+Something to note if running the datahub in docker is that by default docker does not have persistent storage of the data in the created container. This means that if the docker container is shut down your data saved in the datahub will dissapear. To make sure that your data persists you will need to define a persisting docker volume on disk. Read more on how to set up [docker volumes](https://docs.docker.com/storage/volumes/).
+
 ## Running the Binary
 
 The MIMIRO data hub is built as a single binary. It can be run in the following ways:
