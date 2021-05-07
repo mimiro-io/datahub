@@ -35,7 +35,7 @@ import (
 
 type Transform interface {
 	GetConfig() map[string]interface{}
-	transformEntities(runner *Runner, entities []*server.Entity) ([]*server.Entity, error)
+	transformEntities(runner *Runner, entities []*server.Entity, jobTag string) ([]*server.Entity, error)
 }
 
 // these are upper cased to prevent the user from accidentally redefining them
@@ -171,6 +171,7 @@ func newJavascriptTransform(log *zap.SugaredLogger, code64 string, store *server
 	transform.Runtime.Set("Log", transform.Log)
 	transform.Runtime.Set("NewEntity", transform.NewEntity)
 	transform.Runtime.Set("ToString", transform.ToString)
+	transform.Runtime.Set("Timing", transform.Timing)
 
 	_, err = transform.Runtime.RunString(string(code))
 	if err != nil {
@@ -192,10 +193,23 @@ type JavascriptTransform struct {
 	Logger       *zap.SugaredLogger
 	statsDClient statsd.ClientInterface
 	statsDTags   []string
+	timings      map[string]time.Time
 }
 
 func (javascriptTransform *JavascriptTransform) Log(thing interface{}) {
 	javascriptTransform.Logger.Info(thing)
+}
+
+func (javascriptTransform *JavascriptTransform) Timing(name string, end bool) {
+	if end {
+		if _, ok := javascriptTransform.timings[name]; ok {
+			timing := time.Since(javascriptTransform.timings[name])
+			_ = javascriptTransform.statsDClient.Timing("transform.timing."+name,
+				timing, javascriptTransform.statsDTags, 1)
+		}
+	} else {
+		javascriptTransform.timings[name] = time.Now()
+	}
 }
 
 func (javascriptTransform *JavascriptTransform) MakeEntityArray(entities []interface{}) []*server.Entity {
@@ -274,15 +288,16 @@ func (javascriptTransform *JavascriptTransform) ToString(obj interface{}) string
 	}
 }
 
-func (javascriptTransform *JavascriptTransform) transformEntities(runner *Runner, entities []*server.Entity) ([]*server.Entity, error) {
+func (javascriptTransform *JavascriptTransform) transformEntities(runner *Runner, entities []*server.Entity, jobTag string) ([]*server.Entity, error) {
 
 	var transformFunc func(entities []*server.Entity) (interface{}, error)
 	err := javascriptTransform.Runtime.ExportTo(javascriptTransform.Runtime.Get("transform_entities"), &transformFunc)
-	javascriptTransform.statsDClient = runner.statsdClient
-	javascriptTransform.statsDTags = []string{"application:datahub"}
 	if err != nil {
 		return nil, err
 	}
+	javascriptTransform.statsDClient = runner.statsdClient
+	javascriptTransform.statsDTags = []string{"application:datahub", "job:" + jobTag}
+	javascriptTransform.timings = map[string]time.Time{}
 
 	// invoke transform, and catch js runtime err
 	result, err := transformFunc(entities)
@@ -321,7 +336,7 @@ type HttpTransform struct {
 	TokenProvider  string // for use in token auth
 }
 
-func (httpTransform *HttpTransform) transformEntities(runner *Runner, entities []*server.Entity) ([]*server.Entity, error) {
+func (httpTransform *HttpTransform) transformEntities(runner *Runner, entities []*server.Entity, jobTag string) ([]*server.Entity, error) {
 	timeout := 1000 * time.Millisecond
 	client := httpclient.NewClient(httpclient.WithHTTPTimeout(timeout))
 
