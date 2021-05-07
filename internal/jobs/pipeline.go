@@ -17,6 +17,7 @@ package jobs
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/mimiro-io/datahub/internal/server"
 )
@@ -66,9 +67,13 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 	}
 	syncJobState.ContinuationToken = ""
 
+	tags := []string{"application:datahub", "job:" + job.id }
 	for keepReading {
 
+		readTs := time.Now()
 		err := pipeline.source.readEntities(runner, syncJobState.ContinuationToken, pipeline.batchSize, func(entities []*server.Entity, continuationToken string) error {
+			_ = runner.statsdClient.Timing("pipeline.source.batch", time.Since(readTs), tags, 1)
+			readTs = time.Now()
 			select {
 			// if the cancellable context is cancelled, ctx.Done will trigger, and it will break out. The only way I
 			// found to do so, was to trigger an error, and then check for that in the jobs.Runner.
@@ -82,14 +87,18 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 				if incomingEntityCount > 0 {
 					// apply transform if it exists
 					if pipeline.transform != nil {
-						entities, err = pipeline.transform.transformEntities(runner, entities)
+						transformTs := time.Now()
+						entities, err = pipeline.transform.transformEntities(runner, entities, job.id)
+						_ = runner.statsdClient.Timing("pipeline.transform.batch", time.Since(transformTs), tags, 1)
 						if err != nil {
 							return err
 						}
 					}
 
 					// write to sink
+					sinkTs := time.Now()
 					err = pipeline.sink.processEntities(runner, entities)
+					_ = runner.statsdClient.Timing("pipeline.sink.batch", time.Since(sinkTs), tags, 1)
 					if err != nil {
 						return err
 					}
@@ -147,9 +156,13 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 
 	keepReading := true
 
+	tags := []string{"application:datahub", "job:" + job.id }
 	for keepReading {
 
+		readTs := time.Now()
 		err := pipeline.source.readEntities(runner, syncJobState.ContinuationToken, pipeline.batchSize, func(entities []*server.Entity, continuationToken string) error {
+			_ = runner.statsdClient.Timing("pipeline.source.batch", time.Since(readTs), tags, 1)
+			readTs = time.Now()
 			select {
 			// if the cancellable context is cancelled, ctx.Done will trigger, and it will break out. The only way I
 			// found to do so, was to trigger an error, and then check for that in the jobs.Runner.
@@ -163,14 +176,18 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 				if incomingEntityCount > 0 {
 					// apply transform if it exists
 					if pipeline.transform != nil {
-						entities, err = pipeline.transform.transformEntities(runner, entities)
+						transformTs := time.Now()
+						entities, err = pipeline.transform.transformEntities(runner, entities, job.id)
+						_ = runner.statsdClient.Timing("pipeline.transform.batch", time.Since(transformTs), tags, 1)
 						if err != nil {
 							return err
 						}
 					}
 
 					// write to sink
+					sinkTs := time.Now()
 					err = pipeline.sink.processEntities(runner, entities)
+					_ = runner.statsdClient.Timing("pipeline.sink.batch", time.Since(sinkTs), tags, 1)
 					if err != nil {
 						return err
 					}
