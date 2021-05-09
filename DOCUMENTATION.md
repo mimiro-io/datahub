@@ -182,8 +182,10 @@ Entities can be retrieved from datasets as a stream of changes or as the latest 
 To get the changes from a dataset:
 
 ```
-> mim dataset changes -n test.people -f raw
+> mim dataset changes test.people
 ```
+
+By default the format of the returned JSON is 'raw' but by adding ```--pretty```-flag you can have it more human readable.
 
 Entities are returned as an array of JSON objects and can also contain a continuation token. A continuation token can be used in subsequent requests.
 
@@ -233,8 +235,9 @@ Now, when we retrieve entities from `namespaces.Test`, datahub will supply only 
 
 ```
 > mim dataset entities namespaces.
+                                                                                                          
+# Listing entities from http://localhost:8080/datasets/namespaces.Test/entities
 
-# Listing entities from http://localhost:4242/datasets/namespaces.Test/entities
 # Namespaces:
 
 #   | Namespace
@@ -302,7 +305,8 @@ Job definitions are described using JSON and can be uploaded to the data hub usi
     },
     "sink" : {
         "Type" : "Name of sink type - see below for list"
-    }
+    },
+    "type": "job"
 }
 ```
 
@@ -438,7 +442,7 @@ The following example shows how to configure a job to send data from a dataset t
 }
 ```
 
-To run a job just once,  install it as paused and trigger a single run with the `/jobs/<id>/run` endpoint or `mim jobs operate`.
+To run a job just once, install it as paused and trigger a single run with the `/jobs/<id>/run` endpoint or `mim jobs operate`.
 Example for paused job:
 
 ```json
@@ -529,7 +533,7 @@ mim jobs delete -C=false simple-job
 To pause a job so that it is not scheduled to run:
 
 ```shell
-mim jobs operate -i simple-job -o pause
+mim jobs operate simple-job -o pause
 ```
 
 #### Starting a Job
@@ -537,7 +541,7 @@ mim jobs operate -i simple-job -o pause
 To start a job:
 
 ```shell
-mim jobs operate -i simple-job -o start
+mim jobs operate simple-job -o run
 ```
 
 #### Stopping a Job
@@ -545,7 +549,7 @@ mim jobs operate -i simple-job -o start
 To stop a running job:
 
 ```shell
-mim jobs operate -i simple-job -o stop
+mim jobs operate simple-job -o kill
 ```
 
 #### Inspecting a Job
@@ -596,7 +600,7 @@ Internal transforms are written in Javascript and executed in a sandbox.
 
 Note: The version of Javascript supported is ES5.1. Please check for the restrictions regarding this version, e.g. const and let are NOT supported.
 
-Transforms written in Javascript need to be encoded as base64 and added in the transform section of a job definition.
+Transforms written in Javascript need to be encoded as base64 and added in the transform section of a job definition. This can be done with the help of `mim jobs add -f job-with-transform.json -t javascript-transform.js` to automatically encode it or by manually encoding the transform section and adding it in the job-with-transform.json.
 
 Example Job Definition:
 
@@ -726,8 +730,9 @@ The Query function is used to lookup related entities. It accepts an array of en
 The result is a list of lists where each inner list is a result row. The result row contains the entity id, the property, and then the related entity. Note: that if an entity has multiple related entities then each appear in its own row.
 
 ```json
+// expand these examples
 [
-    [ "entity-id" , "property uri", { "id" : "related entity" }  ]
+    [ "entity-id" , "property uri", { "id" : "related entity" } ]
 ]
 ```
 
