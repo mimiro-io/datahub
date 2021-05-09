@@ -6,7 +6,7 @@ Semantic Graph databases are the ideal basis for an integration platform, they a
 
 Data integration is often done by writing ad-hoc code to talk to different APIs, and long running batch ETL jobs. The data hub standardises on a simple, generic protocol for exposing and updating remote systems with support for both batch, incremental and streaming modes.
 
-Combining the semantic graph database with simple synchronisation protocol delivers a generic and powerful capability for collecting, connecting and delivering data from and to many sources. 
+Combining the semantic graph database with simple synchronisation protocol delivers a generic and powerful capability for collecting, connecting and delivering data from and to many sources.
 
 Once the data is in the graph database it can be connected via queries and transformed to produce new unified data structures. These data can then be used as the basis for ML and AI, or sent to external third parties via APIs or data exports.
 
@@ -16,7 +16,7 @@ Finally, data is changing over time, it is often useful to go back to a given mo
 
 Getting started with the MIMIRO data hub is quick and easy. The data hub can be run locally with just one command. Check out the [getting started](./README.md#getting-started) section for how to get it running.
 
-Working with the data hub API can be done in many ways, but we really recommend getting and installing, `mim`, the MIMIRO data hub CLI. 
+Working with the data hub API can be done in many ways, but we really recommend getting and installing, `mim`, the MIMIRO data hub CLI.
 
 `mim` can be downloaded for any platform: linux, macos, and windows. Check out the [releases](https://github.com/mimiro-io/datahub-cli/releases) on github.
 
@@ -237,6 +237,7 @@ Now, when we retrieve entities from `namespaces.Test`, datahub will supply only 
 > mim dataset entities namespaces.
                                                                                                           
 # Listing entities from http://localhost:8080/datasets/namespaces.Test/entities
+
 # Namespaces:
 
 #   | Namespace
@@ -651,6 +652,23 @@ id = GetId(e);
 
 returns value `ns0:bob`
 
+#### SetId
+
+`SetId(entity, id)` takes a parameter of type `Entity` and a string with an id, and updates the id of the entity.
+
+Example:
+
+```javascript
+var e = NewEntity();
+SetId(e, PrefixField("ns0", 42));
+
+Log("Id is now: " + GetId(e));
+```
+```text
+ INFO  - Id is now: ns0:42
+```
+
+
 #### GetNamespacePrefix
 
 URIs are often represented as CURIEs. CURIEs are formed of a prefix part and local part. The prefix is key that corresponds to an expansion. To resolve a CURIE into a full URI the local part of appended to the prefix expansion.
@@ -669,6 +687,19 @@ var personTypePrefix = GetNamespacePrefix("http://data.mimiro.io/schema/people/"
 
 ```javascript
 var newTypePrefix = AssertNamespacePrefix("http://data.mimiro.io/schema/company/")
+```
+
+#### Timing
+
+`Timing` can be used to create custom timing metrics around parts of a transform. The function accepts a metric name as
+first parameter and a "send" boolean as optional second parameter. When the send parameter is false or omitted, the `Timing`
+function registers a start-timestamp for the given metric name. When the send parameter is `true`, Timing sends the duration
+since start as timing value to statsd.
+
+```javascript
+Timing("hello")  //register start for metric "hello"
+// ... do something
+Timing("hello", true) // send duration since start for metric "hello"
 ```
 
 #### Log
@@ -723,6 +754,22 @@ var personTypePrefix = GetNamespacePrefix("http://data.mimiro.io/schema/person/"
 personName = GetProperty(person, personTypePrefix, "name");
 ```
 
+The `GetProperty` function can also take an optional extra defaultValue
+
+```javascript
+var e = NewEntity();
+
+// field1 is missing
+var value = GetProperty(e, "ns0", "field1", "my default value");
+
+Log(value);
+
+```
+```text
+ INFO  - my default value
+```
+
+
 #### SetProperty
 
 To set the value of a named property on an entity use the SetProperty function.
@@ -731,6 +778,27 @@ To set the value of a named property on an entity use the SetProperty function.
 var personTypePrefix = GetNamespacePrefix("http://data.mimiro.io/schema/person/");
 
 SetProperty(person, personTypePrefix, "name", "bobby");
+```
+
+#### SetDeleted / GetDeleted
+
+`SetDeleted` takes a parameter `entity` of type Entity, and a boolean flag, and updates the deleted state on the Entity.
+
+`GetDeleted` takes a single parameter `entity` of type Entity, and returns the deleted state of the Entity. If entity is
+missing or null, this function returns undefined.
+
+Example:
+
+```javascript
+var e = NewEntity()
+
+SetDeleted(e, true);
+var deleted = GetDeleted(e);
+
+Log("Deleted: " + ToString(deleted));
+```
+```text
+ INFO  - Deleted: true
 ```
 
 #### RenameProperty

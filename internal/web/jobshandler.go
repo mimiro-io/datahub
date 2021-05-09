@@ -73,12 +73,12 @@ func (handler *jobsHandler) jobsAdd(c echo.Context) error {
 	// read json
 	body, err := ioutil.ReadAll(c.Request().Body)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpBodyMissingErr.Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HttpBodyMissingErr(err).Error())
 	}
 
 	config, err := handler.jobScheduler.Parse(body)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpJobParsingErr.Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HttpJobParsingErr(err).Error())
 	}
 
 	err = handler.jobScheduler.AddJob(config)

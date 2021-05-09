@@ -211,8 +211,12 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 
 	// get lock - only one writer to a dataset log
 	ds.writeLock.Lock()
+	writeLockStart := time.Now()
 	// release lock at end regardless
-	defer ds.writeLock.Unlock()
+	defer func() {
+		_ = ds.store.statsdClient.Timing("ds.writeLock.time", time.Since(writeLockStart), tags, 1)
+		ds.writeLock.Unlock()
+	}()
 
 	// need this to ensure time moves forward in high perf environments.
 	time.Sleep(time.Nanosecond * 1)
@@ -279,53 +283,44 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 		// assume different from a previous version
 		isDifferent := true
 
+		datasetEntitiesLatestVersionKey := make([]byte, 14)
+		binary.BigEndian.PutUint16(datasetEntitiesLatestVersionKey, DATASET_LATEST_ENTITIES)
+		binary.BigEndian.PutUint32(datasetEntitiesLatestVersionKey[2:], ds.InternalID)
+		binary.BigEndian.PutUint64(datasetEntitiesLatestVersionKey[6:], rid)
+		// fixme: optimise to have txntime in key and not need a value
+
+		var previousEntityIdBuffer []byte
+		var prevEntity *Entity
+		var prevJsonData []byte
+
 		if !isnew {
-			opts1 := badger.DefaultIteratorOptions
-			opts1.PrefetchValues = false
-			opts1.Reverse = true
-			entityLocatorIterator := rtxn.NewIterator(opts1)
-			entityLocatorPrefixBuffer := make([]byte, 14)
-			copy(entityLocatorPrefixBuffer, entityIdBuffer[:14]) // fixme: optimise a bit with some buffer reuse.
-			entityLocatorPrefixBuffer = append(entityLocatorPrefixBuffer, 0xFF)
-
-			countAsNew := true
-
-			for entityLocatorIterator.Seek(entityLocatorPrefixBuffer); entityLocatorIterator.ValidForPrefix(entityLocatorPrefixBuffer[:14]); {
-				item := entityLocatorIterator.Item()
-				k := item.Key()
-				countAsNew = false // if it enters here, we find the existing item, and dont count it
-				existingEntityDataLength := binary.BigEndian.Uint16(k[22:])
-				if existingEntityDataLength == uint16(jsonLength) {
-					// load data as length is the same
-					err := item.Value(func(val []byte) error {
-						_ = ds.store.statsdClient.Count("ds.read.bytes", int64(len(val)), tags, 1)
-						existingEntity := &Entity{}
-						err := json.Unmarshal(val, existingEntity)
-						if err != nil {
-							return err
-						}
-
-						if reflect.DeepEqual(existingEntity.References, e.References) && reflect.DeepEqual(existingEntity.Properties, e.Properties) {
-							isDifferent = false
-						} else {
-							isDifferent = true
-						}
-						return nil
-					})
-
-					if err != nil {
-						return err
-					}
-				} else {
-					isDifferent = true
+			if previousEntityIdBufferValue, err := rtxn.Get(datasetEntitiesLatestVersionKey); err == nil {
+				previousEntityIdBuffer, err = previousEntityIdBufferValue.ValueCopy(nil)
+				if err != nil {
+					return err
 				}
-
-				// only need the first one we find
-				break
+				prevJsonDataValue, err := rtxn.Get(previousEntityIdBuffer)
+				if err != nil {
+					return err
+				}
+				prevJsonData, err = prevJsonDataValue.ValueCopy(nil)
+				_ = ds.store.statsdClient.Count("ds.read.bytes", prevJsonDataValue.ValueSize(), tags, 1)
+				if err != nil {
+					return err
+				}
+				prevEntity = &Entity{}
+				err = json.Unmarshal(prevJsonData, prevEntity)
+				if err != nil {
+					return err
+				}
 			}
-			entityLocatorIterator.Close()
-
-			if countAsNew {
+			if prevEntity != nil {
+				if len(prevJsonData) == jsonLength &&
+					reflect.DeepEqual(prevEntity.References, e.References) &&
+					reflect.DeepEqual(prevEntity.Properties, e.Properties) {
+					isDifferent = false
+				}
+			} else {
 				newitems++
 			}
 		}
@@ -356,11 +351,6 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 		}
 
 		// dataset all latest entities
-		datasetEntitiesLatestVersionKey := make([]byte, 14)
-		binary.BigEndian.PutUint16(datasetEntitiesLatestVersionKey, DATASET_LATEST_ENTITIES)
-		binary.BigEndian.PutUint32(datasetEntitiesLatestVersionKey[2:], ds.InternalID)
-		binary.BigEndian.PutUint64(datasetEntitiesLatestVersionKey[6:], rid)
-		// fixme: optimise to have txntime in key and not need a value
 		err = txn.Set(datasetEntitiesLatestVersionKey, entityIdBuffer)
 		if err != nil {
 			return err
@@ -427,123 +417,167 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 
 		} else {
 
-			// iterate previous outgoing refs
-			opts1 := badger.DefaultIteratorOptions
-			opts1.PrefetchValues = false
-			opts1.Reverse = true
-			outgoingIterator := rtxn.NewIterator(opts1)
-
-			// search prefix buffer
-			searchPrefixBuffer := make([]byte, 10)
-			binary.BigEndian.PutUint16(searchPrefixBuffer, OUTGOING_REF_INDEX)
-			binary.BigEndian.PutUint64(searchPrefixBuffer[2:], rid)
-
-			oldRefs := make(map[uint64]uint64)
-
-			searcherPrefixBuffer := append(searchPrefixBuffer, 0xFF)
-
-			// check for no longer there rels
-			var entityTime uint64 = 0
-			for outgoingIterator.Seek(searcherPrefixBuffer); outgoingIterator.ValidForPrefix(searchPrefixBuffer); outgoingIterator.Next() {
-				item := outgoingIterator.Item()
-				k := item.Key()
-
-				// get time
-				et := binary.BigEndian.Uint64(k[10:])
-
-				// get dataset
-				datasetId := binary.BigEndian.Uint32(k[36:])
-				if datasetId != ds.InternalID {
-					continue
-				}
-
-				// if time has changed for entities in this dataset then we are onto previous version of entity
-				if entityTime != 0 && et != entityTime {
-					break
-				} else {
-					entityTime = et
-				}
-
-				// get predicate
-				predID := binary.BigEndian.Uint64(k[18:])
-
-				// get related
-				relatedID := binary.BigEndian.Uint64(k[26:])
-
-				oldRefs[predID] = relatedID
-			}
-
-			// close iterator as we need another one.
-			outgoingIterator.Close()
-
-			// go through new state
-			for k, stringOrArrayValue := range e.References {
-
-				// need to check if v is string or []string
-				refs, isArray := stringOrArrayValue.([]string)
-				if !isArray {
-					refs = []string{stringOrArrayValue.(string)}
-				}
-
-				for _, ref := range refs {
-					outgoingBuffer := make([]byte, 40)
-					incomingBuffer := make([]byte, 40)
-
-					// assert uint64 id for predicate
-					predid, _, err := ds.store.assertIDForURI(k, idCache)
-					if err != nil {
-						return err
+			oldRefs := make(map[uint64][]uint64)
+			if prevEntity != nil {
+				// go through previous state
+				// check for no longer there rels
+				for k, stringOrArrayValue := range prevEntity.References {
+					// need to check if v is string or []string
+					refs, isArray := stringOrArrayValue.([]interface{})
+					if !isArray {
+						s := stringOrArrayValue.(interface{})
+						refs = []interface{}{s}
 					}
 
-					// assert uint64 id for related entity URI
-					relatedid, _, err := ds.store.assertIDForURI(ref, idCache)
-					if err != nil {
-						return err
-					}
+					for _, ref := range refs {
+						// get predicate
+						predid, _, err := ds.store.assertIDForURI(k, idCache)
+						if err != nil {
+							return err
+						}
 
-					binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
-					binary.BigEndian.PutUint64(outgoingBuffer[2:], rid)
-					binary.BigEndian.PutUint64(outgoingBuffer[10:], uint64(txnTime))
-					binary.BigEndian.PutUint64(outgoingBuffer[18:], predid)
-					binary.BigEndian.PutUint64(outgoingBuffer[26:], relatedid)
-					binary.BigEndian.PutUint16(outgoingBuffer[34:], 0) // deleted.
-					binary.BigEndian.PutUint32(outgoingBuffer[36:], ds.InternalID)
-					err = txn.Set(outgoingBuffer, []byte(""))
-					if err != nil {
-						return err
-					}
+						// get related
+						relatedid, _, err := ds.store.assertIDForURI(ref.(string), idCache)
+						if err != nil {
+							return err
+						}
 
-					binary.BigEndian.PutUint16(incomingBuffer, INCOMING_REF_INDEX)
-					binary.BigEndian.PutUint64(incomingBuffer[2:], relatedid)
-					binary.BigEndian.PutUint64(incomingBuffer[10:], rid)
-					binary.BigEndian.PutUint64(incomingBuffer[18:], uint64(txnTime))
-					binary.BigEndian.PutUint64(incomingBuffer[26:], predid)
-					binary.BigEndian.PutUint16(incomingBuffer[34:], 0) // deleted.
-					binary.BigEndian.PutUint32(incomingBuffer[36:], ds.InternalID)
-					err = txn.Set(incomingBuffer, []byte(""))
-					if err != nil {
-						return err
+						if refs, ok := oldRefs[predid]; ok {
+							refs = append(refs, relatedid)
+							oldRefs[predid] = refs
+						} else {
+							refs := []uint64 { relatedid}
+							oldRefs[predid] = refs
+						}
 					}
-
-					// delete key from current state
-					delete(oldRefs, predid)
 				}
 			}
 
-			// iterate remaining keys of old and add them as deleted for incoming
-			for p, e := range oldRefs {
-				incomingBuffer := make([]byte, 40)
+			if e.IsDeleted {
+				for p, referencedIds := range oldRefs {
+					for _, e := range referencedIds {
+						incomingBuffer := make([]byte, 40)
+						outgoingBuffer := make([]byte, 40)
 
-				binary.BigEndian.PutUint16(incomingBuffer, INCOMING_REF_INDEX)
-				binary.BigEndian.PutUint64(incomingBuffer[2:], e)
-				binary.BigEndian.PutUint64(incomingBuffer[10:], rid)
-				binary.BigEndian.PutUint64(incomingBuffer[18:], uint64(txnTime))
-				binary.BigEndian.PutUint64(incomingBuffer[26:], p)
-				binary.BigEndian.PutUint16(incomingBuffer[34:], 1) // is deleted
-				binary.BigEndian.PutUint32(incomingBuffer[36:], ds.InternalID)
-				err := txn.Set(incomingBuffer, []byte(""))
-				if err != nil {
-					return err
+						binary.BigEndian.PutUint16(incomingBuffer, INCOMING_REF_INDEX)
+						binary.BigEndian.PutUint64(incomingBuffer[2:], e)
+						binary.BigEndian.PutUint64(incomingBuffer[10:], rid)
+						binary.BigEndian.PutUint64(incomingBuffer[18:], uint64(txnTime))
+						binary.BigEndian.PutUint64(incomingBuffer[26:], p)
+						binary.BigEndian.PutUint16(incomingBuffer[34:], 1) // is deleted
+						binary.BigEndian.PutUint32(incomingBuffer[36:], ds.InternalID)
+						err := txn.Set(incomingBuffer, []byte(""))
+						if err != nil {
+							return err
+						}
+
+						binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
+						binary.BigEndian.PutUint64(outgoingBuffer[2:], rid)
+						binary.BigEndian.PutUint64(outgoingBuffer[10:], uint64(txnTime))
+						binary.BigEndian.PutUint64(outgoingBuffer[18:], p)
+						binary.BigEndian.PutUint64(outgoingBuffer[26:], e)
+						binary.BigEndian.PutUint16(outgoingBuffer[34:], 1) // deleted.
+						binary.BigEndian.PutUint32(outgoingBuffer[36:], ds.InternalID)
+						err = txn.Set(outgoingBuffer, []byte(""))
+						if err != nil {
+							return err
+						}
+					}
+				}
+			} else {
+				// go through new state
+				for k, stringOrArrayValue := range e.References {
+
+					// need to check if v is string or []string
+					refs, isArray := stringOrArrayValue.([]string)
+					if !isArray {
+						refs = []string{stringOrArrayValue.(string)}
+					}
+
+					for _, ref := range refs {
+						outgoingBuffer := make([]byte, 40)
+						incomingBuffer := make([]byte, 40)
+
+						// assert uint64 id for predicate
+						predid, _, err := ds.store.assertIDForURI(k, idCache)
+						if err != nil {
+							return err
+						}
+
+						// assert uint64 id for related entity URI
+						relatedid, _, err := ds.store.assertIDForURI(ref, idCache)
+						if err != nil {
+							return err
+						}
+
+						binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
+						binary.BigEndian.PutUint64(outgoingBuffer[2:], rid)
+						binary.BigEndian.PutUint64(outgoingBuffer[10:], uint64(txnTime))
+						binary.BigEndian.PutUint64(outgoingBuffer[18:], predid)
+						binary.BigEndian.PutUint64(outgoingBuffer[26:], relatedid)
+						binary.BigEndian.PutUint16(outgoingBuffer[34:], 0) // deleted.
+						binary.BigEndian.PutUint32(outgoingBuffer[36:], ds.InternalID)
+						err = txn.Set(outgoingBuffer, []byte(""))
+						if err != nil {
+							return err
+						}
+
+						binary.BigEndian.PutUint16(incomingBuffer, INCOMING_REF_INDEX)
+						binary.BigEndian.PutUint64(incomingBuffer[2:], relatedid)
+						binary.BigEndian.PutUint64(incomingBuffer[10:], rid)
+						binary.BigEndian.PutUint64(incomingBuffer[18:], uint64(txnTime))
+						binary.BigEndian.PutUint64(incomingBuffer[26:], predid)
+						binary.BigEndian.PutUint16(incomingBuffer[34:], 0) // deleted.
+						binary.BigEndian.PutUint32(incomingBuffer[36:], ds.InternalID)
+						err = txn.Set(incomingBuffer, []byte(""))
+						if err != nil {
+							return err
+						}
+
+						if refs, ok := oldRefs[predid]; ok {
+							newrefs := make([]uint64, 0)
+							for _, refid := range refs {
+								if refid != relatedid {
+									newrefs = append(newrefs, refid)
+								}
+							}
+
+							oldRefs[predid] = newrefs
+						}
+
+					}
+				}
+
+				// iterate remaining keys of old and add them as deleted for incoming refs
+				for p, referencedIds := range oldRefs {
+					for _, e := range referencedIds {
+						incomingBuffer := make([]byte, 40)
+						outgoingBuffer := make([]byte, 40)
+
+						binary.BigEndian.PutUint16(incomingBuffer, INCOMING_REF_INDEX)
+						binary.BigEndian.PutUint64(incomingBuffer[2:], e)
+						binary.BigEndian.PutUint64(incomingBuffer[10:], rid)
+						binary.BigEndian.PutUint64(incomingBuffer[18:], uint64(txnTime))
+						binary.BigEndian.PutUint64(incomingBuffer[26:], p)
+						binary.BigEndian.PutUint16(incomingBuffer[34:], 1) // is deleted
+						binary.BigEndian.PutUint32(incomingBuffer[36:], ds.InternalID)
+						err := txn.Set(incomingBuffer, []byte(""))
+						if err != nil {
+							return err
+						}
+
+						binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
+						binary.BigEndian.PutUint64(outgoingBuffer[2:], rid)
+						binary.BigEndian.PutUint64(outgoingBuffer[10:], uint64(txnTime))
+						binary.BigEndian.PutUint64(outgoingBuffer[18:], p)
+						binary.BigEndian.PutUint64(outgoingBuffer[26:], e)
+						binary.BigEndian.PutUint16(outgoingBuffer[34:], 1) // deleted.
+						binary.BigEndian.PutUint32(outgoingBuffer[36:], ds.InternalID)
+						err = txn.Set(outgoingBuffer, []byte(""))
+						if err != nil {
+							return err
+						}
+					}
 				}
 			}
 		}
@@ -554,12 +588,16 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 		return err
 	}
 
+	commitTime := time.Now()
 	err = txn.Commit()
+	_ = ds.store.statsdClient.Timing("ds.commit.time", time.Since(commitTime), tags, 1)
 	if err != nil {
 		return err
 	}
 
+	updateDsTime := time.Now()
 	err = ds.updateDataset(newitems, entities)
+	_ = ds.store.statsdClient.Timing("ds.updateDataset.time", time.Since(updateDsTime), tags, 1)
 	if err != nil {
 		return err
 	}

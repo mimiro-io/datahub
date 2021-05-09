@@ -17,8 +17,10 @@ package server
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/DataDog/datadog-go/statsd"
 	"github.com/mimiro-io/datahub/internal/conf"
@@ -34,6 +36,7 @@ func TestDatasetManager(t *testing.T) {
 		testCnt := 0
 		var dsm *DsManager
 		var store *Store
+		var gc *GarbageCollector
 		var storeLocation string
 		g.BeforeEach(func() {
 			testCnt += 1
@@ -51,6 +54,7 @@ func TestDatasetManager(t *testing.T) {
 			lc := fxtest.NewLifecycle(t)
 			store = NewStore(lc, e, &statsd.NoOpClient{})
 			dsm = NewDsManager(lc, e, store, NoOpBus())
+			gc = NewGarbageCollector(lc, store, e)
 
 			err = lc.Start(context.Background())
 			g.Assert(err).IsNil()
@@ -137,6 +141,74 @@ func TestDatasetManager(t *testing.T) {
 			g.Assert(ds2).IsNotZero()
 			g.Assert(ds2.InternalID).Eql(uint32(3))
 
+		})
+
+		g.It("Should store and overwrite and restore datasets at same pace", func() {
+			// create datasets
+			ds, _ := dsm.CreateDataset("people0")
+
+			batchSize := 100
+			iterationSize := 10
+			totalcnt := 0
+			uniq := 0
+			var avgs []int64
+			// we write the same batches to a new dataset 3 times:
+			//  - first iteration to an empty store
+			//  - second iteration after a dataset delete + dataset create, followed by GC
+			//  - third iteration after a dataset delete + dataset create, no GC
+			// all three write processes should be in the same performance range
+			for deletes := 0; deletes < 3; deletes++ {
+				//t.Log("restored dataset times: ", deletes)
+				var times []time.Duration
+				for rewrites := 0; rewrites < 2; rewrites++ {
+					prefix := "http://data.mimiro.io/people/p1-"
+					idcounter := uint64(0)
+					//write 5 batches
+					for j := 0; j < iterationSize; j++ {
+						entities := make([]*Entity, batchSize)
+						// of 10000 entities each
+						for i := 0; i < batchSize; i++ {
+							uniq++
+							entity := NewEntity(fmt.Sprint(idcounter), idcounter)
+							entity.Properties[prefix+":Name"] = "homer"
+							entity.Properties[prefix+":uniqueness"] = fmt.Sprint(uniq)
+							entity.References[prefix+":type"] = prefix + "/Person"
+							entity.References[prefix+":f1"] = prefix + "/Person-1"
+							entity.References[prefix+":f2"] = prefix + "/Person-2"
+							entity.References[prefix+":f3"] = prefix + "/Person-3"
+							entity.References[prefix+":f4"] = prefix + "/Person-4"
+							entity.References[prefix+":f5"] = prefix + "/Person-5"
+							entity.References[prefix+":f6"] = prefix + "/Person-6"
+							entity.References[prefix+":f7"] = prefix + "/Person-7"
+							entity.References[prefix+":f8"] = prefix + "/Person-8"
+							entity.References[prefix+":f9"] = prefix + "/Person-9"
+
+							entities[i] = entity
+							idcounter++
+						}
+						ts := time.Now()
+						totalcnt += len(entities)
+						_ = ds.StoreEntities(entities)
+						//t.Log("StoreEntities of batch took ", time.Now().Sub(ts))
+						times = append(times, time.Now().Sub(ts))
+					}
+				}
+				totalDur := time.Duration(0)
+				for _, d := range times {
+					totalDur = d + totalDur
+				}
+				avgs = append(avgs, totalDur.Nanoseconds()/int64(len(times)))
+				_ = dsm.DeleteDataset("people0")
+				ds, _ = dsm.CreateDataset("people0")
+				if deletes == 0 {
+					_ = gc.Cleandeleted()
+					_ = gc.GC()
+				}
+			}
+			g.Assert(math.Abs(float64(avgs[1])-float64(avgs[0])) < float64(avgs[0])).IsTrue(
+				"Average batch time after first delete with gc should not exceed twice average of first batch-loop")
+			g.Assert(math.Abs(float64(avgs[2])-float64(avgs[0])) < float64(avgs[0])).IsTrue(
+				"Average batch time after 2nd delete should not exceed twice average of first batch-loop")
 		})
 	})
 }

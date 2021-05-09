@@ -75,6 +75,7 @@ func (r *raffle) borrowTicket(job *job) *ticket {
 			ctx, cancel := context.WithCancel(context.Background())
 			state := &runState{
 				started: time.Now(),
+				isEvent: job.isEvent,
 				isFull:  true,
 				id:      job.id,
 				ctx:     ctx,
@@ -83,19 +84,6 @@ func (r *raffle) borrowTicket(job *job) *ticket {
 			r.runningJobs[job.id] = state
 			return &ticket{runState: state}
 		}
-	} else if job.isEvent {
-		// you get a ticket, we dont pool these
-		ctx, cancel := context.WithCancel(context.Background())
-		state := &runState{
-			started: time.Now(),
-			isEvent: true,
-			id:      job.id,
-			ctx:     ctx,
-			cancel:  cancel,
-		}
-		r.runningJobs[job.id] = state
-		return &ticket{runState: state}
-
 	} else {
 		if r.ticketsIncr > 0 {
 			r.ticketsIncr--
@@ -103,6 +91,7 @@ func (r *raffle) borrowTicket(job *job) *ticket {
 			ctx, cancel := context.WithCancel(context.Background())
 			state := &runState{
 				started: time.Now(),
+				isEvent: job.isEvent,
 				isFull:  false,
 				id:      job.id,
 				ctx:     ctx,

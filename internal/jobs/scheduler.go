@@ -128,14 +128,17 @@ func (s *Scheduler) AddJob(jobConfig *JobConfiguration) error {
 	if err != nil {
 		return err
 	}
+
 	err = s.Store.StoreObject(server.JOB_CONFIGS_INDEX, jobConfig.Id, jobConfig) // store it for the future
 	if err != nil {
 		return err
 	}
+
 	g, _ := errgroup.WithContext(context.Background())
 	g.Go(func() error {
 		// make sure we clear up before adding
 		clearCrontab(s.Runner.scheduledJobs, jobConfig.Id)
+		s.Runner.eventBus.UnsubscribeToDataset(jobConfig.Id)
 		for _, job := range triggeredJobs {
 			if !jobConfig.Paused { // only add the job if it is not paused
 				err := s.Runner.addJob(job)

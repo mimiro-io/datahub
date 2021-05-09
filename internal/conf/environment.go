@@ -20,18 +20,19 @@ import (
 )
 
 type Env struct {
-	Logger         *zap.SugaredLogger
-	Env            string
-	Port           string
-	StoreLocation  string
-	BackupLocation string
-	BackupSchedule string
-	BackupRsync    bool
-	AgentHost      string
-	Auth           *AuthConfig
-	DlJwtConfig    *DatalayerJwtConfig
-	GcOnStartup    bool
+	Logger               *zap.SugaredLogger
+	Env                  string
+	Port                 string
+	StoreLocation        string
+	BackupLocation       string
+	BackupSchedule       string
+	BackupRsync          bool
+	AgentHost            string
+	Auth                 *AuthConfig
+	DlJwtConfig          *DatalayerJwtConfig
+	GcOnStartup          bool
 	FullsyncLeaseTimeout time.Duration
+	BlockCacheSize       int64
 }
 
 type AuthConfig struct {

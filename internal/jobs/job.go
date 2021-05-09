@@ -83,23 +83,26 @@ func (job *job) Run() {
 	tags := []string{
 		"application:datahub",
 		fmt.Sprintf("jobs:job-%s", job.id),
+		fmt.Sprintf("jobtype:%v", jobType),
 	}
-	_ = job.runner.statsdClient.Incr("jobs.count", tags, 1)
+	_ = job.runner.statsdClient.Count("jobs.count", 1, tags, 1)
 
 	sourceType := job.pipeline.spec().source.GetConfig()["Type"]
 	sinkType := job.pipeline.spec().sink.GetConfig()["Type"]
 	job.runner.logger.Infof(" > Running task '%s': %s -> %s", job.id, sourceType, sinkType)
 	err := job.pipeline.sync(job, ticket.runState.ctx)
+	timed := time.Since(ticket.runState.started)
 	if err != nil {
 		if err.Error() == "got job interrupt" { // if a job gets killed, this will trigger
+			_ = job.runner.statsdClient.Count("jobs.cancelled", timed.Nanoseconds(), tags, 1)
 			job.runner.logger.Infof("Job '%s' was terminated", job.id)
 		} else {
+			_ = job.runner.statsdClient.Count("jobs.error", timed.Nanoseconds(), tags, 1)
 			job.runner.logger.Warnf("Failed running task for job '%s': %s", job.id, err.Error())
 		}
-
+	} else {
+		_ = job.runner.statsdClient.Count("jobs.success", timed.Nanoseconds(), tags, 1)
 	}
-
-	timed := time.Since(ticket.runState.started)
 
 	job.runner.logger.Infof("Finished %s with id '%s' - duration was %s", msg, job.id, timed)
 
