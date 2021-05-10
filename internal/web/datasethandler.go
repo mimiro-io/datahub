@@ -100,9 +100,14 @@ func whitelistDatasets(datasets []server.DatasetName, whitelist []string) []serv
 func (handler *datasetHandler) datasetCreate(c echo.Context) error {
 	datasetName := c.Param("dataset")
 
+	exist := handler.datasetManager.IsDataset(datasetName)
+	if exist {
+		return echo.NewHTTPError(http.StatusBadRequest, "Dataset already exist")
+	}
+
 	_, err := handler.datasetManager.CreateDataset(datasetName)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed creating dataset")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed creating dataset")
 	}
 
 	// TODO: remove the part under here
@@ -114,7 +119,7 @@ func (handler *datasetHandler) datasetCreate(c echo.Context) error {
 	}
 	err = core.StoreEntities(entities)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed creating dataset")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed creating dataset")
 	}
 
 	return c.NoContent(http.StatusOK)
@@ -333,7 +338,7 @@ func (handler *datasetHandler) processEntities(c echo.Context, datasetName strin
 	}
 
 	if fullSyncEnd {
-		if err := dataset.ReleaseFullSyncLease(fullSyncID);err != nil {
+		if err := dataset.ReleaseFullSyncLease(fullSyncID); err != nil {
 			return echo.NewHTTPError(http.StatusGone, server.HttpGenericErr(err).Error())
 		}
 		if err := dataset.CompleteFullSync(); err != nil {
