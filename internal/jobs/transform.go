@@ -63,6 +63,19 @@ function GetProperty(entity, prefix, name, defaultValue) {
 	}
 	return value;
 }
+function GetReference(entity, prefix, name, defaultValue) {
+	if (entity === null || entity === undefined) {
+		return defaultValue;
+	}
+	if (entity.References === null || entity.References === undefined) {
+		return defaultValue;
+	}
+	var value = entity["References"][prefix+":"+name]
+	if (value === undefined || value === null) {
+		return defaultValue;
+	}
+	return value;
+}
 function AddReference(entity, prefix, name, value) {
 	if (entity === null || entity === undefined) {
 		return;
