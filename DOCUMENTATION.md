@@ -277,28 +277,34 @@ and to get entities referencing a given entity, e.g. all entities of type person
 
 ### Incoming or outgoing query
 
-The query is incoming if you are looking for entities that reference the id of the entity your are starting with in their references and it is outgoing if the starting entity is referencing other entities' ids in its refrences
+There are two types of queries; incoming and outgoing.
+The incoming query finds all the references pointing to the id of your starting entity.
+
+The outgoing query finds all the reference-ids that your starting entity is pointing to.
 
 #### Incoming
 
 ```json
 > starting entity
 {
-    "id":"ns0:starting-entity",
-    "refs":{},
+    "id":"ns0:company",
+    "refs":{
+        "ns0:type":"Company"
+    },
     "props":{
-        "ns0:a-property":"a"
+        "ns0:name":"company"
     }
 }
 
 >referencing entity
 {
-    "id":"ns2:id-of-referencing-entity",
+    "id":"ns2:bob",
     "refs":{
-        "ns1:id":"ns0:starting-entity"
+        "ns1:worksfor":"ns0:company",
+        "ns0:type":"Person"
     },
     "props":{
-        "ns2:b-property":"b"
+        "ns2:name":"bob"
     }
 }
 
@@ -309,21 +315,24 @@ The query is incoming if you are looking for entities that reference the id of t
 ```json
 >starting entity
 {
-    "id":"ns0:starting-entity",
+    "id":"ns0:bob",
     "refs":{
-        "ns1:id":"ns2:id-of-referenced-entity"
+        "ns1:worksfor":"ns2:company",
+        "ns0:type":"Person"
     },
     "props":{
-        "ns0:a-property":"a"
+        "ns0:name":"bob"
     }
 }
 
 >referenced entity
 {
-    "id":"ns2:id-of-referenced-entity",
-    "refs":{},
+    "id":"ns2:company",
+    "refs":{
+        "ns0:type":"Company"
+    },
     "props":{
-        "ns2:b-property":"b"
+        "ns2:name":"company"
     }
 }
 ```
@@ -787,12 +796,14 @@ var p2 = FindById("http://data.mimiro.io/people/bob");
 
 The Query function is used to lookup related entities. It accepts an array of entity ids (CURIEs or full URIs), a property to traverse, a flag indicating if the traversal is incoming or outgoing, and an array of dataset names to limit the query scope if desired.
 
-The result is a list of lists where each inner list is a result row. The result row contains the entity id, the property, and then the related entity. Note: that if an entity has multiple related entities then each appear in its own row.
+The result is a list of lists where each inner list is a result row. The result row contains the entity id, the property used to find to find a relation, and then the related entity. Note: that if an entity has multiple related entities then each appear in its own row.
 
 ```json
 >returned from the Query function:
+
 [
-    [ "entity-id" , "property uri", { "id" : "related entity" } ]
+    [ "entity-id" , "property uri", { "id" : "related entity 1" } ],
+    [ "entity-id", "property uri", { "id" : "related entity 2"}]
 ]
 ```
 
@@ -802,20 +813,53 @@ var queryResult = Query(["ns0:bob"], "ns1:worksfor", false, []);
 
 // assuming there is a company then get that company
 var company = queryResult[0][2];
+Log(company)
+```
+```text
+ INFO  - [company]
 ```
 
 ```javascript
 //find all people that works for company in the dataset test.people, incoming query
-var queryResult = Query(["ns0:company"], "ns1:worksfor", true, [test.people]);
+var queryResult = Query(["ns0:company"], "ns1:worksfor", true, ["test.people"]);
 
 //assuming there are multiple hits
-var poeple = queryResult[0][2];
+var people = queryResult;
 Log(people);
 ```
-```text
- INFO  - [bob, janet]
-```
 
+```text
+ INFO  - [
+```
+```json
+["company",
+ "worksfor:company", 
+[{
+    "id":"bob",
+    "refs":{
+        "type":"Person",
+        "worksfor":"company"
+    },
+    "props":{
+        "name":"bob",
+        "start-date": "1970-01-01",
+        "end-date": "1999-12-31"
+    }
+}],["company",
+ "worksfor:company", 
+{
+    "id":"janet",
+    "refs":{
+        "type":"Person",
+        "worksfor":"company"
+    },
+    "props":{
+        "name":"janet",
+        "start-date":"2000-01-01"
+    }
+}]]
+```
+]
 
 #### GetProperty
 
@@ -1142,7 +1186,7 @@ This is the client secret supported by the token generator service.
 This is the intended audience for the token, and needs to be supported by the token generator service.
 
 ```DL_JWT_GRANT_TYPE=app_credentials```
-
+ 
 This is the grant type for the token. Note that this should be a machine token type, however for local testing purposes, other grant types can be used.
 
 ```DL_JWT_ENDPOINT=https://auth.example.io/oauth/token```
