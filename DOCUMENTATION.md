@@ -857,7 +857,8 @@ Log(people);
         "start-date":"2000-01-01"
     }
 }]]]
-``
+```
+
 #### GetProperty
 
 To get the value of a named property on an entity use the GetProperty function.
