@@ -1141,7 +1141,7 @@ This is the client secret supported by the token generator service.
 
 This is the intended audience for the token, and needs to be supported by the token generator service.
 
-```DL_JWT_GRANT_TYPE=client_credentials```
+```DL_JWT_GRANT_TYPE=app_credentials```
 
 This is the grant type for the token. Note that this should be a machine token type, however for local testing purposes, other grant types can be used.
 
@@ -1154,9 +1154,9 @@ The payload that is generated is compatible with both Auth0 and Mimiro:
 ```json
 {
     "client_id":"ABCD1234",
-    "client_secret":"<super secret>",
+    "client_secret":"<super_secret>",
     "audience":"https://api.example.io",
-    "grant_type": "client_credentials"
+    "grant_type": "app_credentials"
 }
 ```
 
