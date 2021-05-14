@@ -830,8 +830,6 @@ Log(people);
 
 ```text
  INFO  - [
-```
-```json
 ["company",
  "worksfor:company", 
 [{
@@ -845,7 +843,8 @@ Log(people);
         "start-date": "1970-01-01",
         "end-date": "1999-12-31"
     }
-}],["company",
+}],
+["company",
  "worksfor:company", 
 {
     "id":"janet",
@@ -857,10 +856,8 @@ Log(people);
         "name":"janet",
         "start-date":"2000-01-01"
     }
-}]]
-```
-]
-
+}]]]
+``
 #### GetProperty
 
 To get the value of a named property on an entity use the GetProperty function.
