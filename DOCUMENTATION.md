@@ -843,7 +843,7 @@ Log(people);
         "start-date": "1970-01-01",
         "end-date": "1999-12-31"
     }
-},
+}],
 ["company",
  "worksfor:company", 
 {
