@@ -287,12 +287,12 @@ The outgoing query finds all the reference-ids that your starting entity is poin
 ```json
 > starting entity
 {
-    "id":"ns0:company",
+    "id":"ns0:a-company",
     "refs":{
         "ns0:type":"Company"
     },
     "props":{
-        "ns0:name":"company"
+        "ns0:name":"a-company"
     }
 }
 
@@ -300,7 +300,7 @@ The outgoing query finds all the reference-ids that your starting entity is poin
 {
     "id":"ns2:bob",
     "refs":{
-        "ns1:worksfor":"ns0:company",
+        "ns1:worksfor":"ns0:a-company",
         "ns0:type":"Person"
     },
     "props":{
@@ -317,7 +317,7 @@ The outgoing query finds all the reference-ids that your starting entity is poin
 {
     "id":"ns0:bob",
     "refs":{
-        "ns1:worksfor":"ns2:company",
+        "ns1:worksfor":"ns2:a-company",
         "ns0:type":"Person"
     },
     "props":{
@@ -327,12 +327,12 @@ The outgoing query finds all the reference-ids that your starting entity is poin
 
 >referenced entity
 {
-    "id":"ns2:company",
+    "id":"ns2:a-company",
     "refs":{
         "ns0:type":"Company"
     },
     "props":{
-        "ns2:name":"company"
+        "ns2:name":"a-company"
     }
 }
 ```
