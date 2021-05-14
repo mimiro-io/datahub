@@ -275,6 +275,59 @@ and to get entities referencing a given entity, e.g. all entities of type person
             --inverse=true
 ```
 
+### Incoming or outgoing query
+
+The query is incoming if you are looking for entities that reference the id of the entity your are starting with in their references and it is outgoing if the starting entity is referencing other entities' ids in its refrences
+
+#### Incoming
+
+```json
+> starting entity
+{
+    "id":"ns0:starting-entity",
+    "refs":{},
+    "props":{
+        "ns0:a-property":"a"
+    }
+}
+
+>referencing entity
+{
+    "id":"ns2:id-of-referencing-entity",
+    "refs":{
+        "ns1:id":"ns0:starting-entity"
+    },
+    "props":{
+        "ns2:b-property":"b"
+    }
+}
+
+```
+
+#### Outgoing
+
+```json
+>starting entity
+{
+    "id":"ns0:starting-entity",
+    "refs":{
+        "ns1:id":"ns2:id-of-referenced-entity"
+    },
+    "props":{
+        "ns0:a-property":"a"
+    }
+}
+
+>referenced entity
+{
+    "id":"ns2:id-of-referenced-entity",
+    "refs":{},
+    "props":{
+        "ns2:b-property":"b"
+    }
+}
+```
+
 ## Data Layers
 
 Data Layers implement the [UDA Specification](#specification). They are used to expose data from different data sources, such as file systems and relational databases, in a standard way.
@@ -559,6 +612,13 @@ To get the status of a job:
 ```shell
 mim jobs status simple-job
 ```
+#### Getting latest run info from a Job
+
+To get information on latest run of a Job:
+
+```shell
+mim jobs history simple-job
+```
 
 ## Transforms
 
@@ -730,19 +790,32 @@ The Query function is used to lookup related entities. It accepts an array of en
 The result is a list of lists where each inner list is a result row. The result row contains the entity id, the property, and then the related entity. Note: that if an entity has multiple related entities then each appear in its own row.
 
 ```json
-// expand these examples
+>returned from the Query function:
 [
     [ "entity-id" , "property uri", { "id" : "related entity" } ]
 ]
 ```
 
 ```javascript
-// find all the companies bob works for
+// find all the companies bob works for, outgoing query
 var queryResult = Query(["ns0:bob"], "ns1:worksfor", false, []);
 
 // assuming there is a company then get that company
 var company = queryResult[0][2];
 ```
+
+```javascript
+//find all people that works for company in the dataset test.people, incoming query
+var queryResult = Query(["ns0:company"], "ns1:worksfor", true, [test.people]);
+
+//assuming there are multiple hits
+var poeple = queryResult[0][2];
+Log(people);
+```
+```text
+ INFO  - [bob, janet]
+```
+
 
 #### GetProperty
 
@@ -945,12 +1018,19 @@ function transform_entities(entities) {
 
 The `mim` can be used to run and develop transforms locally before creating jobs.
 
-#### Testing a Transform
+#### Testing a Transform on a dataset
 
 The following command runs the transform script `transform1.js` on the dataset `test.people`. The data is fetched from the dataset, the script is executed locally, and the output displayed.
 
 ```shell
-mim transform test test.people transform1.js
+mim transform test test.people --file transform1.js
+```
+#### Testing a Transform on a given entity
+
+There is also a possibility to test the transform on a known entity in the datahub by running a query and applying the transformation on the returned entity, the command runs the same transform as above but on the entity `http://data.mimiro.io/people/bob`. The data is fetched from the dataset, the script is executed locally, and the output displayed. 
+
+```shell
+mim query --id "http://data.mimiro.io/people/bob" --via="*" --json | mim transform test --file transform1.js
 ```
 
 #### Generate base64 encoded transform
