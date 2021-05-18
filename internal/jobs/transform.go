@@ -196,6 +196,12 @@ type JavascriptTransform struct {
 	timings      map[string]time.Time
 }
 
+// clone the transform for use in parallel processing
+func (javascriptTransform *JavascriptTransform) Clone() (*JavascriptTransform, error) {
+	code := base64.StdEncoding.EncodeToString(javascriptTransform.Code)
+	return newJavascriptTransform(javascriptTransform.Logger, code, javascriptTransform.Store)
+}
+
 func (javascriptTransform *JavascriptTransform) Log(thing interface{}) {
 	javascriptTransform.Logger.Info(thing)
 }
