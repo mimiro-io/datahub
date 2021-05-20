@@ -17,6 +17,9 @@ package jobs
 import (
 	"context"
 	"errors"
+	"math"
+	"reflect"
+	"sync"
 	"time"
 
 	"github.com/mimiro-io/datahub/internal/server"
@@ -147,6 +150,11 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 	return nil
 }
 
+type presult struct {
+	entities []*server.Entity
+	err error
+}
+
 func (pipeline *IncrementalPipeline) spec() PipelineSpec { return pipeline.PipelineSpec }
 func (pipeline *IncrementalPipeline) isFullSync() bool   { return false }
 func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
@@ -180,8 +188,65 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 					// apply transform if it exists
 					if pipeline.transform != nil {
 						transformTs := time.Now()
-						entities, err = pipeline.transform.transformEntities(runner, entities, job.id)
-						_ = runner.statsdClient.Timing("pipeline.transform.batch", time.Since(transformTs), tags, 1)
+
+						parallelisms := pipeline.transform.getParallelism()
+						if len(entities) < parallelisms {
+							parallelisms = 1
+						}
+
+						psize := int(math.Round(float64(len(entities)) / float64(parallelisms)))
+						workResults := make([]presult, parallelisms)
+
+						local := func(workId int, lentities []*server.Entity, wg *sync.WaitGroup) {
+							res := presult{}
+							if reflect.TypeOf(pipeline.transform) == reflect.TypeOf(&JavascriptTransform{}) {
+								t := pipeline.transform.(*JavascriptTransform)
+								tc, _ := t.Clone()
+								pe, e := tc.transformEntities(runner, lentities, job.id)
+								res.entities = pe
+								res.err = e
+							} else {
+								pe, e := pipeline.transform.transformEntities(runner, lentities, job.id)
+								res.entities = pe
+								res.err = e
+							}
+							workResults[workId] = res
+							wg.Done()
+						}
+
+						var wg sync.WaitGroup
+						wg.Add(parallelisms)
+
+						wid := 0
+						index := 0
+						for i:=0;i<parallelisms;i++  {
+							from := index
+							to := index+psize
+
+							if to >= len(entities) {
+								to = index + (len(entities) - index)
+							}
+
+							chunk := make([]*server.Entity, to-from)
+							copy(chunk, entities[from:to])
+							go local(wid, chunk, &wg)
+							wid++
+							index += psize
+						}
+
+						wg.Wait()
+
+						// construct result
+						entities = make([]*server.Entity, 0)
+						for i:=0;i<parallelisms;i++ {
+							res := workResults[i]
+							if res.err != nil {
+								return err
+							}
+							entities = append(entities, res.entities...)
+						}
+
+						err = runner.statsdClient.Timing("pipeline.transform.batch", time.Since(transformTs), tags, 1)
 						if err != nil {
 							return err
 						}

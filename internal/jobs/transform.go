@@ -36,6 +36,7 @@ import (
 type Transform interface {
 	GetConfig() map[string]interface{}
 	transformEntities(runner *Runner, entities []*server.Entity, jobTag string) ([]*server.Entity, error)
+	getParallelism() int
 }
 
 // these are upper cased to prevent the user from accidentally redefining them
@@ -155,6 +156,15 @@ func (s *Scheduler) parseTransform(config *JobConfiguration) (Transform, error) 
 					if err != nil {
 						return nil, err
 					}
+					parallelism, ok := transformConfig["Parallelism"]
+					if ok {
+						transform.Parallelism = int(parallelism.(float64))
+						if err != nil {
+							return nil, err
+						}
+					} else {
+						transform.Parallelism = 1
+					}
 					return transform, nil
 				}
 				return nil, nil
@@ -207,6 +217,17 @@ type JavascriptTransform struct {
 	statsDClient statsd.ClientInterface
 	statsDTags   []string
 	timings      map[string]time.Time
+	Parallelism  int
+}
+
+func (javascriptTransform *JavascriptTransform) getParallelism() int {
+	return javascriptTransform.Parallelism
+}
+
+// clone the transform for use in parallel processing
+func (javascriptTransform *JavascriptTransform) Clone() (*JavascriptTransform, error) {
+	code := base64.StdEncoding.EncodeToString(javascriptTransform.Code)
+	return newJavascriptTransform(javascriptTransform.Logger, code, javascriptTransform.Store)
 }
 
 func (javascriptTransform *JavascriptTransform) Log(thing interface{}) {
@@ -347,6 +368,10 @@ type HttpTransform struct {
 	User           string // for use in basic auth
 	Password       string // for use in basic auth
 	TokenProvider  string // for use in token auth
+}
+
+func (httpTransform *HttpTransform) getParallelism() int {
+	return 1
 }
 
 func (httpTransform *HttpTransform) transformEntities(runner *Runner, entities []*server.Entity, jobTag string) ([]*server.Entity, error) {
