@@ -189,7 +189,7 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 					if pipeline.transform != nil {
 						transformTs := time.Now()
 
-						parallelisms := 10
+						parallelisms := pipeline.transform.getParallelism()
 						if len(entities) < parallelisms {
 							parallelisms = 1
 						}
@@ -218,7 +218,8 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 						wg.Add(parallelisms)
 
 						wid := 0
-						for index := 0; index < len(entities); index += psize {
+						index := 0
+						for i:=0;i<parallelisms;i++  {
 							from := index
 							to := index+psize
 
@@ -230,6 +231,7 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 							copy(chunk, entities[from:to])
 							go local(wid, chunk, &wg)
 							wid++
+							index += psize
 						}
 
 						wg.Wait()
@@ -244,7 +246,7 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 							entities = append(entities, res.entities...)
 						}
 
-						_ = runner.statsdClient.Timing("pipeline.transform.batch", time.Since(transformTs), tags, 1)
+						err = runner.statsdClient.Timing("pipeline.transform.batch", time.Since(transformTs), tags, 1)
 						if err != nil {
 							return err
 						}

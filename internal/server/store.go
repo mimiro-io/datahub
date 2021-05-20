@@ -555,7 +555,8 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(internalId uint64, at int64
 	defer rtxn.Discard()
 
 	opts1 := badger.DefaultIteratorOptions
-	// opts1.PrefetchValues = false
+	// opts1.PrefetchSize = 1
+	opts1.PrefetchValues = false
 	entityLocatorIterator := rtxn.NewIterator(opts1)
 	defer entityLocatorIterator.Close()
 

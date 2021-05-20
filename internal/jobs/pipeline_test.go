@@ -268,6 +268,7 @@ func TestPipeline(t *testing.T) {
 			},
 			"transform" : {
 				"Type" : "JavascriptTransform",
+				"Parallelism" : 10,
 				"Code" : "ZnVuY3Rpb24gdHJhbnNmb3JtX2VudGl0aWVzKGVudGl0aWVzKSB7CiAgIHZhciBzdGFydHMgPSBbXTsKICAgdmFyIHJlcyA9IFF1ZXJ5KHN0YXJ0cywgInRlc3QiLCBmYWxzZSk7CiAgIHJldHVybiBlbnRpdGllczsKfQo="
 			},
 			"sink" : {
