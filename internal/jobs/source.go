@@ -40,7 +40,6 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (Source, error) {
 	sourceConfig := jobConfig.Source
 	if sourceConfig != nil {
 		sourceTypeName := sourceConfig["Type"]
-		// TODO: Change this so that sources can be added and configured automatically without maintaining this list
 		if sourceTypeName != nil {
 			if sourceTypeName == "HttpDatasetSource" {
 				source := &httpDatasetSource{}
@@ -59,6 +58,10 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (Source, error) {
 				source.Store = s.Store
 				source.DatasetManager = s.DatasetManager
 				source.DatasetName = (sourceConfig["Name"]).(string)
+				return source, nil
+			} else if sourceTypeName == "MultiSource" {
+				source := &multiSource{}
+
 				return source, nil
 			} else if sourceTypeName == "SampleSource" {
 				source := &sampleSource{}
@@ -84,6 +87,39 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (Source, error) {
 	}
 	return nil, errors.New("missing source config")
 
+}
+
+
+type join struct {
+	dataset string
+	property string
+	inverse bool
+}
+
+type dependency struct {
+	dataset string // name of the dependent dataset
+	joins []join
+}
+
+type multiSource struct {
+	mainDataset string // the main dataset that is read on initial sync
+	dependencies []dependency // the dependency queries
+	enableTracking bool
+	mainDatasetSynced bool
+}
+
+type multiSourceContinuationToken struct {
+	dependenciesSince []string //
+}
+
+func (multiSource *multiSource) startFullSync() {
+}
+
+func (multiSource *multiSource) endFullSync() {
+}
+
+func (multiSource *multiSource) readEntities(runner *Runner, since string, batchSize int, processEntities func([]*server.Entity, string) error) error {
+	//
 }
 
 type datasetSource struct {
