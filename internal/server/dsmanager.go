@@ -149,8 +149,15 @@ func (dsm *DsManager) DeleteDataset(name string) error {
 		return err
 	}
 
-	// record we deleted it. fixme: persist this list and reload
-	dsm.store.deletedDatasets[existingDataset.InternalID] = true
+	// record we deleted it.
+	// swap map out with new modified copy of map to avoid concurrent read/write issues which can occur if
+	// a user deletes a dataset while this map is iterated over (in garbagecollector for example)
+	newDeletedDatasets := make(map[uint32]bool)
+	for k,v := range dsm.store.deletedDatasets {
+		newDeletedDatasets[k] = v
+	}
+	newDeletedDatasets[existingDataset.InternalID] = true
+	dsm.store.deletedDatasets = newDeletedDatasets
 	err = dsm.store.StoreObject(STORE_META_INDEX, "deleteddatasets", dsm.store.deletedDatasets)
 	if err != nil {
 		return err
