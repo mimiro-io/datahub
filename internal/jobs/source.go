@@ -209,14 +209,6 @@ func (httpDatasetSource *httpDatasetSource) readEntities(runner *Runner, since s
 		Transport: netTransport,
 	}
 
-	// we set up a cancel timer, this will cancel the connection after max 30 seconds
-	timer := time.AfterFunc(30*time.Second, func() {
-		runner.logger.Warn("Shutting down http connection because of timeout")
-		cancel()
-	})
-
-	defer timer.Stop()
-
 	// security
 	if httpDatasetSource.TokenProvider != "" {
 		// attempt to parse the token provider
@@ -236,6 +228,7 @@ func (httpDatasetSource *httpDatasetSource) readEntities(runner *Runner, since s
 	if err != nil {
 		return err
 	}
+	defer res.Body.Close()
 	if res.StatusCode != 200 {
 		return handleHttpError(res)
 	}
@@ -250,7 +243,6 @@ func (httpDatasetSource *httpDatasetSource) readEntities(runner *Runner, since s
 	continuationToken := ""
 	esp := server.NewEntityStreamParser(httpDatasetSource.Store)
 	err = esp.ParseStream(res.Body, func(entity *server.Entity) error {
-		timer.Reset(10 * time.Second) // we reset this everytime we get data, if we dont get anything more for 10 seconds, we cancel
 		if entity.ID == "@continuation" {
 			continuationToken = entity.GetStringProperty("token")
 		} else {

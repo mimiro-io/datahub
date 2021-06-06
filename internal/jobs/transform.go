@@ -19,6 +19,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/DataDog/datadog-go/statsd"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -33,36 +35,100 @@ import (
 
 type Transform interface {
 	GetConfig() map[string]interface{}
-	transformEntities(runner *Runner, entities []*server.Entity) ([]*server.Entity, error)
+	transformEntities(runner *Runner, entities []*server.Entity, jobTag string) ([]*server.Entity, error)
+	getParallelism() int
 }
 
 // these are upper cased to prevent the user from accidentally redefining them
 // (i mean, not really, but maybe it will help)
 const helperJavascriptFunctions = `
 function SetProperty(entity, prefix, name, value) {
+	if (entity === null || entity === undefined) {
+		return;
+	}
+	if (entity.Properties === null || entity.Properties === undefined) {
+		return;
+	}
 	entity["Properties"][prefix+":"+name] = value;
 }
-function GetProperty(entity, prefix, name) {
-	return entity["Properties"][prefix+":"+name];
+function GetProperty(entity, prefix, name, defaultValue) {
+	if (entity === null || entity === undefined) {
+		return defaultValue;
+	}
+	if (entity.Properties === null || entity.Properties === undefined) {
+		return defaultValue;
+	}
+	var value = entity["Properties"][prefix+":"+name]
+	if (value === undefined || value === null) {
+		return defaultValue;
+	}
+	return value;
+}
+function GetReference(entity, prefix, name, defaultValue) {
+	if (entity === null || entity === undefined) {
+		return defaultValue;
+	}
+	if (entity.References === null || entity.References === undefined) {
+		return defaultValue;
+	}
+	var value = entity["References"][prefix+":"+name]
+	if (value === undefined || value === null) {
+		return defaultValue;
+	}
+	return value;
 }
 function AddReference(entity, prefix, name, value) {
+	if (entity === null || entity === undefined) {
+		return;
+	}
+	if (entity.References === null || entity.References === undefined) {
+		return;
+	}
 	entity["References"][prefix+":"+name] = value;
 }
 function GetId(entity) {
-    return entity["ID"];
+	if (entity === null || entity === undefined) {
+		return;
+	}
+	return entity["ID"];
 }
+function SetId(entity, id) {
+	if (entity === null || entity === undefined) {
+		return;
+	}
+	entity.ID = id
+}
+
+function SetDeleted(entity, deleted) {
+	if (entity === null || entity === undefined) {
+		return;
+	}
+	entity.IsDeleted = deleted
+}
+
+function GetDeleted(entity) {
+	if (entity === null || entity === undefined) {
+		return;
+	}
+	return entity.IsDeleted;
+}
+
 function PrefixField(prefix, field) {
     return prefix + ":" + field;
 }
 function RenameProperty(entity, originalPrefix, originalName, newPrefix, newName) {
+	if (entity === null || entity === undefined) {
+		return;
+	}
 	var value = GetProperty(entity, originalPrefix, originalName);
 	SetProperty(entity, newPrefix, newName, value);
 	RemoveProperty(entity, originalPrefix, originalName);
 }
-function ToString(value){
-	return (value === null || value === undefined) ? value : value.toString();
-}
+
 function RemoveProperty(entity, prefix, name){
+	if (entity === null || entity === undefined) {
+		return;
+	}
 	delete entity["Properties"][prefix+":"+name];
 }
 `
@@ -89,6 +155,15 @@ func (s *Scheduler) parseTransform(config *JobConfiguration) (Transform, error) 
 					transform, err := newJavascriptTransform(s.Logger, code64.(string), s.Store)
 					if err != nil {
 						return nil, err
+					}
+					parallelism, ok := transformConfig["Parallelism"]
+					if ok {
+						transform.Parallelism = int(parallelism.(float64))
+						if err != nil {
+							return nil, err
+						}
+					} else {
+						transform.Parallelism = 1
 					}
 					return transform, nil
 				}
@@ -118,6 +193,8 @@ func newJavascriptTransform(log *zap.SugaredLogger, code64 string, store *server
 	transform.Runtime.Set("AssertNamespacePrefix", transform.AssertNamespacePrefix)
 	transform.Runtime.Set("Log", transform.Log)
 	transform.Runtime.Set("NewEntity", transform.NewEntity)
+	transform.Runtime.Set("ToString", transform.ToString)
+	transform.Runtime.Set("Timing", transform.Timing)
 
 	_, err = transform.Runtime.RunString(string(code))
 	if err != nil {
@@ -133,10 +210,24 @@ func newJavascriptTransform(log *zap.SugaredLogger, code64 string, store *server
 }
 
 type JavascriptTransform struct {
-	Store   *server.Store
-	Code    []byte
-	Runtime *goja.Runtime
-	Logger  *zap.SugaredLogger
+	Store        *server.Store
+	Code         []byte
+	Runtime      *goja.Runtime
+	Logger       *zap.SugaredLogger
+	statsDClient statsd.ClientInterface
+	statsDTags   []string
+	timings      map[string]time.Time
+	Parallelism  int
+}
+
+func (javascriptTransform *JavascriptTransform) getParallelism() int {
+	return javascriptTransform.Parallelism
+}
+
+// clone the transform for use in parallel processing
+func (javascriptTransform *JavascriptTransform) Clone() (*JavascriptTransform, error) {
+	code := base64.StdEncoding.EncodeToString(javascriptTransform.Code)
+	return newJavascriptTransform(javascriptTransform.Logger, code, javascriptTransform.Store)
 }
 
 func (javascriptTransform *JavascriptTransform) MakeTransaction() *server.Transaction {
@@ -151,6 +242,18 @@ func (javascriptTransform *JavascriptTransform) RunTransaction(txn *server.Trans
 
 func (javascriptTransform *JavascriptTransform) Log(thing interface{}) {
 	javascriptTransform.Logger.Info(thing)
+}
+
+func (javascriptTransform *JavascriptTransform) Timing(name string, end bool) {
+	if end {
+		if _, ok := javascriptTransform.timings[name]; ok {
+			timing := time.Since(javascriptTransform.timings[name])
+			_ = javascriptTransform.statsDClient.Timing("transform.timing."+name,
+				timing, javascriptTransform.statsDTags, 1)
+		}
+	} else {
+		javascriptTransform.timings[name] = time.Now()
+	}
 }
 
 func (javascriptTransform *JavascriptTransform) MakeEntityArray(entities []interface{}) []*server.Entity {
@@ -170,17 +273,27 @@ func (javascriptTransform *JavascriptTransform) NewEntity() *server.Entity {
 }
 
 func (javascriptTransform *JavascriptTransform) GetNamespacePrefix(urlExpansion string) string {
+	ts := time.Now()
+
 	prefix, _ := javascriptTransform.Store.NamespaceManager.GetPrefixMappingForExpansion(urlExpansion)
+	_ = javascriptTransform.statsDClient.Timing("transform.GetNamespacePrefix.time",
+		time.Since(ts), javascriptTransform.statsDTags, 1)
 	return prefix
 }
 
 func (javascriptTransform *JavascriptTransform) AssertNamespacePrefix(urlExpansion string) string {
+	ts := time.Now()
 	prefix, _ := javascriptTransform.Store.NamespaceManager.AssertPrefixMappingForExpansion(urlExpansion)
+	_ = javascriptTransform.statsDClient.Timing("transform.AssertNamespacePrefix.time",
+		time.Since(ts), javascriptTransform.statsDTags, 1)
 	return prefix
 }
 
 func (javascriptTransform *JavascriptTransform) Query(startingEntities []string, predicate string, inverse bool, datasets []string) [][]interface{} {
+	ts := time.Now()
 	results, err := javascriptTransform.Store.GetManyRelatedEntities(startingEntities, predicate, inverse, datasets)
+	_ = javascriptTransform.statsDClient.Timing("transform.Query.time",
+		time.Since(ts), javascriptTransform.statsDTags, 1)
 	if err != nil {
 		return nil
 	}
@@ -188,21 +301,47 @@ func (javascriptTransform *JavascriptTransform) Query(startingEntities []string,
 }
 
 func (javascriptTransform *JavascriptTransform) ById(entityId string, datasets []string) *server.Entity {
+	ts := time.Now()
 	entity, err := javascriptTransform.Store.GetEntity(entityId, datasets)
+	_ = javascriptTransform.statsDClient.Timing("transform.ById.time",
+		time.Since(ts), javascriptTransform.statsDTags, 1)
 	if err != nil {
 		return nil
 	}
 	return entity
 }
 
-func (javascriptTransform *JavascriptTransform) transformEntities(runner *Runner, entities []*server.Entity) ([]*server.Entity, error) {
+func (javascriptTransform *JavascriptTransform) ToString(obj interface{}) string {
+	if obj == nil {
+		return "undefined"
+	}
+
+	switch obj.(type) {
+	case *server.Entity:
+		return fmt.Sprintf("%v", obj)
+	case map[string]interface{}:
+		return fmt.Sprintf("%v", obj)
+	case int, int32, int64:
+		return fmt.Sprintf("%d", obj)
+	case float32, float64:
+		return fmt.Sprintf("%g", obj)
+	case bool:
+		return fmt.Sprintf("%v", obj)
+	default:
+		return fmt.Sprintf("%s", obj)
+	}
+}
+
+func (javascriptTransform *JavascriptTransform) transformEntities(runner *Runner, entities []*server.Entity, jobTag string) ([]*server.Entity, error) {
 
 	var transformFunc func(entities []*server.Entity) (interface{}, error)
 	err := javascriptTransform.Runtime.ExportTo(javascriptTransform.Runtime.Get("transform_entities"), &transformFunc)
-
 	if err != nil {
 		return nil, err
 	}
+	javascriptTransform.statsDClient = runner.statsdClient
+	javascriptTransform.statsDTags = []string{"application:datahub", "job:" + jobTag}
+	javascriptTransform.timings = map[string]time.Time{}
 
 	// invoke transform, and catch js runtime err
 	result, err := transformFunc(entities)
@@ -241,7 +380,11 @@ type HttpTransform struct {
 	TokenProvider  string // for use in token auth
 }
 
-func (httpTransform *HttpTransform) transformEntities(runner *Runner, entities []*server.Entity) ([]*server.Entity, error) {
+func (httpTransform *HttpTransform) getParallelism() int {
+	return 1
+}
+
+func (httpTransform *HttpTransform) transformEntities(runner *Runner, entities []*server.Entity, jobTag string) ([]*server.Entity, error) {
 	timeout := 1000 * time.Millisecond
 	client := httpclient.NewClient(httpclient.WithHTTPTimeout(timeout))
 

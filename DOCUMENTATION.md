@@ -6,7 +6,7 @@ Semantic Graph databases are the ideal basis for an integration platform, they a
 
 Data integration is often done by writing ad-hoc code to talk to different APIs, and long running batch ETL jobs. The data hub standardises on a simple, generic protocol for exposing and updating remote systems with support for both batch, incremental and streaming modes.
 
-Combining the semantic graph database with simple synchronisation protocol delivers a generic and powerful capability for collecting, connecting and delivering data from and to many sources. 
+Combining the semantic graph database with simple synchronisation protocol delivers a generic and powerful capability for collecting, connecting and delivering data from and to many sources.
 
 Once the data is in the graph database it can be connected via queries and transformed to produce new unified data structures. These data can then be used as the basis for ML and AI, or sent to external third parties via APIs or data exports.
 
@@ -16,7 +16,7 @@ Finally, data is changing over time, it is often useful to go back to a given mo
 
 Getting started with the MIMIRO data hub is quick and easy. The data hub can be run locally with just one command. Check out the [getting started](./README.md#getting-started) section for how to get it running.
 
-Working with the data hub API can be done in many ways, but we really recommend getting and installing, `mim`, the MIMIRO data hub CLI. 
+Working with the data hub API can be done in many ways, but we really recommend getting and installing, `mim`, the MIMIRO data hub CLI.
 
 `mim` can be downloaded for any platform: linux, macos, and windows. Check out the [releases](https://github.com/mimiro-io/datahub-cli/releases) on github.
 
@@ -182,8 +182,10 @@ Entities can be retrieved from datasets as a stream of changes or as the latest 
 To get the changes from a dataset:
 
 ```
-> mim dataset changes -n test.people -f raw
+> mim dataset changes test.people
 ```
+
+By default the format of the returned JSON is 'raw' but by adding ```--pretty```-flag you can have it more human readable.
 
 Entities are returned as an array of JSON objects and can also contain a continuation token. A continuation token can be used in subsequent requests.
 
@@ -234,7 +236,8 @@ Now, when we retrieve entities from `namespaces.Test`, datahub will supply only 
 ```
 > mim dataset entities namespaces.
                                                                                                           
-# Listing entities from http://localhost:4242/datasets/namespaces.Test/entities
+# Listing entities from http://localhost:8080/datasets/namespaces.Test/entities
+
 # Namespaces:
 
 #   | Namespace
@@ -272,6 +275,68 @@ and to get entities referencing a given entity, e.g. all entities of type person
             --inverse=true
 ```
 
+### Incoming or outgoing query
+
+There are two types of queries; incoming and outgoing.
+The incoming query finds all the references pointing to the id of your starting entity.
+
+The outgoing query finds all the reference-ids that your starting entity is pointing to.
+
+#### Incoming
+
+```json
+> starting entity
+{
+    "id":"ns0:a-company",
+    "refs":{
+        "ns0:type":"Company"
+    },
+    "props":{
+        "ns0:name":"a-company"
+    }
+}
+
+>referencing entity
+{
+    "id":"ns2:bob",
+    "refs":{
+        "ns1:worksfor":"ns0:a-company",
+        "ns0:type":"Person"
+    },
+    "props":{
+        "ns2:name":"bob"
+    }
+}
+
+```
+
+#### Outgoing
+
+```json
+>starting entity
+{
+    "id":"ns0:bob",
+    "refs":{
+        "ns1:worksfor":"ns2:a-company",
+        "ns0:type":"Person"
+    },
+    "props":{
+        "ns0:name":"bob"
+    }
+}
+
+>referenced entity
+{
+    "id":"ns2:a-company",
+    "refs":{
+        "ns0:type":"Company"
+    },
+    "props":{
+        "ns2:name":"a-company"
+    }
+}
+```
+
 ## Data Layers
 
 Data Layers implement the [UDA Specification](#specification). They are used to expose data from different data sources, such as file systems and relational databases, in a standard way.
@@ -302,7 +367,8 @@ Job definitions are described using JSON and can be uploaded to the data hub usi
     },
     "sink" : {
         "Type" : "Name of sink type - see below for list"
-    }
+    },
+    "type": "job"
 }
 ```
 
@@ -438,7 +504,7 @@ The following example shows how to configure a job to send data from a dataset t
 }
 ```
 
-To run a job just once,  install it as paused and trigger a single run with the `/jobs/<id>/run` endpoint or `mim jobs operate`.
+To run a job just once, install it as paused and trigger a single run with the `/jobs/<id>/run` endpoint or `mim jobs operate`.
 Example for paused job:
 
 ```json
@@ -529,7 +595,7 @@ mim jobs delete -C=false simple-job
 To pause a job so that it is not scheduled to run:
 
 ```shell
-mim jobs operate -i simple-job -o pause
+mim jobs operate simple-job -o pause
 ```
 
 #### Starting a Job
@@ -537,7 +603,7 @@ mim jobs operate -i simple-job -o pause
 To start a job:
 
 ```shell
-mim jobs operate -i simple-job -o start
+mim jobs operate simple-job -o run
 ```
 
 #### Stopping a Job
@@ -545,7 +611,7 @@ mim jobs operate -i simple-job -o start
 To stop a running job:
 
 ```shell
-mim jobs operate -i simple-job -o stop
+mim jobs operate simple-job -o kill
 ```
 
 #### Inspecting a Job
@@ -554,6 +620,13 @@ To get the status of a job:
 
 ```shell
 mim jobs status simple-job
+```
+#### Getting latest run info from a Job
+
+To get information on latest run of a Job:
+
+```shell
+mim jobs history simple-job
 ```
 
 ## Transforms
@@ -596,7 +669,9 @@ Internal transforms are written in Javascript and executed in a sandbox.
 
 Note: The version of Javascript supported is ES5.1. Please check for the restrictions regarding this version, e.g. const and let are NOT supported.
 
-Transforms written in Javascript need to be encoded as base64 and added in the transform section of a job definition.
+Internal transforms can be run in parallel. To do this include an attribute on the transform called `Parallelism` whose value is an integer. e.g. 10 to run the transform in parallel.  
+
+Transforms written in Javascript need to be encoded as base64 and added in the transform section of a job definition. This can be done with the help of `mim jobs add -f job-with-transform.json -t javascript-transform.js` to automatically encode it or by manually encoding the transform section and adding it in the job-with-transform.json.
 
 Example Job Definition:
 
@@ -611,6 +686,7 @@ Example Job Definition:
     },
     "transform" : {
         "Type" : "JavascriptTransform",
+        "Parallelism" : 10, 
         "Code" : "ZnVuY3Rpb24gdHJhbnNmb3JtX2VudGl0aWVzKGVudGl0aWVzKSB7CiAgIHZhciBzdGFydHMgPSBbXTsKICAgdmFyIHJlcyA9IFF1ZXJ5KHN0YXJ0cywgInRlc3QiLCBmYWxzZSk7CiAgIHJldHVybiBlbnRpdGllczsKfQo="
     },
     "sink" : {
@@ -648,6 +724,23 @@ id = GetId(e);
 
 returns value `ns0:bob`
 
+#### SetId
+
+`SetId(entity, id)` takes a parameter of type `Entity` and a string with an id, and updates the id of the entity.
+
+Example:
+
+```javascript
+var e = NewEntity();
+SetId(e, PrefixField("ns0", 42));
+
+Log("Id is now: " + GetId(e));
+```
+```text
+ INFO  - Id is now: ns0:42
+```
+
+
 #### GetNamespacePrefix
 
 URIs are often represented as CURIEs. CURIEs are formed of a prefix part and local part. The prefix is key that corresponds to an expansion. To resolve a CURIE into a full URI the local part of appended to the prefix expansion.
@@ -666,6 +759,19 @@ var personTypePrefix = GetNamespacePrefix("http://data.mimiro.io/schema/people/"
 
 ```javascript
 var newTypePrefix = AssertNamespacePrefix("http://data.mimiro.io/schema/company/")
+```
+
+#### Timing
+
+`Timing` can be used to create custom timing metrics around parts of a transform. The function accepts a metric name as
+first parameter and a "send" boolean as optional second parameter. When the send parameter is false or omitted, the `Timing`
+function registers a start-timestamp for the given metric name. When the send parameter is `true`, Timing sends the duration
+since start as timing value to statsd.
+
+```javascript
+Timing("hello")  //register start for metric "hello"
+// ... do something
+Timing("hello", true) // send duration since start for metric "hello"
 ```
 
 #### Log
@@ -693,20 +799,67 @@ var p2 = FindById("http://data.mimiro.io/people/bob");
 
 The Query function is used to lookup related entities. It accepts an array of entity ids (CURIEs or full URIs), a property to traverse, a flag indicating if the traversal is incoming or outgoing, and an array of dataset names to limit the query scope if desired.
 
-The result is a list of lists where each inner list is a result row. The result row contains the entity id, the property, and then the related entity. Note: that if an entity has multiple related entities then each appear in its own row.
+The result is a list of lists where each inner list is a result row. The result row contains the entity id, the property used to find to find a relation, and then the related entity. Note: that if an entity has multiple related entities then each appear in its own row.
 
 ```json
+>returned from the Query function:
+
 [
-    [ "entity-id" , "property uri", { "id" : "related entity" }  ]
+    [ "entity-id" , "property uri", { "id" : "related entity 1" } ],
+    [ "entity-id", "property uri", { "id" : "related entity 2"}]
 ]
 ```
 
 ```javascript
-// find all the companies bob works for
+// find all the companies bob works for, outgoing query
 var queryResult = Query(["ns0:bob"], "ns1:worksfor", false, []);
 
 // assuming there is a company then get that company
 var company = queryResult[0][2];
+Log(company)
+```
+```text
+ INFO  - [company]
+```
+
+```javascript
+//find all people that works for company in the dataset test.people, incoming query
+var queryResult = Query(["ns0:company"], "ns1:worksfor", true, ["test.people"]);
+
+//assuming there are multiple hits
+var people = queryResult;
+Log(people);
+```
+
+```text
+ INFO  - [
+["company",
+ "worksfor:company", 
+{
+    "id":"bob",
+    "refs":{
+        "type":"Person",
+        "worksfor":"company"
+    },
+    "props":{
+        "name":"bob",
+        "start-date": "1970-01-01",
+        "end-date": "1999-12-31"
+    }
+}],
+["company",
+ "worksfor:company", 
+{
+    "id":"janet",
+    "refs":{
+        "type":"Person",
+        "worksfor":"company"
+    },
+    "props":{
+        "name":"janet",
+        "start-date":"2000-01-01"
+    }
+}]]]
 ```
 
 #### GetProperty
@@ -719,6 +872,22 @@ var personTypePrefix = GetNamespacePrefix("http://data.mimiro.io/schema/person/"
 personName = GetProperty(person, personTypePrefix, "name");
 ```
 
+The `GetProperty` function can also take an optional extra defaultValue
+
+```javascript
+var e = NewEntity();
+
+// field1 is missing
+var value = GetProperty(e, "ns0", "field1", "my default value");
+
+Log(value);
+
+```
+```text
+ INFO  - my default value
+```
+
+
 #### SetProperty
 
 To set the value of a named property on an entity use the SetProperty function.
@@ -727,6 +896,27 @@ To set the value of a named property on an entity use the SetProperty function.
 var personTypePrefix = GetNamespacePrefix("http://data.mimiro.io/schema/person/");
 
 SetProperty(person, personTypePrefix, "name", "bobby");
+```
+
+#### SetDeleted / GetDeleted
+
+`SetDeleted` takes a parameter `entity` of type Entity, and a boolean flag, and updates the deleted state on the Entity.
+
+`GetDeleted` takes a single parameter `entity` of type Entity, and returns the deleted state of the Entity. If entity is
+missing or null, this function returns undefined.
+
+Example:
+
+```javascript
+var e = NewEntity()
+
+SetDeleted(e, true);
+var deleted = GetDeleted(e);
+
+Log("Deleted: " + ToString(deleted));
+```
+```text
+ INFO  - Deleted: true
 ```
 
 #### RenameProperty
@@ -873,12 +1063,19 @@ function transform_entities(entities) {
 
 The `mim` can be used to run and develop transforms locally before creating jobs.
 
-#### Testing a Transform
+#### Testing a Transform on a dataset
 
 The following command runs the transform script `transform1.js` on the dataset `test.people`. The data is fetched from the dataset, the script is executed locally, and the output displayed.
 
 ```shell
-mim transform test test.people transform1.js
+mim transform test test.people --file transform1.js
+```
+#### Testing a Transform on a given entity
+
+There is also a possibility to test the transform on a known entity in the datahub by running a query and applying the transformation on the returned entity, the command runs the same transform as above but on the entity `http://data.mimiro.io/people/bob`. The data is fetched from the dataset, the script is executed locally, and the output displayed. 
+
+```shell
+mim query --id "http://data.mimiro.io/people/bob" --via="*" --json | mim transform test --file transform1.js
 ```
 
 #### Generate base64 encoded transform
@@ -989,8 +1186,8 @@ This is the client secret supported by the token generator service.
 
 This is the intended audience for the token, and needs to be supported by the token generator service.
 
-```DL_JWT_GRANT_TYPE=client_credentials```
-
+```DL_JWT_GRANT_TYPE=app_credentials```
+ 
 This is the grant type for the token. Note that this should be a machine token type, however for local testing purposes, other grant types can be used.
 
 ```DL_JWT_ENDPOINT=https://auth.example.io/oauth/token```
@@ -1002,9 +1199,9 @@ The payload that is generated is compatible with both Auth0 and Mimiro:
 ```json
 {
     "client_id":"ABCD1234",
-    "client_secret":"<super secret>",
+    "client_secret":"<super_secret>",
     "audience":"https://api.example.io",
-    "grant_type": "client_credentials"
+    "grant_type": "app_credentials"
 }
 ```
 

@@ -17,6 +17,10 @@ package jobs
 import (
 	"context"
 	"errors"
+	"math"
+	"reflect"
+	"sync"
+	"time"
 
 	"github.com/mimiro-io/datahub/internal/server"
 )
@@ -66,9 +70,10 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 	}
 	syncJobState.ContinuationToken = ""
 
+	tags := []string{"application:datahub", "job:" + job.id}
 	for keepReading {
 
-		err := pipeline.source.readEntities(runner, syncJobState.ContinuationToken, pipeline.batchSize, func(entities []*server.Entity, continuationToken string) error {
+		processEntities := func(entities []*server.Entity, continuationToken string) error {
 			select {
 			// if the cancellable context is cancelled, ctx.Done will trigger, and it will break out. The only way I
 			// found to do so, was to trigger an error, and then check for that in the jobs.Runner.
@@ -82,14 +87,18 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 				if incomingEntityCount > 0 {
 					// apply transform if it exists
 					if pipeline.transform != nil {
-						entities, err = pipeline.transform.transformEntities(runner, entities)
+						transformTs := time.Now()
+						entities, err = pipeline.transform.transformEntities(runner, entities, job.id)
+						_ = runner.statsdClient.Timing("pipeline.transform.batch", time.Since(transformTs), tags, 1)
 						if err != nil {
 							return err
 						}
 					}
 
 					// write to sink
+					sinkTs := time.Now()
 					err = pipeline.sink.processEntities(runner, entities)
+					_ = runner.statsdClient.Timing("pipeline.sink.batch", time.Since(sinkTs), tags, 1)
 					if err != nil {
 						return err
 					}
@@ -107,7 +116,16 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 				}
 			}
 			return nil
-		})
+		}
+
+		readTs := time.Now()
+		err := pipeline.source.readEntities(runner, syncJobState.ContinuationToken, pipeline.batchSize,
+			func(entities []*server.Entity, s string) error {
+				_ = runner.statsdClient.Timing("pipeline.source.batch", time.Since(readTs), tags, 1)
+				result := processEntities(entities, s)
+				readTs = time.Now()
+				return result
+			})
 
 		if err != nil {
 			return err
@@ -132,6 +150,11 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 	return nil
 }
 
+type presult struct {
+	entities []*server.Entity
+	err error
+}
+
 func (pipeline *IncrementalPipeline) spec() PipelineSpec { return pipeline.PipelineSpec }
 func (pipeline *IncrementalPipeline) isFullSync() bool   { return false }
 func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
@@ -147,9 +170,10 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 
 	keepReading := true
 
+	tags := []string{"application:datahub", "job:" + job.id}
 	for keepReading {
 
-		err := pipeline.source.readEntities(runner, syncJobState.ContinuationToken, pipeline.batchSize, func(entities []*server.Entity, continuationToken string) error {
+		processEntities := func(entities []*server.Entity, continuationToken string) error {
 			select {
 			// if the cancellable context is cancelled, ctx.Done will trigger, and it will break out. The only way I
 			// found to do so, was to trigger an error, and then check for that in the jobs.Runner.
@@ -163,14 +187,75 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 				if incomingEntityCount > 0 {
 					// apply transform if it exists
 					if pipeline.transform != nil {
-						entities, err = pipeline.transform.transformEntities(runner, entities)
+						transformTs := time.Now()
+
+						parallelisms := pipeline.transform.getParallelism()
+						if len(entities) < parallelisms {
+							parallelisms = 1
+						}
+
+						psize := int(math.Round(float64(len(entities)) / float64(parallelisms)))
+						workResults := make([]presult, parallelisms)
+
+						local := func(workId int, lentities []*server.Entity, wg *sync.WaitGroup) {
+							res := presult{}
+							if reflect.TypeOf(pipeline.transform) == reflect.TypeOf(&JavascriptTransform{}) {
+								t := pipeline.transform.(*JavascriptTransform)
+								tc, _ := t.Clone()
+								pe, e := tc.transformEntities(runner, lentities, job.id)
+								res.entities = pe
+								res.err = e
+							} else {
+								pe, e := pipeline.transform.transformEntities(runner, lentities, job.id)
+								res.entities = pe
+								res.err = e
+							}
+							workResults[workId] = res
+							wg.Done()
+						}
+
+						var wg sync.WaitGroup
+						wg.Add(parallelisms)
+
+						wid := 0
+						index := 0
+						for i:=0;i<parallelisms;i++  {
+							from := index
+							to := index+psize
+
+							if to >= len(entities) {
+								to = index + (len(entities) - index)
+							}
+
+							chunk := make([]*server.Entity, to-from)
+							copy(chunk, entities[from:to])
+							go local(wid, chunk, &wg)
+							wid++
+							index += psize
+						}
+
+						wg.Wait()
+
+						// construct result
+						entities = make([]*server.Entity, 0)
+						for i:=0;i<parallelisms;i++ {
+							res := workResults[i]
+							if res.err != nil {
+								return err
+							}
+							entities = append(entities, res.entities...)
+						}
+
+						err = runner.statsdClient.Timing("pipeline.transform.batch", time.Since(transformTs), tags, 1)
 						if err != nil {
 							return err
 						}
 					}
 
 					// write to sink
+					sinkTs := time.Now()
 					err = pipeline.sink.processEntities(runner, entities)
+					_ = runner.statsdClient.Timing("pipeline.sink.batch", time.Since(sinkTs), tags, 1)
 					if err != nil {
 						return err
 					}
@@ -192,7 +277,16 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 				}
 			}
 			return nil
-		})
+		}
+
+		readTs := time.Now()
+		err := pipeline.source.readEntities(runner, syncJobState.ContinuationToken, pipeline.batchSize,
+			func(entities []*server.Entity, s string) error {
+				_ = runner.statsdClient.Timing("pipeline.source.batch", time.Since(readTs), tags, 1)
+				result := processEntities(entities, s)
+				readTs = time.Now()
+				return result
+			})
 
 		if err != nil {
 			return err

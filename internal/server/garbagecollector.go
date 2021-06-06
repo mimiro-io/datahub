@@ -1,8 +1,23 @@
+// Copyright 2021 MIMIRO AS
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package server
 
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx"
@@ -13,12 +28,14 @@ import (
 type GarbageCollector struct {
 	store  *Store
 	logger *zap.SugaredLogger
+	quit   chan bool
 }
 
 func NewGarbageCollector(lc fx.Lifecycle, store *Store, env *conf.Env) *GarbageCollector {
 	gc := &GarbageCollector{
 		store:  store,
 		logger: env.Logger.Named("garbagecollector"),
+		quit:   make(chan bool),
 	}
 
 	lc.Append(fx.Hook{
@@ -27,21 +44,31 @@ func NewGarbageCollector(lc fx.Lifecycle, store *Store, env *conf.Env) *GarbageC
 				gc.logger.Info("Starting inital GC in background")
 				go func() {
 					ts := time.Now()
+					var err error
 					gc.logger.Info("Starting to clean deleted datasets")
-					gc.Cleandeleted()
-					gc.logger.Infof("Finished cleaning of deleted datasets after %v", time.Since(ts).Round(time.Millisecond))
-
+					err = gc.Cleandeleted()
+					if err != nil {
+						gc.logger.Warnf("cleaning of deleted datasets failed: %v", err.Error())
+						return
+					} else {
+						gc.logger.Infof("Finished cleaning of deleted datasets after %v", time.Since(ts).Round(time.Millisecond))
+					}
 					ts = time.Now()
 					gc.logger.Info("Starting badger gc")
-					err := gc.GC()
-					gc.logger.Infof("Finished badger gc after %v", time.Since(ts).Round(time.Millisecond))
+					err = gc.GC()
 					if err != nil {
-						gc.logger.Panic("badger gc failed", err)
+						gc.logger.Warn("badger gc failed: ", err)
+					} else {
+						gc.logger.Infof("Finished badger gc after %v", time.Since(ts).Round(time.Millisecond))
 					}
 				}()
 			} else {
 				gc.logger.Info("GC_ON_STARTUP disabled")
 			}
+			return nil
+		},
+		OnStop: func(ctx context.Context) error {
+			go func() { gc.quit <- true}()
 			return nil
 		},
 	})
@@ -51,6 +78,7 @@ func NewGarbageCollector(lc fx.Lifecycle, store *Store, env *conf.Env) *GarbageC
 
 func (garbageCollector *GarbageCollector) GC() error {
 again:
+	if garbageCollector.isCancelled() { return errors.New("gc cancelled") }
 	err := garbageCollector.store.database.RunValueLogGC(0.5)
 	if err == nil {
 		goto again
@@ -78,6 +106,7 @@ func (garbageCollector *GarbageCollector) Cleandeleted() error {
 	}
 
 	for deletedDsID := range garbageCollector.store.deletedDatasets {
+		if garbageCollector.isCancelled() { return errors.New("gc cancelled") }
 		// delete from change log
 		/*
 			binary.BigEndian.PutUint16(entityIdChangeTimeBuffer, DATASET_ENTITY_CHANGE_LOG)
@@ -163,6 +192,7 @@ func (garbageCollector *GarbageCollector) deleteByPrefixAndSelectorFunction(pref
 				if err := txn.Delete(key); err != nil {
 					return err
 				}
+				if garbageCollector.isCancelled() { return errors.New("gc cancelled") }
 			}
 			return nil
 		})
@@ -180,6 +210,7 @@ func (garbageCollector *GarbageCollector) deleteByPrefixAndSelectorFunction(pref
 		keysForDelete := make([][]byte, 0, collectSize)
 		keysCollected := 0
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			if garbageCollector.isCancelled() { return errors.New("gc cancelled") }
 			key := it.Item().KeyCopy(nil)
 
 			// if selector false continue
@@ -205,4 +236,13 @@ func (garbageCollector *GarbageCollector) deleteByPrefixAndSelectorFunction(pref
 
 		return nil
 	})
+}
+
+func (garbageCollector *GarbageCollector) isCancelled() bool {
+	select {
+	case <-garbageCollector.quit:
+		return true
+	default:
+		return false
+	}
 }
