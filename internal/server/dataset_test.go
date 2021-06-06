@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/DataDog/datadog-go/statsd"
 	"github.com/mimiro-io/datahub/internal/conf"
@@ -81,7 +82,8 @@ func TestDataset(t *testing.T) {
 			_ = env.store.Close()
 			_ = os.RemoveAll(storeLocation)
 		})
-		g.It("Should accept both single strings and string arrays as refs values", func() {
+		g.It("XXX Should accept both single strings and string arrays as refs values", func() {
+			g.Timeout(time.Hour)
 			//add a first person with all new refs
 			person := NewEntity(env.peopleNamespacePrefix+":person-1", 1)
 			person.Properties[env.peopleNamespacePrefix+":Name"] = "person 1"
