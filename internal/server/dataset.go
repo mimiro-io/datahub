@@ -197,13 +197,25 @@ func (ds *Dataset) getStorageKey() []byte {
 }
 
 func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
+	tags := []string{
+		"application:datahub",
+		fmt.Sprintf("dataset:%s", ds.ID),
+	}
+
 	if len(entities) == 0 {
 		return nil
 	}
-	// get lock - only one writer to a dataset log
+
 	ds.WriteLock.Lock()
+	writeLockStart := time.Now()
 	// release lock at end regardless
-	defer ds.WriteLock.Unlock()
+	defer func() {
+		_ = ds.store.statsdClient.Timing("ds.writeLock.time", time.Since(writeLockStart), tags, 1)
+		ds.WriteLock.Unlock()
+	}()
+
+	// need this to ensure time moves forward in high perf environments.
+	time.Sleep(time.Nanosecond * 1)
 
 	txnTime := time.Now().UnixNano()
 	txn := ds.store.database.NewTransaction(true)
@@ -247,17 +259,6 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 
 	_ = ds.store.statsdClient.Count("ds.added.items", int64(len(entities)), tags, 1)
 
-	// get lock - only one writer to a dataset log
-	ds.WriteLock.Lock()
-	writeLockStart := time.Now()
-	// release lock at end regardless
-	defer func() {
-		_ = ds.store.statsdClient.Timing("ds.writeLock.time", time.Since(writeLockStart), tags, 1)
-		ds.WriteLock.Unlock()
-	}()
-
-	// need this to ensure time moves forward in high perf environments.
-	time.Sleep(time.Nanosecond * 1)
 
 	// time now as uint64
 	/* txnTime := time.Now().UnixNano()

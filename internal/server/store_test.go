@@ -1430,6 +1430,7 @@ func TestDatasetScope(test *testing.T) {
 
 		g.It("Should respect dataset scope in GetEntity (single lookup query)", func() {
 			// namespaces
+			g.Timeout(time.Hour)
 			employeeNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/employee/")
 			modelNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/model/")
 			rdfNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(RdfNamespaceExpansion)
