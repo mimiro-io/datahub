@@ -17,13 +17,14 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/dgraph-io/badger/v3"
 	"os"
 	"reflect"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/dgraph-io/badger/v3"
 
 	"github.com/franela/goblin"
 
@@ -1526,7 +1527,7 @@ func TestDatasetScope(test *testing.T) {
 
 			people := dsm.GetDataset("people")
 			peopleEntities, _ := people.GetEntities("", 100)
-			g.Assert(len(peopleEntities.Entities)).Eql(1)
+			g.Assert(len(peopleEntities.Entities)).Eql(6)
 
 		})
 
@@ -1540,7 +1541,7 @@ func TestDatasetScope(test *testing.T) {
 			g.Assert(err).IsNil()
 
 			entities := make([]*Entity, 1)
-			entity := NewEntity(peopleNamespacePrefix + ":p1", 0)
+			entity := NewEntity(peopleNamespacePrefix+":p1", 0)
 			entity.Properties["Name"] = "homer"
 			entity.References["rdf:type"] = "http://data.mimiro.io/model/Person"
 			entity.References["rdf:f1"] = "http://data.mimiro.io/people/Person-1"
@@ -1552,12 +1553,12 @@ func TestDatasetScope(test *testing.T) {
 			g.Assert(err).IsNil("StoreEntities failed unexpectedly")
 
 			// get entity
-			e, err := store.GetEntity(peopleNamespacePrefix + ":p1", nil)
+			e, err := store.GetEntity(peopleNamespacePrefix+":p1", nil)
 			g.Assert(err).IsNil("GetEntity failed unexpectedly")
 			g.Assert(e.IsDeleted).IsFalse()
 
 			entities = make([]*Entity, 1)
-			entity = NewEntity(peopleNamespacePrefix + ":p1", 0)
+			entity = NewEntity(peopleNamespacePrefix+":p1", 0)
 			entity.IsDeleted = true
 			entities[0] = entity
 
