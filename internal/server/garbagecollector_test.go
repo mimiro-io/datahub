@@ -24,7 +24,6 @@ import (
 	"go.uber.org/zap"
 	"os"
 	"testing"
-	"time"
 )
 
 func TestGC(t *testing.T) {
@@ -195,14 +194,10 @@ func TestGC(t *testing.T) {
 			g.Assert(result[0][2].(*Entity).ID).Eql(peopleNamespacePrefix + ":person-1")
 		})
 
-		g.It("Should stop on shutdown", func() {
-			g.Timeout(1 * time.Hour)
-			time.AfterFunc(1*time.Nanosecond, func() {
-				lc.Stop(context.Background())
-			})
-			time.Sleep(10 * time.Nanosecond)
-
+		g.It("Should stop when asked to", func() {
+			go func() {gc.quit <- true}()
 			err := gc.Cleandeleted()
+			g.Assert(err).IsNotZero()
 			g.Assert(err.Error()).Eql("gc cancelled")
 		})
 	})
