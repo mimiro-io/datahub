@@ -35,6 +35,78 @@ func NewEntityStreamParser(store *Store) *EntityStreamParser {
 	return esp
 }
 
+/*
+{
+	"@context" : {
+
+	},
+	"ds1" : [
+
+	],
+	"ds2" : [
+
+	]
+}
+*/
+
+func (esp *EntityStreamParser) ParseTransaction(reader io.Reader) (*Transaction, error) {
+
+	txn := &Transaction{}
+
+	decoder := json.NewDecoder(reader)
+
+	t, err := decoder.Token()
+	if err != nil {
+		return nil, errors.New("parsing error: Bad token at start of stream " + err.Error())
+	}
+
+	if delim, ok := t.(json.Delim); !ok || delim != '{' {
+		return nil, errors.New("parsing error: Expected { at start of transaction json")
+	}
+
+	// key @context
+	t,err = decoder.Token()
+	if err != nil {
+		return nil, errors.New("parsing error: Bad token at read @context key " + err.Error())
+	}
+
+	context := make(map[string]interface{})
+	err = decoder.Decode(&context)
+	if err != nil {
+		return nil, errors.New("parsing error: Unable to decode context " + err.Error())
+	}
+
+	for k, v := range context["namespaces"].(map[string]interface{}) {
+		esp.localNamespaces[k] = v.(string)
+	}
+
+	for {
+		t,err = decoder.Token()
+		if t == "}" {
+			// end of outer txn
+			break
+		} else {
+			datasetName := t.(string)
+			t,err = decoder.Token()
+			entities := make([]*Entity, 0)
+			
+
+			e, err := esp.parseEntity(decoder)
+			if err != nil {
+				return nil, errors.New("parsing error: Unable to parse entity: " + err.Error())
+			}
+			entities = append(entities, e)
+			txn.DatasetEntities[datasetName] = entities
+		}
+	}
+
+	return txn, nil
+}
+
+func (esp *EntityStreamParser) ParseDatasetTransaction(decoder *json.Decoder) error {
+	return nil
+}
+
 func (esp *EntityStreamParser) ParseStream(reader io.Reader, emitEntity func(*Entity) error) error {
 
 	decoder := json.NewDecoder(reader)

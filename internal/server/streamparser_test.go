@@ -39,7 +39,6 @@ func TestJsonOmitOnEntity(m *testing.T) {
 	}
 }
 
-
 func TestStreamParser(m *testing.T) {
 	g := goblin.Goblin(m)
 	g.Describe("The stream parser", func() {
@@ -47,7 +46,6 @@ func TestStreamParser(m *testing.T) {
 		var store *Store
 		var storeLocation string
 		g.BeforeEach(func() {
-
 			testCnt += 1
 			storeLocation = fmt.Sprintf("./test_streamparser_%v", testCnt)
 			err := os.RemoveAll(storeLocation)
@@ -68,6 +66,24 @@ func TestStreamParser(m *testing.T) {
 		g.AfterEach(func() {
 			_ = store.Close()
 			_ = os.RemoveAll(storeLocation)
+		})
+
+		g.It("Should deal with transactions with only a context", func() {
+			reader := strings.NewReader(
+				`{
+						"@context" : {
+							"namespaces" : {
+								"mimiro-people" : "http://data.mimiro.io/people/",
+								"_" : "http://data.mimiro.io/core/"
+							}
+						}
+					}`)
+
+			esp := NewEntityStreamParser(store)
+			txn, err := esp.ParseTransaction(reader)
+
+			g.Assert(err).IsNil("Parsing produced an unexpected error")
+			g.Assert(txn).IsNotNil("No transaction returned")
 		})
 
 		g.It("Should deal with @context, data and @continuation entities", func() {
