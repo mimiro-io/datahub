@@ -11,7 +11,6 @@ require (
 	github.com/bamzi/jobrunner v1.0.0
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/dgraph-io/badger/v3 v3.2011.1
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dlclark/regexp2 v1.4.0 // indirect
 	github.com/dop251/goja v0.0.0-20201022115936-e21ccf39bfce
 	github.com/franela/goblin v0.0.0-20210113153425-413781f5e6c8
@@ -19,6 +18,7 @@ require (
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/goburrow/cache v0.1.1
 	github.com/gojektech/heimdall/v6 v6.1.0
+	github.com/golang-jwt/jwt v3.2.1+incompatible
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/uuid v1.1.4
