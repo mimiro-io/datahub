@@ -89,22 +89,21 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (Source, error) {
 
 }
 
-
 type join struct {
-	dataset string
+	dataset  string
 	property string
-	inverse bool
+	inverse  bool
 }
 
 type dependency struct {
 	dataset string // name of the dependent dataset
-	joins []join
+	joins   []join
 }
 
 type multiSource struct {
-	mainDataset string // the main dataset that is read on initial sync
-	dependencies []dependency // the dependency queries
-	enableTracking bool
+	mainDataset       string       // the main dataset that is read on initial sync
+	dependencies      []dependency // the dependency queries
+	enableTracking    bool
 	mainDatasetSynced bool
 }
 
@@ -120,6 +119,8 @@ func (multiSource *multiSource) endFullSync() {
 
 func (multiSource *multiSource) readEntities(runner *Runner, since string, batchSize int, processEntities func([]*server.Entity, string) error) error {
 	//
+
+	return nil
 }
 
 type datasetSource struct {
