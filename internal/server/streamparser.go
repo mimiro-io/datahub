@@ -52,6 +52,7 @@ func NewEntityStreamParser(store *Store) *EntityStreamParser {
 func (esp *EntityStreamParser) ParseTransaction(reader io.Reader) (*Transaction, error) {
 
 	txn := &Transaction{}
+	txn.DatasetEntities = make(map[string][]*Entity)
 
 	decoder := json.NewDecoder(reader)
 
@@ -82,29 +83,50 @@ func (esp *EntityStreamParser) ParseTransaction(reader io.Reader) (*Transaction,
 
 	for {
 		t,err = decoder.Token()
-		if t == "}" {
-			// end of outer txn
-			break
+		delimVal, isDelim := t.(json.Delim)
+		if isDelim {
+			if delimVal.String() == "}" {
+				break
+			} else {
+				return nil, errors.New("parsing error: Unexpected delimiter: " + delimVal.String())
+			}
 		} else {
 			datasetName := t.(string)
-			t,err = decoder.Token()
-			entities := make([]*Entity, 0)
-			
 
-			e, err := esp.parseEntity(decoder)
+			// read [
+			t,err = decoder.Token()
 			if err != nil {
-				return nil, errors.New("parsing error: Unable to parse entity: " + err.Error())
+				return nil, errors.New("parsing error: Unable to read next token " + err.Error())
 			}
-			entities = append(entities, e)
+			delimVal, isDelim := t.(json.Delim)
+			if !isDelim && delimVal.String() != "[" {
+				return nil, errors.New("parsing error: Unexpected delimiter - expected [ but got : " + delimVal.String())
+			}
+
+			entities := make([]*Entity, 0)
+			for {
+				t, err = decoder.Token() // starting { or ending ]
+				if err != nil {
+					return nil, errors.New("parsing error: Unable to read next token " + err.Error())
+				}
+
+				delimVal, isDelim := t.(json.Delim)
+				if isDelim && delimVal.String() == "{" {
+					e, err := esp.parseEntity(decoder)
+					if err != nil {
+						return nil, errors.New("parsing error: Unable to parse entity: " + err.Error())
+					}
+					entities = append(entities, e)
+				} else if isDelim && delimVal.String() == "]" {
+					break
+				}
+			}
+
 			txn.DatasetEntities[datasetName] = entities
 		}
 	}
 
 	return txn, nil
-}
-
-func (esp *EntityStreamParser) ParseDatasetTransaction(decoder *json.Decoder) error {
-	return nil
 }
 
 func (esp *EntityStreamParser) ParseStream(reader io.Reader, emitEntity func(*Entity) error) error {

@@ -68,6 +68,72 @@ func TestStreamParser(m *testing.T) {
 			_ = os.RemoveAll(storeLocation)
 		})
 
+		g.It("Should process transaction with dataset with array of entities", func() {
+			reader := strings.NewReader(
+				`{
+						"@context" : {
+							"namespaces" : {
+								"mimiro-people" : "http://data.mimiro.io/people/",
+								"_" : "http://data.mimiro.io/core/"
+							}
+						},
+						"people" : [
+							{
+								"id" : "http://data.mimiro.io/people/12345000"
+							},
+							{
+								"id" : "http://data.mimiro.io/people/12345999"
+							}
+						]
+					}`)
+
+			esp := NewEntityStreamParser(store)
+			txn, err := esp.ParseTransaction(reader)
+
+			g.Assert(txn).IsNotNil("Transaction cannot be nil")
+			g.Assert(err).IsNil("Parsing didnt produce the expected error")
+
+			people := txn.DatasetEntities["people"]
+			g.Assert(people).IsNotNil("people dataset updates missing")
+
+		})
+
+
+		g.It("Should process transaction with dataset with empty array of entities", func() {
+			reader := strings.NewReader(
+				`{
+						"@context" : {
+							"namespaces" : {
+								"mimiro-people" : "http://data.mimiro.io/people/",
+								"_" : "http://data.mimiro.io/core/"
+							}
+						},
+						"people" : []
+					}`)
+
+			esp := NewEntityStreamParser(store)
+			txn, err := esp.ParseTransaction(reader)
+
+			g.Assert(txn).IsNotNil("Transaction cannot be nil")
+			g.Assert(err).IsNil("Parsing didnt produce the expected error")
+		})
+
+		g.It("Should error with transactions with no context", func() {
+			reader := strings.NewReader(
+				`{
+						"people" : [
+							{
+								"id" : "http://data.mimiro.io/people/12345"
+							}
+						]
+					}`)
+
+			esp := NewEntityStreamParser(store)
+			_, err := esp.ParseTransaction(reader)
+
+			g.Assert(err).IsNotNil("Parsing didnt produce the expected error")
+		})
+
 		g.It("Should deal with transactions with only a context", func() {
 			reader := strings.NewReader(
 				`{

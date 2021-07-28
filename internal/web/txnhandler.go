@@ -20,6 +20,7 @@ import (
 	"github.com/mimiro-io/datahub/internal/server"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+	"net/http"
 )
 
 func NewTxnHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, store *server.Store) {
@@ -44,10 +45,18 @@ type txnHandler struct {
 
 func (txnHandler *txnHandler) processTransaction(c echo.Context) error {
 	// parse transaction
+	esp := server.NewEntityStreamParser(txnHandler.store)
+	txn, err := esp.ParseTransaction(c.Request().Body)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, server.AttemptStoreEntitiesErr(err).Error())
+	}
 
-	// 
-	var txn *server.Transaction
-	err := txnHandler.store.ExecuteTransaction(txn)
-	return err
+	// execute transaction
+	err = txnHandler.store.ExecuteTransaction(txn)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, server.AttemptStoreEntitiesErr(err).Error())
+	}
+
+	return c.NoContent(http.StatusOK)
 }
 
