@@ -75,9 +75,9 @@ func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 			GrantType:    viper.GetString("DL_JWT_GRANT_TYPE"),
 			Endpoint:     viper.GetString("DL_JWT_ENDPOINT"),
 		},
-		GcOnStartup: viper.GetBool("GC_ON_STARTUP"),
+		GcOnStartup:          viper.GetBool("GC_ON_STARTUP"),
 		FullsyncLeaseTimeout: viper.GetDuration("FULLSYNC_LEASE_TIMEOUT"),
-		BlockCacheSize: viper.GetInt64("BLOCK_CACHE_SIZE"),
+		BlockCacheSize:       viper.GetInt64("BLOCK_CACHE_SIZE"),
 	}, nil
 }
 

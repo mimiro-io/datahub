@@ -195,7 +195,7 @@ func TestGC(t *testing.T) {
 		})
 
 		g.It("Should stop when asked to", func() {
-			go func() {gc.quit <- true}()
+			go func() { gc.quit <- true }()
 			err := gc.Cleandeleted()
 			g.Assert(err).IsNotZero()
 			g.Assert(err.Error()).Eql("gc cancelled")

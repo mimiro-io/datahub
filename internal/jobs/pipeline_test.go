@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"github.com/mimiro-io/datahub/internal/jobs/source"
 	"os"
 	"strconv"
 	"sync"
@@ -247,8 +248,8 @@ func TestPipeline(t *testing.T) {
 
 			count := 19
 			entities := make([]*server.Entity, count)
-			for i:=0;i<count;i++ {
-				entity := server.NewEntity("http://data.mimiro.io/people/p" + strconv.Itoa(i) , 0)
+			for i := 0; i < count; i++ {
+				entity := server.NewEntity("http://data.mimiro.io/people/p"+strconv.Itoa(i), 0)
 				entity.Properties["name"] = "homer" + strconv.Itoa(i)
 				entity.References["type"] = "http://data.mimiro.io/model/Person"
 				entities[i] = entity
@@ -299,7 +300,6 @@ func TestPipeline(t *testing.T) {
 
 			g.Assert(len(result.Entities)).Eql(19, "correct number of entities retrieved")
 		})
-
 
 		g.It("Should incrementally do internal sync with js transform in parallel when les than workers count", func() {
 			g.Timeout(time.Hour)
@@ -361,7 +361,6 @@ func TestPipeline(t *testing.T) {
 
 			g.Assert(len(result.Entities)).Eql(2, "correct number of entities retrieved")
 		})
-
 
 		//func TestDatasetToDatasetWithJavascriptTransformJob(m *testing.T) {
 		g.It("Should incrementally do internal sync with js transform", func() {
@@ -739,7 +738,7 @@ func TestPipeline(t *testing.T) {
 			_ = sourceDs.StoreEntities([]*server.Entity{e1, e2})
 
 			pipeline := &FullSyncPipeline{PipelineSpec{
-				source: &datasetSource{DatasetName: "people", Store: store, DatasetManager: dsm},
+				source: &source.DatasetSource{DatasetName: "people", Store: store, DatasetManager: dsm},
 				sink:   &datasetSink{DatasetName: "people2", Store: store, DatasetManager: dsm},
 			}}
 
@@ -776,7 +775,7 @@ func TestPipeline(t *testing.T) {
 		g.It("Should store continuation token after every page in incremental job", func() {
 			pipeline := &IncrementalPipeline{PipelineSpec{
 				batchSize: 5,
-				source:    &sampleSource{NumberOfEntities: 10, Store: store},
+				source:    &source.SampleSource{NumberOfEntities: 10, Store: store},
 				sink:      &httpDatasetSink{Endpoint: "http://localhost:7777/datasets/inctest/fullsync", Store: store},
 			}}
 			job := &job{id: "inc-1", pipeline: pipeline, runner: runner}
@@ -812,7 +811,7 @@ func TestPipeline(t *testing.T) {
 		g.It("Should store continuation token only after finished run in fullsync job", func() {
 			pipeline := &FullSyncPipeline{PipelineSpec{
 				batchSize: 5,
-				source:    &sampleSource{NumberOfEntities: 10, Store: store},
+				source:    &source.SampleSource{NumberOfEntities: 10, Store: store},
 				//sink:      &httpDatasetSink{Endpoint: "http://localhost:7777/datasets/fulltest/fullsync", Store: store},
 				sink: &devNullSink{},
 			}}
@@ -866,7 +865,7 @@ func TestPipeline(t *testing.T) {
 
 			pipeline := &IncrementalPipeline{PipelineSpec{
 				batchSize: 5,
-				source:    &datasetSource{DatasetName: "src", Store: store, DatasetManager: dsm},
+				source:    &source.DatasetSource{DatasetName: "src", Store: store, DatasetManager: dsm},
 				sink:      &httpDatasetSink{Endpoint: "http://localhost:7777/datasets/inctest/fullsync", Store: store},
 			}}
 			job := &job{id: "inc-1", pipeline: pipeline, runner: runner}
@@ -894,7 +893,7 @@ func TestPipeline(t *testing.T) {
 
 			pipeline := &FullSyncPipeline{PipelineSpec{
 				batchSize: 5,
-				source:    &datasetSource{DatasetName: "src", Store: store, DatasetManager: dsm},
+				source:    &source.DatasetSource{DatasetName: "src", Store: store, DatasetManager: dsm},
 				sink:      &httpDatasetSink{Endpoint: "http://localhost:7777/datasets/fulltest/fullsync", Store: store},
 			}}
 			job := &job{id: "inc-1", pipeline: pipeline, runner: runner}

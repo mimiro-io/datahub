@@ -22,8 +22,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/golang-jwt/jwt"
 	"github.com/gojektech/heimdall/v6/httpclient"
+	"github.com/golang-jwt/jwt"
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"

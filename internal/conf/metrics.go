@@ -147,11 +147,11 @@ func bToMb(b uint64) uint64 {
 }
 
 type histogram struct {
-	avg float64
-	count int64
-	median float64
+	avg        float64
+	count      int64
+	median     float64
 	percentile float64
-	max float64
+	max        float64
 }
 
 func getHistogram(h *metrics.Float64Histogram) histogram {
@@ -168,9 +168,9 @@ func getHistogram(h *metrics.Float64Histogram) histogram {
 	avg := count / uint64(len(h.Counts))
 
 	return histogram{
-		avg: float64(avg),
-		max: max,
-		count: int64(count),
+		avg:    float64(avg),
+		max:    max,
+		count:  int64(count),
 		median: median,
 	}
 }

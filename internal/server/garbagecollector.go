@@ -68,7 +68,7 @@ func NewGarbageCollector(lc fx.Lifecycle, store *Store, env *conf.Env) *GarbageC
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
-			go func() { gc.quit <- true}()
+			go func() { gc.quit <- true }()
 			return nil
 		},
 	})
@@ -78,7 +78,9 @@ func NewGarbageCollector(lc fx.Lifecycle, store *Store, env *conf.Env) *GarbageC
 
 func (garbageCollector *GarbageCollector) GC() error {
 again:
-	if garbageCollector.isCancelled() { return errors.New("gc cancelled") }
+	if garbageCollector.isCancelled() {
+		return errors.New("gc cancelled")
+	}
 	err := garbageCollector.store.database.RunValueLogGC(0.5)
 	if err == nil {
 		goto again
@@ -106,7 +108,9 @@ func (garbageCollector *GarbageCollector) Cleandeleted() error {
 	}
 
 	for deletedDsID := range garbageCollector.store.deletedDatasets {
-		if garbageCollector.isCancelled() { return errors.New("gc cancelled") }
+		if garbageCollector.isCancelled() {
+			return errors.New("gc cancelled")
+		}
 		// delete from change log
 		/*
 			binary.BigEndian.PutUint16(entityIdChangeTimeBuffer, DATASET_ENTITY_CHANGE_LOG)
@@ -192,7 +196,9 @@ func (garbageCollector *GarbageCollector) deleteByPrefixAndSelectorFunction(pref
 				if err := txn.Delete(key); err != nil {
 					return err
 				}
-				if garbageCollector.isCancelled() { return errors.New("gc cancelled") }
+				if garbageCollector.isCancelled() {
+					return errors.New("gc cancelled")
+				}
 			}
 			return nil
 		})
@@ -210,7 +216,9 @@ func (garbageCollector *GarbageCollector) deleteByPrefixAndSelectorFunction(pref
 		keysForDelete := make([][]byte, 0, collectSize)
 		keysCollected := 0
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			if garbageCollector.isCancelled() { return errors.New("gc cancelled") }
+			if garbageCollector.isCancelled() {
+				return errors.New("gc cancelled")
+			}
 			key := it.Item().KeyCopy(nil)
 
 			// if selector false continue

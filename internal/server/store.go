@@ -847,7 +847,7 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 				}
 
 				// make result key
-				var rkey[12]byte
+				var rkey [12]byte
 				binary.BigEndian.PutUint32(rkey[0:], datasetId)
 				binary.BigEndian.PutUint64(rkey[4:], predID)
 
@@ -869,12 +869,12 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 			}
 		} else {
 			/*  binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
-				binary.BigEndian.PutUint64(outgoingBuffer[2:], rid)
-				binary.BigEndian.PutUint64(outgoingBuffer[10:], uint64(txnTime))
-				binary.BigEndian.PutUint64(outgoingBuffer[18:], predid)
-				binary.BigEndian.PutUint64(outgoingBuffer[26:], relatedid)
-				binary.BigEndian.PutUint16(outgoingBuffer[34:], 0) // deleted.
-				binary.BigEndian.PutUint32(outgoingBuffer[36:], ds.InternalID) */
+			binary.BigEndian.PutUint64(outgoingBuffer[2:], rid)
+			binary.BigEndian.PutUint64(outgoingBuffer[10:], uint64(txnTime))
+			binary.BigEndian.PutUint64(outgoingBuffer[18:], predid)
+			binary.BigEndian.PutUint64(outgoingBuffer[26:], relatedid)
+			binary.BigEndian.PutUint16(outgoingBuffer[34:], 0) // deleted.
+			binary.BigEndian.PutUint32(outgoingBuffer[36:], ds.InternalID) */
 
 			searchBuffer := make([]byte, 10)
 			binary.BigEndian.PutUint16(searchBuffer, OUTGOING_REF_INDEX)
@@ -926,7 +926,7 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 				// get related
 				relatedID := binary.BigEndian.Uint64(k[26:])
 
-				var rkey[20]byte
+				var rkey [20]byte
 				binary.BigEndian.PutUint32(rkey[0:], datasetId)
 				binary.BigEndian.PutUint64(rkey[4:], predID)
 				binary.BigEndian.PutUint64(rkey[12:], relatedID)
@@ -942,7 +942,7 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 
 			results = make([]result, len(tmpResult))
 			i := 0
-			for _,v := range tmpResult {
+			for _, v := range tmpResult {
 				results[i] = v
 				i++
 			}

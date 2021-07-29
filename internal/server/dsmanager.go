@@ -153,7 +153,7 @@ func (dsm *DsManager) DeleteDataset(name string) error {
 	// swap map out with new modified copy of map to avoid concurrent read/write issues which can occur if
 	// a user deletes a dataset while this map is iterated over (in garbagecollector for example)
 	newDeletedDatasets := make(map[uint32]bool)
-	for k,v := range dsm.store.deletedDatasets {
+	for k, v := range dsm.store.deletedDatasets {
 		newDeletedDatasets[k] = v
 	}
 	newDeletedDatasets[existingDataset.InternalID] = true

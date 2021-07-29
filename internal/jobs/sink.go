@@ -19,6 +19,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
@@ -338,4 +340,11 @@ func (datasetSink *datasetSink) GetConfig() map[string]interface{} {
 	config["Type"] = "DatasetSink"
 	config["Name"] = datasetSink.DatasetName
 	return config
+}
+func handleHttpError(response *http.Response) error {
+	bodyBytes, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Received http sink error (%d). Unable to read error body", response.StatusCode))
+	}
+	return errors.New(fmt.Sprintf("Received http sink error (%d): %s", response.StatusCode, string(bodyBytes)))
 }
