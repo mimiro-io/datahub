@@ -235,7 +235,7 @@ Now, when we retrieve entities from `namespaces.Test`, datahub will supply only 
 
 ```
 > mim dataset entities namespaces.
-                                                                                                          
+
 # Listing entities from http://localhost:8080/datasets/namespaces.Test/entities
 
 # Namespaces:
@@ -629,6 +629,52 @@ To get information on latest run of a Job:
 mim jobs history simple-job
 ```
 
+## Transactional Updates
+
+The datahub has two main modes of update:
+
+1) Batches of entities are loaded into a single dataset, either via the API or using a job and loading it from another dataset or external data layer. Data updated in this way is guaranteed to have been committed.
+
+2) Using transactions to make a single update to several datasets in a single transaction. Unlike the above sometimes it is necessary to write into several datasets at once in a transactional fashion.
+
+Tranasactions can be used either via the data hub API, or as part of a javascript transform.
+
+The API endpoint is:
+
+`/transactions`
+
+and supports POST of a json document that represents the transaction.
+
+The data structure for a transaction consists of a namespace declaring context, followed by a map of dataset names that each map to a list of entities.
+
+The following example shows a transaction serialised as JSON.
+
+```
+{
+  "@context" : {
+    "namespaces" : {
+        "schema" : "http://data.mimiro.io/schema/",
+        "rdf" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+        "person" : "http://data.mimiro.io/schema/person/",
+        "people" : "http://data.mimiro.io/people/",
+        "companies" : "http://data.mimiro.io/companies/"
+    }
+  },
+  "people" : [
+        {
+            "id" : "people:homer",
+            "props" : {
+                "person:fullname" : "Homer Simpson"
+            },
+            "refs" : {
+                "person:worksfor" : "companies:mimiro",
+                "rdf:type" : "schema:person"
+            }
+        }
+    ]
+}
+```
+
 ## Transforms
 
 Jobs take data from a source and write it to a sink. It is often necessary to transform the source entities into a new form before writing them to the sink. Each job definition can contain a `transform` that is executed to carry out the manipulation.
@@ -669,7 +715,7 @@ Internal transforms are written in Javascript and executed in a sandbox.
 
 Note: The version of Javascript supported is ES5.1. Please check for the restrictions regarding this version, e.g. const and let are NOT supported.
 
-Internal transforms can be run in parallel. To do this include an attribute on the transform called `Parallelism` whose value is an integer. e.g. 10 to run the transform in parallel.  
+Internal transforms can be run in parallel. To do this include an attribute on the transform called `Parallelism` whose value is an integer. e.g. 10 to run the transform in parallel.
 
 Transforms written in Javascript need to be encoded as base64 and added in the transform section of a job definition. This can be done with the help of `mim jobs add -f job-with-transform.json -t javascript-transform.js` to automatically encode it or by manually encoding the transform section and adding it in the job-with-transform.json.
 
@@ -686,7 +732,7 @@ Example Job Definition:
     },
     "transform" : {
         "Type" : "JavascriptTransform",
-        "Parallelism" : 10, 
+        "Parallelism" : 10,
         "Code" : "ZnVuY3Rpb24gdHJhbnNmb3JtX2VudGl0aWVzKGVudGl0aWVzKSB7CiAgIHZhciBzdGFydHMgPSBbXTsKICAgdmFyIHJlcyA9IFF1ZXJ5KHN0YXJ0cywgInRlc3QiLCBmYWxzZSk7CiAgIHJldHVybiBlbnRpdGllczsKfQo="
     },
     "sink" : {
@@ -834,7 +880,7 @@ Log(people);
 ```text
  INFO  - [
 ["company",
- "worksfor:company", 
+ "worksfor:company",
 {
     "id":"bob",
     "refs":{
@@ -848,7 +894,7 @@ Log(people);
     }
 }],
 ["company",
- "worksfor:company", 
+ "worksfor:company",
 {
     "id":"janet",
     "refs":{
@@ -1059,6 +1105,30 @@ function transform_entities(entities) {
 }
 ```
 
+#### NewTransaction
+
+`NewTransaction()` is used to create a new transaction object. A transaction can then be executed using the ExecuteTransaction function.
+
+#### ExecuteTransaction
+
+`ExecuteTransaction(txn)`is used to execute a transaction. The following example shows how to use both MakeTransaction and ExecuteTransaction in a transform.
+
+```
+function transform_entities(entities) {
+    for (e of entities) {
+        var txn = NewTransaction();
+        var newentities = [];
+        newentities.push(e);
+        txn.DatasetEntities["NewProducts"] = newentities;
+        txn.DatasetEntities["ProductAudit"] = newentities;
+        ExecuteTransaction(txn);
+    }
+    return entities;
+}
+```
+
+It is recommended that jobs using transactions configure the DevNullSink.
+
 ### Using `mim` for Transforms
 
 The `mim` can be used to run and develop transforms locally before creating jobs.
@@ -1072,7 +1142,7 @@ mim transform test test.people --file transform1.js
 ```
 #### Testing a Transform on a given entity
 
-There is also a possibility to test the transform on a known entity in the datahub by running a query and applying the transformation on the returned entity, the command runs the same transform as above but on the entity `http://data.mimiro.io/people/bob`. The data is fetched from the dataset, the script is executed locally, and the output displayed. 
+There is also a possibility to test the transform on a known entity in the datahub by running a query and applying the transformation on the returned entity, the command runs the same transform as above but on the entity `http://data.mimiro.io/people/bob`. The data is fetched from the dataset, the script is executed locally, and the output displayed.
 
 ```shell
 mim query --id "http://data.mimiro.io/people/bob" --via="*" --json | mim transform test --file transform1.js
@@ -1187,7 +1257,7 @@ This is the client secret supported by the token generator service.
 This is the intended audience for the token, and needs to be supported by the token generator service.
 
 ```DL_JWT_GRANT_TYPE=app_credentials```
- 
+
 This is the grant type for the token. Note that this should be a machine token type, however for local testing purposes, other grant types can be used.
 
 ```DL_JWT_ENDPOINT=https://auth.example.io/oauth/token```
