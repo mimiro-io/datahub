@@ -446,7 +446,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 							refs = append(refs, relatedid)
 							oldRefs[predid] = refs
 						} else {
-							refs := []uint64 { relatedid}
+							refs := []uint64{relatedid}
 							oldRefs[predid] = refs
 						}
 					}

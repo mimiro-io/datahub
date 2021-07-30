@@ -17,6 +17,7 @@ package jobs
 import (
 	"context"
 	"errors"
+	jobSource "github.com/mimiro-io/datahub/internal/jobs/source"
 	"math"
 	"reflect"
 	"sync"
@@ -37,7 +38,7 @@ type Pipeline interface {
 	isFullSync() bool
 }
 type PipelineSpec struct {
-	source    Source
+	source    jobSource.Source
 	sink      Sink
 	transform Transform
 	batchSize int
@@ -62,7 +63,7 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 	//dont call source.startFullSync, just sink.startFullSync. to make sure we run on changes.
 	//exception is when the sink is http.
 	if pipeline.sink.GetConfig()["Type"] == "HttpDatasetSink" {
-		pipeline.source.startFullSync()
+		pipeline.source.StartFullSync()
 	}
 	err = pipeline.sink.startFullSync(runner)
 	if err != nil {
@@ -119,7 +120,7 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 		}
 
 		readTs := time.Now()
-		err := pipeline.source.readEntities(runner, syncJobState.ContinuationToken, pipeline.batchSize,
+		err := pipeline.source.ReadEntities(syncJobState.ContinuationToken, pipeline.batchSize,
 			func(entities []*server.Entity, s string) error {
 				_ = runner.statsdClient.Timing("pipeline.source.batch", time.Since(readTs), tags, 1)
 				result := processEntities(entities, s)
@@ -132,7 +133,7 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 		}
 	}
 
-	pipeline.source.endFullSync()
+	pipeline.source.EndFullSync()
 	err = pipeline.sink.endFullSync(runner)
 	if err != nil {
 		return err
@@ -152,7 +153,7 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 
 type presult struct {
 	entities []*server.Entity
-	err error
+	err      error
 }
 
 func (pipeline *IncrementalPipeline) spec() PipelineSpec { return pipeline.PipelineSpec }
@@ -219,9 +220,9 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 
 						wid := 0
 						index := 0
-						for i:=0;i<parallelisms;i++  {
+						for i := 0; i < parallelisms; i++ {
 							from := index
-							to := index+psize
+							to := index + psize
 
 							if to >= len(entities) {
 								to = index + (len(entities) - index)
@@ -238,7 +239,7 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 
 						// construct result
 						entities = make([]*server.Entity, 0)
-						for i:=0;i<parallelisms;i++ {
+						for i := 0; i < parallelisms; i++ {
 							res := workResults[i]
 							if res.err != nil {
 								return err
@@ -280,7 +281,7 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 		}
 
 		readTs := time.Now()
-		err := pipeline.source.readEntities(runner, syncJobState.ContinuationToken, pipeline.batchSize,
+		err := pipeline.source.ReadEntities(syncJobState.ContinuationToken, pipeline.batchSize,
 			func(entities []*server.Entity, s string) error {
 				_ = runner.statsdClient.Timing("pipeline.source.batch", time.Since(readTs), tags, 1)
 				result := processEntities(entities, s)

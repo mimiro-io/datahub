@@ -19,8 +19,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"net/http"
+	"github.com/mimiro-io/datahub/internal/jobs/source"
+	"github.com/mimiro-io/datahub/internal/security"
+	"strings"
 	"time"
 
 	"github.com/bamzi/jobrunner"
@@ -497,10 +498,64 @@ func (s *Scheduler) toPipeline(jobConfig *JobConfiguration, jobType string) (Pip
 	}
 }
 
-func handleHttpError(response *http.Response) error {
-	bodyBytes, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		return errors.New(fmt.Sprintf("Received error (%d). Unable to read error body", response.StatusCode))
+func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, error) {
+	sourceConfig := jobConfig.Source
+	if sourceConfig != nil {
+		sourceTypeName := sourceConfig["Type"]
+		if sourceTypeName != nil {
+			if sourceTypeName == "HttpDatasetSource" {
+				src := &source.HttpDatasetSource{}
+				src.Store = s.Store
+				src.Logger = s.Runner.logger.Named("HttpDatasetSource")
+				endpoint, ok := sourceConfig["Url"]
+				if ok && endpoint != "" {
+					src.Endpoint = endpoint.(string)
+				}
+				tokenProviderRaw, ok := sourceConfig["TokenProvider"]
+				if ok {
+					tokenProviderName := tokenProviderRaw.(string)
+					// security
+					if tokenProviderName != "" {
+						// attempt to parse the token provider
+						provider, ok := s.Runner.tokenProviders.Providers[strings.ToLower(tokenProviderName)]
+						if ok {
+							src.TokenProvider = provider.(security.TokenProvider)
+						}
+					}
+				}
+				return src, nil
+			} else if sourceTypeName == "DatasetSource" {
+				src := &source.DatasetSource{}
+				src.Store = s.Store
+				src.DatasetManager = s.DatasetManager
+				src.DatasetName = (sourceConfig["Name"]).(string)
+				return src, nil
+			} else if sourceTypeName == "MultiSource" {
+				src := &source.MultiSource{}
+
+				return src, nil
+			} else if sourceTypeName == "SampleSource" {
+				src := &source.SampleSource{}
+				src.Store = s.Store
+				numEntities := sourceConfig["NumberOfEntities"]
+				if numEntities != nil {
+					src.NumberOfEntities = int(numEntities.(float64))
+				}
+				return src, nil
+			} else if sourceTypeName == "SlowSource" {
+				src := &source.SlowSource{}
+				src.Sleep = sourceConfig["Sleep"].(string)
+				batch := sourceConfig["BatchSize"]
+				if batch != nil {
+					src.BatchSize = int(batch.(float64))
+				}
+				return src, nil
+			} else {
+				return nil, errors.New("unknown source type: " + sourceTypeName.(string))
+			}
+		}
+		return nil, errors.New("missing source type")
 	}
-	return errors.New(fmt.Sprintf("Received error (%d): %s", response.StatusCode, string(bodyBytes)))
+	return nil, errors.New("missing source config")
+
 }

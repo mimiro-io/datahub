@@ -39,7 +39,6 @@ func TestJsonOmitOnEntity(m *testing.T) {
 	}
 }
 
-
 func TestStreamParser(m *testing.T) {
 	g := goblin.Goblin(m)
 	g.Describe("The stream parser", func() {
