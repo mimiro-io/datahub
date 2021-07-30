@@ -195,6 +195,8 @@ func newJavascriptTransform(log *zap.SugaredLogger, code64 string, store *server
 	transform.Runtime.Set("NewEntity", transform.NewEntity)
 	transform.Runtime.Set("ToString", transform.ToString)
 	transform.Runtime.Set("Timing", transform.Timing)
+	transform.Runtime.Set("NewTransaction", transform.NewTransaction)
+	transform.Runtime.Set("ExecuteTransaction", transform.ExecuteTransaction)
 
 	_, err = transform.Runtime.RunString(string(code))
 	if err != nil {
@@ -228,6 +230,16 @@ func (javascriptTransform *JavascriptTransform) getParallelism() int {
 func (javascriptTransform *JavascriptTransform) Clone() (*JavascriptTransform, error) {
 	code := base64.StdEncoding.EncodeToString(javascriptTransform.Code)
 	return newJavascriptTransform(javascriptTransform.Logger, code, javascriptTransform.Store)
+}
+
+func (javascriptTransform *JavascriptTransform) NewTransaction() *server.Transaction {
+	txn := &server.Transaction{}
+	txn.DatasetEntities = make(map[string][]*server.Entity)
+	return txn
+}
+
+func (javascriptTransform *JavascriptTransform) ExecuteTransaction(txn *server.Transaction) error {
+	return javascriptTransform.Store.ExecuteTransaction(txn)
 }
 
 func (javascriptTransform *JavascriptTransform) Log(thing interface{}) {

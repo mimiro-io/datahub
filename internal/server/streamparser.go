@@ -35,6 +35,100 @@ func NewEntityStreamParser(store *Store) *EntityStreamParser {
 	return esp
 }
 
+/*
+{
+	"@context" : {
+
+	},
+	"ds1" : [
+
+	],
+	"ds2" : [
+
+	]
+}
+*/
+
+func (esp *EntityStreamParser) ParseTransaction(reader io.Reader) (*Transaction, error) {
+
+	txn := &Transaction{}
+	txn.DatasetEntities = make(map[string][]*Entity)
+
+	decoder := json.NewDecoder(reader)
+
+	t, err := decoder.Token()
+	if err != nil {
+		return nil, errors.New("parsing error: Bad token at start of stream " + err.Error())
+	}
+
+	if delim, ok := t.(json.Delim); !ok || delim != '{' {
+		return nil, errors.New("parsing error: Expected { at start of transaction json")
+	}
+
+	// key @context
+	t,err = decoder.Token()
+	if err != nil {
+		return nil, errors.New("parsing error: Bad token at read @context key " + err.Error())
+	}
+
+	context := make(map[string]interface{})
+	err = decoder.Decode(&context)
+	if err != nil {
+		return nil, errors.New("parsing error: Unable to decode context " + err.Error())
+	}
+
+	for k, v := range context["namespaces"].(map[string]interface{}) {
+		esp.localNamespaces[k] = v.(string)
+	}
+
+	for {
+		t,err = decoder.Token()
+		delimVal, isDelim := t.(json.Delim)
+		if isDelim {
+			if delimVal.String() == "}" {
+				break
+			} else {
+				return nil, errors.New("parsing error: Unexpected delimiter: " + delimVal.String())
+			}
+		} else {
+			datasetName := t.(string)
+
+			// read [
+			t,err = decoder.Token()
+			if err != nil {
+				return nil, errors.New("parsing error: Unable to read next token " + err.Error())
+			}
+			delimVal, isDelim := t.(json.Delim)
+			if !isDelim && delimVal.String() != "[" {
+				return nil, errors.New("parsing error: Unexpected delimiter - expected [ but got : " + delimVal.String())
+			}
+
+			entities := make([]*Entity, 0)
+			for {
+				t, err = decoder.Token() // starting { or ending ]
+				if err != nil {
+					return nil, errors.New("parsing error: Unable to read next token " + err.Error())
+				}
+
+				delimVal, isDelim := t.(json.Delim)
+				if isDelim && delimVal.String() == "{" {
+					e, err := esp.parseEntity(decoder)
+					if err != nil {
+						return nil, errors.New("parsing error: Unable to parse entity: " + err.Error())
+					}
+					entities = append(entities, e)
+				} else if isDelim && delimVal.String() == "]" {
+					break
+				}
+			}
+
+			txn.DatasetEntities[datasetName] = entities
+		}
+	}
+
+	return txn, nil
+}
+
 func (esp *EntityStreamParser) ParseStream(reader io.Reader, emitEntity func(*Entity) error) error {
 
 	decoder := json.NewDecoder(reader)

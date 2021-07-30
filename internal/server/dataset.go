@@ -39,7 +39,7 @@ type Dataset struct {
 	InternalID          uint32 `json:"internalId"`
 	SubjectIdentifier   string `json:"subjectIdentifier"`
 	store               *Store
-	writeLock           sync.Mutex
+	WriteLock           sync.Mutex
 	fullSyncStarted     bool
 	fullSyncLease       *fullSyncLease
 	fullSyncSeen        map[uint64]int
@@ -196,7 +196,6 @@ func (ds *Dataset) getStorageKey() []byte {
 	return key
 }
 
-// StoreEntities
 func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 	tags := []string{
 		"application:datahub",
@@ -207,25 +206,65 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 		return nil
 	}
 
-	_ = ds.store.statsdClient.Count("ds.added.items", int64(len(entities)), tags, 1)
-
-	// get lock - only one writer to a dataset log
-	ds.writeLock.Lock()
+	ds.WriteLock.Lock()
 	writeLockStart := time.Now()
 	// release lock at end regardless
 	defer func() {
 		_ = ds.store.statsdClient.Timing("ds.writeLock.time", time.Since(writeLockStart), tags, 1)
-		ds.writeLock.Unlock()
+		ds.WriteLock.Unlock()
 	}()
 
 	// need this to ensure time moves forward in high perf environments.
 	time.Sleep(time.Nanosecond * 1)
 
-	// time now as uint64
 	txnTime := time.Now().UnixNano()
-
 	txn := ds.store.database.NewTransaction(true)
 	defer txn.Discard()
+
+	newitems, err := ds.StoreEntitiesWithTransaction(entities, txnTime, txn)
+	if err != nil {
+		return err
+	}
+
+	err = ds.store.commitIdTxn()
+	if err != nil {
+		return err
+	}
+
+	err = txn.Commit()
+	if err != nil {
+		return err
+	}
+
+	err = ds.updateDataset(newitems, entities)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// StoreEntities
+func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int64, txn *badger.Txn) (newitems int64, Error error) {
+	tags := []string{
+		"application:datahub",
+		fmt.Sprintf("dataset:%s", ds.ID),
+	}
+
+	newitems = 0
+
+	if len(entities) == 0 {
+		return newitems, nil
+	}
+
+	_ = ds.store.statsdClient.Count("ds.added.items", int64(len(entities)), tags, 1)
+
+
+	// time now as uint64
+	/* txnTime := time.Now().UnixNano()
+
+	txn := ds.store.database.NewTransaction(true)
+	defer txn.Discard() */
 
 	// get dataset seq
 	// fixme: can be part of the dataset data structure no need to open each txn as the is a mutex protecting it
@@ -248,8 +287,6 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 	rtxn := ds.store.database.NewTransaction(false)
 	defer rtxn.Discard()
 
-	var newitems int64 = 0
-
 	for _, e := range entities {
 
 		// entityIdBuffer buffer for lookup in main index
@@ -260,7 +297,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 		var err error
 		rid, isnew, err = ds.store.assertIDForURI(uid, idCache)
 		if err != nil {
-			return err
+			return newitems, err
 		}
 		e.InternalID = rid // set internal id on entity
 		e.Recorded = uint64(txnTime)
@@ -297,21 +334,21 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 			if previousEntityIdBufferValue, err := rtxn.Get(datasetEntitiesLatestVersionKey); err == nil {
 				previousEntityIdBuffer, err = previousEntityIdBufferValue.ValueCopy(nil)
 				if err != nil {
-					return err
+					return newitems, err
 				}
 				prevJsonDataValue, err := rtxn.Get(previousEntityIdBuffer)
 				if err != nil {
-					return err
+					return newitems, err
 				}
 				prevJsonData, err = prevJsonDataValue.ValueCopy(nil)
 				_ = ds.store.statsdClient.Count("ds.read.bytes", prevJsonDataValue.ValueSize(), tags, 1)
 				if err != nil {
-					return err
+					return newitems, err
 				}
 				prevEntity = &Entity{}
 				err = json.Unmarshal(prevJsonData, prevEntity)
 				if err != nil {
-					return err
+					return newitems, err
 				}
 			}
 			if prevEntity != nil {
@@ -335,7 +372,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 		_ = ds.store.statsdClient.Gauge("ds.throughput.bytes", float64(jsonLength), tags, 1)
 		err = txn.Set(entityIdBuffer, jsonData)
 		if err != nil {
-			return err
+			return newitems, err
 		}
 
 		// store change log
@@ -347,13 +384,13 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 		binary.BigEndian.PutUint64(entityIdChangeTimeBuffer[14:], rid)
 		err = txn.Set(entityIdChangeTimeBuffer, entityIdBuffer)
 		if err != nil {
-			return err
+			return newitems, err
 		}
 
 		// dataset all latest entities
 		err = txn.Set(datasetEntitiesLatestVersionKey, entityIdBuffer)
 		if err != nil {
-			return err
+			return newitems, err
 		}
 
 		// Process references
@@ -380,13 +417,13 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 					// assert uint64 id for predicate
 					predid, _, err := ds.store.assertIDForURI(k, idCache)
 					if err != nil {
-						return err
+						return newitems, err
 					}
 
 					// assert uint64 id for related entity URI
 					relatedid, _, err := ds.store.assertIDForURI(ref, idCache)
 					if err != nil {
-						return err
+						return newitems, err
 					}
 
 					binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
@@ -398,7 +435,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 					binary.BigEndian.PutUint32(outgoingBuffer[36:], ds.InternalID)
 					err = txn.Set(outgoingBuffer, []byte(""))
 					if err != nil {
-						return err
+						return newitems, err
 					}
 
 					binary.BigEndian.PutUint16(incomingBuffer, INCOMING_REF_INDEX)
@@ -410,7 +447,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 					binary.BigEndian.PutUint32(incomingBuffer[36:], ds.InternalID)
 					err = txn.Set(incomingBuffer, []byte(""))
 					if err != nil {
-						return err
+						return newitems, err
 					}
 				}
 			}
@@ -433,13 +470,13 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 						// get predicate
 						predid, _, err := ds.store.assertIDForURI(k, idCache)
 						if err != nil {
-							return err
+							return newitems, err
 						}
 
 						// get related
 						relatedid, _, err := ds.store.assertIDForURI(ref.(string), idCache)
 						if err != nil {
-							return err
+							return newitems, err
 						}
 
 						if refs, ok := oldRefs[predid]; ok {
@@ -468,7 +505,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 						binary.BigEndian.PutUint32(incomingBuffer[36:], ds.InternalID)
 						err := txn.Set(incomingBuffer, []byte(""))
 						if err != nil {
-							return err
+							return newitems, err
 						}
 
 						binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
@@ -480,7 +517,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 						binary.BigEndian.PutUint32(outgoingBuffer[36:], ds.InternalID)
 						err = txn.Set(outgoingBuffer, []byte(""))
 						if err != nil {
-							return err
+							return newitems, err
 						}
 					}
 				}
@@ -501,13 +538,13 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 						// assert uint64 id for predicate
 						predid, _, err := ds.store.assertIDForURI(k, idCache)
 						if err != nil {
-							return err
+							return newitems, err
 						}
 
 						// assert uint64 id for related entity URI
 						relatedid, _, err := ds.store.assertIDForURI(ref, idCache)
 						if err != nil {
-							return err
+							return newitems, err
 						}
 
 						binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
@@ -519,7 +556,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 						binary.BigEndian.PutUint32(outgoingBuffer[36:], ds.InternalID)
 						err = txn.Set(outgoingBuffer, []byte(""))
 						if err != nil {
-							return err
+							return newitems, err
 						}
 
 						binary.BigEndian.PutUint16(incomingBuffer, INCOMING_REF_INDEX)
@@ -531,7 +568,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 						binary.BigEndian.PutUint32(incomingBuffer[36:], ds.InternalID)
 						err = txn.Set(incomingBuffer, []byte(""))
 						if err != nil {
-							return err
+							return newitems, err
 						}
 
 						if refs, ok := oldRefs[predid]; ok {
@@ -563,7 +600,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 						binary.BigEndian.PutUint32(incomingBuffer[36:], ds.InternalID)
 						err := txn.Set(incomingBuffer, []byte(""))
 						if err != nil {
-							return err
+							return newitems, err
 						}
 
 						binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
@@ -575,7 +612,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 						binary.BigEndian.PutUint32(outgoingBuffer[36:], ds.InternalID)
 						err = txn.Set(outgoingBuffer, []byte(""))
 						if err != nil {
-							return err
+							return newitems, err
 						}
 					}
 				}
@@ -583,7 +620,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 		}
 	}
 
-	err := ds.store.commitIdTxn()
+	/* err := ds.store.commitIdTxn()
 	if err != nil {
 		return err
 	}
@@ -600,9 +637,9 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 	_ = ds.store.statsdClient.Timing("ds.updateDataset.time", time.Since(updateDsTime), tags, 1)
 	if err != nil {
 		return err
-	}
+	} */
 
-	return nil
+	return newitems, nil
 }
 
 func (ds *Dataset) updateDataset(newItemCount int64, entities []*Entity) error {

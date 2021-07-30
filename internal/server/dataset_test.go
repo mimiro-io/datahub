@@ -17,15 +17,14 @@ package server
 import (
 	"context"
 	"fmt"
-	"os"
-	"strconv"
-	"strings"
-	"testing"
-
 	"github.com/DataDog/datadog-go/statsd"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
+	"os"
+	"strconv"
+	"strings"
+	"testing"
 
 	"github.com/franela/goblin"
 )
@@ -81,7 +80,7 @@ func TestDataset(t *testing.T) {
 			_ = env.store.Close()
 			_ = os.RemoveAll(storeLocation)
 		})
-		g.It("Should accept both single strings and string arrays as refs values", func() {
+		g.It("XXX Should accept both single strings and string arrays as refs values", func() {
 			//add a first person with all new refs
 			person := NewEntity(env.peopleNamespacePrefix+":person-1", 1)
 			person.Properties[env.peopleNamespacePrefix+":Name"] = "person 1"

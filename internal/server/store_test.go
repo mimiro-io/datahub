@@ -17,13 +17,14 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/dgraph-io/badger/v3"
 	"os"
 	"reflect"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/dgraph-io/badger/v3"
 
 	"github.com/franela/goblin"
 
@@ -1491,6 +1492,77 @@ func TestDatasetScope(test *testing.T) {
 			g.Assert(result.Properties[employeeNamespacePrefix+":Title"]).Eql("Vice President",
 				"expected to merge property employees:Title into result with value 'Vice President'")
 			g.Assert(result.Properties[peopleNamespacePrefix+":Name"]).IsNil()
+		})
+
+		g.It("Should perform txn updates without error", func() {
+			// create dataset
+			_, err := dsm.CreateDataset("people")
+			g.Assert(err).IsNil()
+
+			_, err = dsm.CreateDataset("places")
+			g.Assert(err).IsNil()
+
+			entities := make([]*Entity, 1)
+			entity := NewEntity("http://data.mimiro.io/people/person1", 0)
+			entity.Properties["Name"] = "homer"
+			entity.References["rdf:type"] = "http://data.mimiro.io/model/Person"
+			entity.References["rdf:place"] = "http://data.mimiro.io/places/place1"
+			entities[0] = entity
+
+			entities1 := make([]*Entity, 1)
+			entity1 := NewEntity("http://data.mimiro.io/places/place1", 0)
+			entity1.Properties["Name"] = "home"
+			entity1.References["rdf:type"] = "http://data.mimiro.io/model/Place"
+			entities1[0] = entity1
+
+			txn := &Transaction{}
+			txn.DatasetEntities = make(map[string][]*Entity)
+			txn.DatasetEntities["people"] = entities
+			txn.DatasetEntities["places"] = entities1
+
+			err = store.ExecuteTransaction(txn)
+			g.Assert(err).IsNil()
+
+			people := dsm.GetDataset("people")
+			peopleEntities, _ := people.GetEntities("", 100)
+			g.Assert(len(peopleEntities.Entities)).Eql(6)
+
+		})
+
+		g.It("should find deleted version of entity with lookup", func() {
+			peopleNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
+
+			// create dataset
+			ds, err := dsm.CreateDataset("people")
+			g.Assert(err).IsNil()
+
+			entities := make([]*Entity, 1)
+			entity := NewEntity(peopleNamespacePrefix+":p1", 0)
+			entity.Properties["Name"] = "homer"
+			entity.References["rdf:type"] = "http://data.mimiro.io/model/Person"
+			entity.References["rdf:f1"] = "http://data.mimiro.io/people/Person-1"
+			entity.References["rdf:f2"] = "http://data.mimiro.io/people/Person-2"
+			entity.References["rdf:f3"] = "http://data.mimiro.io/people/Person-3"
+			entities[0] = entity
+
+			err = ds.StoreEntities(entities)
+			g.Assert(err).IsNil("StoreEntities failed unexpectedly")
+
+			// get entity
+			e, err := store.GetEntity(peopleNamespacePrefix+":p1", nil)
+			g.Assert(err).IsNil("GetEntity failed unexpectedly")
+			g.Assert(e.IsDeleted).IsFalse()
+
+			entities = make([]*Entity, 1)
+			entity = NewEntity(peopleNamespacePrefix+":p1", 0)
+			entity.IsDeleted = true
+			entities[0] = entity
+
+			err = ds.StoreEntities(entities)
+			g.Assert(err).IsNil("StoreEntities failed unexpectedly")
+
+			e, _ = store.GetEntity("http://data.mimiro.io/people/p1", nil)
+			g.Assert(e.IsDeleted).IsTrue()
 		})
 	})
 }

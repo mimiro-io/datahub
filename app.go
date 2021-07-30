@@ -52,6 +52,7 @@ func wire() *fx.App {
 			web.Register,
 			web.NewContentHandler,
 			web.NewDatasetHandler,
+			web.NewTxnHandler,
 			web.NewQueryHandler,
 			web.NewJobOperationHandler,
 			web.NewJobsHandler,

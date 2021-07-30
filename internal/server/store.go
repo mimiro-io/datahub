@@ -1263,3 +1263,48 @@ func (s *Store) IterateObjectsRaw(prefix []byte, processJSON func([]byte) error)
 
 	return err
 }
+
+type Transaction struct {
+	DatasetEntities map[string][]*Entity
+}
+
+func (s *Store) ExecuteTransaction(transaction *Transaction) error {
+	datasets := make(map[string]*Dataset)
+
+	for k,_ := range transaction.DatasetEntities {
+		dataset, ok := s.datasets.Load(k)
+		if !ok {
+			return errors.New("no dataset " + k)
+		}
+		datasets[k] = dataset.(*Dataset)
+
+		dataset.(*Dataset).WriteLock.Lock()
+		// release lock at end regardless
+		defer dataset.(*Dataset).WriteLock.Unlock()
+	}
+
+	txnTime := time.Now().UnixNano()
+	txn := s.database.NewTransaction(true)
+	defer txn.Discard()
+
+	for k,ds := range datasets {
+		entities := transaction.DatasetEntities[k]
+		_, err := ds.StoreEntitiesWithTransaction(entities, txnTime, txn)
+		if err != nil {
+			return err
+		}
+	}
+
+	err := s.commitIdTxn()
+	if err != nil {
+		return err
+	}
+
+	err = txn.Commit()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
