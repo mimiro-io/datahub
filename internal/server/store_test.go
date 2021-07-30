@@ -1431,7 +1431,6 @@ func TestDatasetScope(test *testing.T) {
 
 		g.It("Should respect dataset scope in GetEntity (single lookup query)", func() {
 			// namespaces
-			g.Timeout(time.Hour)
 			employeeNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/employee/")
 			modelNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/model/")
 			rdfNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(RdfNamespaceExpansion)
@@ -1496,7 +1495,6 @@ func TestDatasetScope(test *testing.T) {
 		})
 
 		g.It("Should perform txn updates without error", func() {
-			g.Timeout(time.Hour * 1)
 			// create dataset
 			_, err := dsm.CreateDataset("people")
 			g.Assert(err).IsNil()
@@ -1532,8 +1530,6 @@ func TestDatasetScope(test *testing.T) {
 		})
 
 		g.It("should find deleted version of entity with lookup", func() {
-			g.Timeout(time.Hour * 1)
-
 			peopleNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
 
 			// create dataset

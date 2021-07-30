@@ -631,13 +631,13 @@ mim jobs history simple-job
 
 ## Transactional Updates
 
-The datahub has two main modes of update:
+The data hub has two main modes of update:
 
 1) Batches of entities are loaded into a single dataset, either via the API or using a job and loading it from another dataset or external data layer. Data updated in this way is guaranteed to have been committed.
 
 2) Using transactions to make a single update to several datasets in a single transaction. Unlike the above sometimes it is necessary to write into several datasets at once in a transactional fashion.
 
-Tranasactions can be used either via the data hub API, or as part of a javascript transform.
+Transactions can be executed either via the data hub API, or as part of a javascript transform.
 
 The API endpoint is:
 
@@ -1111,7 +1111,7 @@ function transform_entities(entities) {
 
 #### ExecuteTransaction
 
-`ExecuteTransaction(txn)`is used to execute a transaction. The following example shows how to use both MakeTransaction and ExecuteTransaction in a transform.
+`ExecuteTransaction(txn)` is used to execute a transaction. The following example shows how to use both NewTransaction and ExecuteTransaction in a transform.
 
 ```
 function transform_entities(entities) {
