@@ -47,7 +47,7 @@ func TestTransform(t *testing.T) {
 			entities = append(entities, server.NewEntity("1", 1))
 
 			_, err = transform.transformEntities(&Runner{statsdClient: &statsd.NoOpClient{}}, entities, "")
-			g.Assert(err).IsNotNil("tranform should fail")
+			g.Assert(err).IsNotNil("transform should fail")
 			g.Assert(strings.Split(err.Error(), " (")[0]).
 				Eql("ReferenceError: prefix is not defined at transform_entities")
 		})
