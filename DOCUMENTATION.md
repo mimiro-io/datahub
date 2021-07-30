@@ -1107,7 +1107,7 @@ function transform_entities(entities) {
 
 #### NewTransaction
 
-`NewTransaction()` is used to create a new transaction object. A transaction can then be executed using the ExecuteTransaction function.
+`NewTransaction()` is used to create a new transaction object. A transaction can then be executed using the ExecuteTransaction function. Note that this function simply returns an empty transaction data structure. It does not open a transaction. 
 
 #### ExecuteTransaction
 
