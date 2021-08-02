@@ -1,9 +1,11 @@
 package source
 
 import (
+	"encoding/json"
 	"errors"
-	"github.com/mimiro-io/datahub/internal/server"
 	"strconv"
+
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 type DatasetSource struct {
@@ -21,18 +23,17 @@ func (datasetSource *DatasetSource) EndFullSync() {
 	datasetSource.isFullSync = false
 }
 
-func (datasetSource *DatasetSource) ReadEntities(since string, batchSize int, processEntities func([]*server.Entity, string) error) error {
+func (datasetSource *DatasetSource) ReadEntities(since DatasetContinuation, batchSize int,
+	processEntities func([]*server.Entity, DatasetContinuation) error) error {
 	exists := datasetSource.DatasetManager.IsDataset(datasetSource.DatasetName)
 	if !exists {
 		return errors.New("dataset is missing")
 	}
 	dataset := datasetSource.DatasetManager.GetDataset(datasetSource.DatasetName)
 
-	sinceInt := 0
-
 	entities := make([]*server.Entity, 0)
 	if datasetSource.isFullSync {
-		continuation, err := dataset.MapEntities(since, batchSize, func(entity *server.Entity) error {
+		continuation, err := dataset.MapEntities(since.GetToken(), batchSize, func(entity *server.Entity) error {
 			entities = append(entities, entity)
 			return nil
 		})
@@ -40,26 +41,19 @@ func (datasetSource *DatasetSource) ReadEntities(since string, batchSize int, pr
 			return err
 		}
 
-		err = processEntities(entities, continuation)
+		err = processEntities(entities, &StringDatasetContinuation{continuation})
 		if err != nil {
 			return err
 		}
 	} else {
-		if since != "" {
-			s, err := strconv.Atoi(since)
-			if err != nil {
-				return err
-			}
-			sinceInt = s
-		}
-		continuation, err := dataset.ProcessChanges(uint64(sinceInt), batchSize, func(entity *server.Entity) {
+		continuation, err := dataset.ProcessChanges(since.AsIncrToken(), batchSize, func(entity *server.Entity) {
 			entities = append(entities, entity)
 		})
 		if err != nil {
 			return err
 		}
 
-		err = processEntities(entities, strconv.Itoa(int(continuation)))
+		err = processEntities(entities, &StringDatasetContinuation{strconv.Itoa(int(continuation))})
 		if err != nil {
 			return err
 		}
@@ -73,4 +67,15 @@ func (datasetSource *DatasetSource) GetConfig() map[string]interface{} {
 	config["Type"] = "DatasetSource"
 	config["Name"] = datasetSource.DatasetName
 	return config
+}
+
+func (datasetSource *DatasetSource) DecodeToken(token string) DatasetContinuation {
+	result := &StringDatasetContinuation{}
+	_ = json.Unmarshal([]byte(token), result)
+	return result
+}
+
+func (datasetSource *DatasetSource) EncodeToken(token DatasetContinuation) string {
+	result, _ := json.Marshal(token)
+	return string(result)
 }

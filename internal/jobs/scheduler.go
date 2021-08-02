@@ -19,18 +19,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/mimiro-io/datahub/internal/jobs/source"
-	"github.com/mimiro-io/datahub/internal/security"
 	"strings"
 	"time"
 
+	"github.com/mimiro-io/datahub/internal/jobs/source"
+	"github.com/mimiro-io/datahub/internal/security"
+
 	"github.com/bamzi/jobrunner"
-	"github.com/mimiro-io/datahub/internal/conf"
-	"github.com/mimiro-io/datahub/internal/server"
 	"github.com/robfig/cron/v3"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/mimiro-io/datahub/internal/conf"
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 // The Scheduler deals with reading and writing jobs and making sure they get added to the
@@ -532,7 +534,13 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 				return src, nil
 			} else if sourceTypeName == "MultiSource" {
 				src := &source.MultiSource{}
-
+				src.Store = s.Store
+				src.DatasetManager = s.DatasetManager
+				src.DatasetName = (sourceConfig["Name"]).(string)
+				err := src.ParseDependencies(sourceConfig["Dependencies"])
+				if err != nil {
+					return nil, err
+				}
 				return src, nil
 			} else if sourceTypeName == "SampleSource" {
 				src := &source.SampleSource{}

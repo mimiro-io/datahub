@@ -1,14 +1,27 @@
 package source
 
 import (
-	"github.com/mimiro-io/datahub/internal/server"
+	"encoding/json"
 	"strconv"
 	"time"
+
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 type SlowSource struct {
 	BatchSize int
 	Sleep     string
+}
+
+func (source *SlowSource) DecodeToken(token string) DatasetContinuation {
+	result := &StringDatasetContinuation{}
+	_ = json.Unmarshal([]byte(token), result)
+	return result
+}
+
+func (source *SlowSource) EncodeToken(token DatasetContinuation) string {
+	result, _ := json.Marshal(token)
+	return string(result)
 }
 
 func (source *SlowSource) StartFullSync() {
@@ -28,7 +41,7 @@ func (source *SlowSource) GetConfig() map[string]interface{} {
 	return config
 }
 
-func (source *SlowSource) ReadEntities(since string, batchSize int, processEntities func([]*server.Entity, string) error) error {
+func (source *SlowSource) ReadEntities(since DatasetContinuation, batchSize int, processEntities func([]*server.Entity, DatasetContinuation) error) error {
 	// assert sample source namespace
 
 	entities := make([]*server.Entity, source.BatchSize)
@@ -42,5 +55,5 @@ func (source *SlowSource) ReadEntities(since string, batchSize int, processEntit
 	}
 	time.Sleep(d)
 
-	return processEntities(entities, "")
+	return processEntities(entities, &StringDatasetContinuation{""})
 }

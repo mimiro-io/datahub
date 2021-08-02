@@ -15,13 +15,40 @@
 package source
 
 import (
+	"strconv"
+
 	"github.com/mimiro-io/datahub/internal/server"
 )
 
 // Source interface for pulling data
 type Source interface {
 	GetConfig() map[string]interface{}
-	ReadEntities(since string, batchSize int, processEntities func([]*server.Entity, string) error) error
+	ReadEntities(since DatasetContinuation, batchSize int, processEntities func([]*server.Entity, DatasetContinuation) error) error
 	StartFullSync()
 	EndFullSync()
+	DecodeToken(token string) DatasetContinuation
+	EncodeToken(token DatasetContinuation) string
+}
+
+type DatasetContinuation interface {
+	GetToken() string
+	AsIncrToken() uint64
+}
+
+type StringDatasetContinuation struct {
+	token string
+}
+
+func (c *StringDatasetContinuation) GetToken() string {
+	return c.token
+}
+func (c *StringDatasetContinuation) AsIncrToken() uint64 {
+	if c.token != "" {
+		i, err := strconv.Atoi(c.token)
+		if err != nil {
+			return 0
+		}
+		return uint64(i)
+	}
+	return 0
 }
