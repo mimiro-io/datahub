@@ -145,8 +145,7 @@ func (multiSource *MultiSource) processDependency(dep dependency, d *MultiDatase
 	join := dep.Joins[0]
 
 	// TODO: create GetManyRelated variant that takes internal ids as "startUris" ?
-	relatedEntities, err := multiSource.Store.GetManyRelatedEntities(
-		uris, join.Predicate, join.Inverse, []string{join.Dataset})
+	relatedEntities, err := multiSource.Store.GetManyRelatedEntities(uris, join.Predicate, join.Inverse, nil)
 	if err != nil {
 		return fmt.Errorf("GetManyRelatedEntities failed for join %+v, %w", join, err)
 	}
