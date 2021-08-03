@@ -259,7 +259,6 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 
 	_ = ds.store.statsdClient.Count("ds.added.items", int64(len(entities)), tags, 1)
 
-
 	// time now as uint64
 	/* txnTime := time.Now().UnixNano()
 
@@ -700,6 +699,35 @@ func (ds *Dataset) updateDataset(newItemCount int64, entities []*Entity) error {
 		}
 	}
 	return nil
+}
+
+func (ds *Dataset) GetChangesWatermark() (uint64, error) {
+	var waterMark uint64
+
+	err := ds.store.database.View(func(txn *badger.Txn) error {
+		searchBuffer := make([]byte, 7)
+		binary.BigEndian.PutUint16(searchBuffer, DATASET_ENTITY_CHANGE_LOG)
+		binary.BigEndian.PutUint32(searchBuffer[2:], ds.InternalID)
+		searchBuffer[6] = 0xFF
+
+		iteratorOptions := badger.DefaultIteratorOptions
+		iteratorOptions.Reverse = true
+		iteratorOptions.PrefetchValues = false
+		iteratorOptions.Prefix = searchBuffer
+		changesIterator := txn.NewIterator(iteratorOptions)
+		defer changesIterator.Close()
+
+		changesIterator.Rewind()
+		item := changesIterator.Item()
+		k := item.Key()
+
+		waterMark = binary.BigEndian.Uint64(k[6:14])
+
+		return nil
+	})
+
+	// need to add one to point to next change in searches.
+	return waterMark+1, err
 }
 
 /*
