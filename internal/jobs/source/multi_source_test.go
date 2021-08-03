@@ -18,7 +18,6 @@ import (
 	"github.com/mimiro-io/datahub/internal/server"
 )
 
-
 func TestMultiSource(t *testing.T) {
 	g := goblin.Goblin(t)
 	g.Describe("dependency tracking", func() {
@@ -209,7 +208,7 @@ func TestMultiSource(t *testing.T) {
 
 		})
 
-		//initial incremental will be much slower, as it traverses all main entities and processes all dependencies without watermarks
+		//initial incremental will be much slower, as it traverses all main entities and processes all dependency changes without watermarks
 		g.It("should emit main entity if direct dependency was changed after initial incremental run", func() {
 			addresses, addressPrefix := createTestDataset("address", []string{"Mainstreet", "Sidealley"}, nil, dsm, g, store)
 			peoplePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://people/")
@@ -265,16 +264,15 @@ func TestMultiSource(t *testing.T) {
 			g.Assert(recordedEntities[0].Properties["name"]).Eql("Bob")
 		})
 
-
 		g.It("should emit main entity if indirect dependency was changed after fullsync", func() {
 			g.Timeout(1 * time.Hour)
 			_, peoplePrefix := createTestDataset("people", []string{"Bob", "Alice"}, nil, dsm, g, store)
 			employments, employmentPrefix := createTestDataset("employment",
 				[]string{"MediumCorp", "LittleSweatshop", "SparetimeYardSale"}, map[string]map[string]interface{}{
-				"MediumCorp":   {peoplePrefix + ":employment": peoplePrefix + ":Bob"},
-				"LittleSweatshop": {peoplePrefix + ":employment": peoplePrefix + ":Alice"},
-				"SparetimeYardSale": {peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix+":Alice"}},
-			}, dsm, g, store)
+					"MediumCorp":        {peoplePrefix + ":employment": peoplePrefix + ":Bob"},
+					"LittleSweatshop":   {peoplePrefix + ":employment": peoplePrefix + ":Alice"},
+					"SparetimeYardSale": {peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"}},
+				}, dsm, g, store)
 
 			testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
 			srcJSON := `{ "Type" : "MultiSource", "Name" : "people", "Dependencies": [ {
@@ -305,7 +303,7 @@ func TestMultiSource(t *testing.T) {
 				server.NewEntityFromMap(map[string]interface{}{
 					"id":    employmentPrefix + ":MediumCorp",
 					"props": map[string]interface{}{"name": "MediumCorp-changed"},
-					"refs":  map[string]interface{}{ peoplePrefix + ":employment": peoplePrefix + ":Bob"},
+					"refs":  map[string]interface{}{peoplePrefix + ":employment": peoplePrefix + ":Bob"},
 				}),
 			})
 
@@ -322,6 +320,109 @@ func TestMultiSource(t *testing.T) {
 			//Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
 			g.Assert(recordedEntities[0].Properties["name"]).Eql("Bob")
 
+			//also, modify SparetimeYardSale employment and verify that both Bob and Alice emitted in next read
+			err = employments.StoreEntities([]*server.Entity{
+				server.NewEntityFromMap(map[string]interface{}{
+					"id":    employmentPrefix + ":SparetimeYardSale",
+					"props": map[string]interface{}{"name": "SparetimeYardSale-changed"},
+					"refs":  map[string]interface{}{peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"}},
+				}),
+			})
+
+			recordedEntities = []server.Entity{}
+			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			//expect both referred-to people to be emitted
+			g.Assert(len(recordedEntities)).Eql(2)
+		})
+
+		g.It("should emit main entity if multi hop dependency was changed after fullsync", func() {
+			g.Timeout(1 * time.Hour)
+			cities, cityPrefix := createTestDataset("city", []string{"Oslo", "Bergen"}, nil, dsm, g, store)
+			addressPrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://address/")
+			addresses, _ := createTestDataset("address", []string{"Mainstreet", "Sidealley"},
+				map[string]map[string]interface{}{
+					"Mainstreet": {},
+					"Sidealley":  {addressPrefix + ":city": cityPrefix + ":Bergen"},
+				}, dsm, g, store)
+			peoplePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://people/")
+			createTestDataset("people", []string{"Bob", "Alice"}, map[string]map[string]interface{}{
+				"Bob":   {peoplePrefix + ":address": addressPrefix + ":Mainstreet"},
+				"Alice": {peoplePrefix + ":address": addressPrefix + ":Sidealley"},
+			}, dsm, g, store)
+
+			testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
+			srcJSON := `{ "Type" : "MultiSource", "Name" : "people", "Dependencies": [ {
+							"dataset": "city",
+							"joins": [
+                              { "dataset": "address", "predicate": "http://address/city", "inverse": true },
+                              { "dataset": "people", "predicate": "http://people/address", "inverse": true }
+                            ] } ] }`
+
+			srcConfig := map[string]interface{}{}
+			err := json.Unmarshal([]byte(srcJSON), &srcConfig)
+			g.Assert(err).IsNil()
+			err = testSource.ParseDependencies(srcConfig["Dependencies"])
+			g.Assert(err).IsNil()
+
+			//fullsync
+			var recordedEntities []server.Entity
+			token := &source.MultiDatasetContinuation{}
+			var lastToken source.DatasetContinuation
+			testSource.StartFullSync()
+			err = testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			testSource.EndFullSync()
+
+			//modify Mainstreet address and verify that nothing changed (address is not a dependency, just a join)
+			err = addresses.StoreEntities([]*server.Entity{
+				server.NewEntityFromMap(map[string]interface{}{
+					"id":    addressPrefix + ":Mainstreet",
+					"props": map[string]interface{}{"name": "Mainstreet-changed"},
+					"refs":  map[string]interface{}{addressPrefix + ":city": cityPrefix + ":Oslo"},
+				}),
+			})
+			recordedEntities = []server.Entity{}
+			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			g.Assert(len(recordedEntities)).Eql(0)
+
+			//now, modify Oslo city and verify that bob is found via Mainstreet address
+			err = cities.StoreEntities([]*server.Entity{
+				server.NewEntityFromMap(map[string]interface{}{
+					"id":    cityPrefix + ":Oslo",
+					"props": map[string]interface{}{"name": "Oslo-changed"},
+					"refs":  map[string]interface{}{},
+				}),
+			})
+			recordedEntities = []server.Entity{}
+			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			g.Assert(len(recordedEntities)).Eql(1)
 		})
 	})
 

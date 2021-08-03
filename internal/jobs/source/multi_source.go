@@ -142,17 +142,26 @@ func (multiSource *MultiSource) processDependency(dep dependency, d *MultiDatase
 		return fmt.Errorf("detecting changes in dependency dataset %+v failed, %w", dep, err)
 	}
 
-	join := dep.Joins[0]
-
-	// TODO: create GetManyRelated variant that takes internal ids as "startUris" ?
-	relatedEntities, err := multiSource.Store.GetManyRelatedEntities(uris, join.Predicate, join.Inverse, nil)
-	if err != nil {
-		return fmt.Errorf("GetManyRelatedEntities failed for join %+v, %w", join, err)
-	}
-
 	entities := make([]*server.Entity, 0)
-	for _, r := range relatedEntities {
-		entities = append(entities, r[2].(*server.Entity))
+	//go through joins in sequence
+	for idx, join := range dep.Joins {
+		// TODO: create GetManyRelated variant that takes internal ids as "startUris" ?
+		relatedEntities, err := multiSource.Store.GetManyRelatedEntities(uris, join.Predicate, join.Inverse, nil)
+		if err != nil {
+			return fmt.Errorf("GetManyRelatedEntities failed for join %+v, %w", join, err)
+		}
+
+		//we reached the end
+		if idx == len(dep.Joins)-1 {
+			for _, r := range relatedEntities {
+				entities = append(entities, r[2].(*server.Entity))
+			}
+		} else {
+			uris = make([]string, 0)
+			for _, r := range relatedEntities {
+				uris = append(uris, r[2].(*server.Entity).ID)
+			}
+		}
 	}
 
 	if d.dependencyTokens == nil {
