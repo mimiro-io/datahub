@@ -67,11 +67,3 @@ func (datasetSource *DatasetSource) GetConfig() map[string]interface{} {
 	config["Name"] = datasetSource.DatasetName
 	return config
 }
-
-func (datasetSource *DatasetSource) DecodeToken(token string) DatasetContinuation {
-	return &StringDatasetContinuation{token}
-}
-
-func (datasetSource *DatasetSource) EncodeToken(token DatasetContinuation) string {
-	return token.GetToken()
-}

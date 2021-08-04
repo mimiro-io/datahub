@@ -12,14 +12,6 @@ type SlowSource struct {
 	Sleep     string
 }
 
-func (source *SlowSource) DecodeToken(token string) DatasetContinuation {
-	return &StringDatasetContinuation{token}
-}
-
-func (source *SlowSource) EncodeToken(token DatasetContinuation) string {
-	return token.GetToken()
-}
-
 func (source *SlowSource) StartFullSync() {
 	// empty for now (this makes sonar not complain)
 }

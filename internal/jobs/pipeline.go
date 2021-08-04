@@ -115,7 +115,10 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 
 				// capture token if there is one
 				if continuationToken.GetToken() != "" {
-					syncJobState.ContinuationToken = pipeline.source.EncodeToken(continuationToken)
+					syncJobState.ContinuationToken, err = continuationToken.Encode()
+					if err != nil {
+						return err
+					}
 				}
 
 				if incomingEntityCount == 0 || // if this was the last page (empty) of a tokenized source
@@ -127,8 +130,12 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 		}
 
 		readTs := time.Now()
-		token := pipeline.source.DecodeToken(syncJobState.ContinuationToken)
-		err := pipeline.source.ReadEntities(token, pipeline.batchSize,
+		token, err := jobSource.DecodeToken(pipeline.source.GetConfig()["Type"], syncJobState.ContinuationToken)
+		if err != nil {
+			return err
+		}
+
+		err = pipeline.source.ReadEntities(token, pipeline.batchSize,
 			func(entities []*server.Entity, c jobSource.DatasetContinuation) error {
 				_ = runner.statsdClient.Timing("pipeline.source.batch", time.Since(readTs), tags, 1)
 				result := processEntities(entities, c)
@@ -272,7 +279,10 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 
 				// store token if there is one
 				if continuationToken.GetToken() != "" {
-					syncJobState.ContinuationToken = pipeline.source.EncodeToken(continuationToken)
+					syncJobState.ContinuationToken, err = continuationToken.Encode()
+					if err != nil {
+						return err
+					}
 
 					err = runner.store.StoreObject(server.JOB_DATA_INDEX, job.id, syncJobState)
 					if err != nil {
@@ -289,7 +299,11 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 		}
 
 		readTs := time.Now()
-		err := pipeline.source.ReadEntities( pipeline.source.DecodeToken(syncJobState.ContinuationToken),
+		since, err := jobSource.DecodeToken(pipeline.source.GetConfig()["Type"], syncJobState.ContinuationToken)
+		if err != nil {
+			return err
+		}
+		err = pipeline.source.ReadEntities(since,
 			pipeline.batchSize,
 			func(entities []*server.Entity, c jobSource.DatasetContinuation) error {
 				_ = runner.statsdClient.Timing("pipeline.source.batch", time.Since(readTs), tags, 1)

@@ -1,6 +1,7 @@
 package source
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -28,34 +29,34 @@ type MultiSource struct {
 	waterMarks     map[string]uint64
 }
 
-func (multiSource *MultiSource) DecodeToken(token string) DatasetContinuation {
-	panic("implement me")
-}
-
-func (multiSource *MultiSource) EncodeToken(token DatasetContinuation) string {
-	panic("implement me")
-}
-
 type MultiDatasetContinuation struct {
-	mainToken        string
-	dependencyTokens map[string]*StringDatasetContinuation
+	MainToken        string
+	DependencyTokens map[string]*StringDatasetContinuation
 	ActiveDS         string
+}
+
+func (c *MultiDatasetContinuation) Encode() (string, error) {
+	result, err := json.Marshal(c)
+	if nil != err {
+		return "", err
+	}
+	return string(result), nil
 }
 
 func (c *MultiDatasetContinuation) GetToken() string {
 	if c.ActiveDS != "" {
-		return c.dependencyTokens[c.ActiveDS].GetToken()
+		return c.DependencyTokens[c.ActiveDS].GetToken()
 	}
 
-	return c.mainToken
+	return c.MainToken
 }
 
 func (c *MultiDatasetContinuation) AsIncrToken() uint64 {
 	if c.ActiveDS != "" {
-		return c.dependencyTokens[c.ActiveDS].AsIncrToken()
+		return c.DependencyTokens[c.ActiveDS].AsIncrToken()
 	}
 
-	i, err := strconv.Atoi(c.mainToken)
+	i, err := strconv.Atoi(c.MainToken)
 	if err != nil {
 		return 0
 	}
@@ -107,11 +108,11 @@ func (multiSource *MultiSource) ReadEntities(since DatasetContinuation, batchSiz
 	} else {
 		//set watermarks before starting fullsync
 		for depName, waterMark := range multiSource.waterMarks {
-			if d.dependencyTokens == nil {
-				d.dependencyTokens = make(map[string]*StringDatasetContinuation)
+			if d.DependencyTokens == nil {
+				d.DependencyTokens = make(map[string]*StringDatasetContinuation)
 			}
 
-			d.dependencyTokens[depName] = &StringDatasetContinuation{token: strconv.Itoa(int(waterMark))}
+			d.DependencyTokens[depName] = &StringDatasetContinuation{token: strconv.Itoa(int(waterMark))}
 		}
 	}
 
@@ -128,7 +129,7 @@ func (multiSource *MultiSource) processDependency(dep dependency, d *MultiDatase
 	}
 	d.ActiveDS = dep.Dataset
 
-	depSince := d.dependencyTokens[dep.Dataset]
+	depSince := d.DependencyTokens[dep.Dataset]
 	if depSince == nil {
 		depSince = &StringDatasetContinuation{}
 	}
@@ -198,11 +199,11 @@ func (multiSource *MultiSource) processDependency(dep dependency, d *MultiDatase
 		}
 	}
 
-	if d.dependencyTokens == nil {
-		d.dependencyTokens = make(map[string]*StringDatasetContinuation)
+	if d.DependencyTokens == nil {
+		d.DependencyTokens = make(map[string]*StringDatasetContinuation)
 	}
 
-	d.dependencyTokens[dep.Dataset] = &StringDatasetContinuation{token: strconv.Itoa(int(continuation))}
+	d.DependencyTokens[dep.Dataset] = &StringDatasetContinuation{token: strconv.Itoa(int(continuation))}
 
 	err = processEntities(entities, d)
 	if err != nil {
@@ -232,7 +233,7 @@ func (multiSource *MultiSource) incrementalRead(since DatasetContinuation, batch
 	}
 
 	d := since.(*MultiDatasetContinuation)
-	d.mainToken = strconv.Itoa(int(continuation))
+	d.MainToken = strconv.Itoa(int(continuation))
 	err = processEntities(entities, d)
 	if err != nil {
 		return err

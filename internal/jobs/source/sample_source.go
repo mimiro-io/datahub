@@ -12,14 +12,6 @@ type SampleSource struct {
 	Store            *server.Store
 }
 
-func (source *SampleSource) DecodeToken(token string) DatasetContinuation {
-	return &StringDatasetContinuation{token}
-}
-
-func (source *SampleSource) EncodeToken(token DatasetContinuation) string {
-	return token.GetToken()
-}
-
 func (source *SampleSource) StartFullSync() {
 	// empty for now (this makes sonar not complain)
 }

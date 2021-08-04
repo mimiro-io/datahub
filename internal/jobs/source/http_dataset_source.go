@@ -25,13 +25,6 @@ type HttpDatasetSource struct {
 	Store          *server.Store
 	Logger         *zap.SugaredLogger
 }
-func (httpDatasetSource *HttpDatasetSource) DecodeToken(token string) DatasetContinuation {
-	return &StringDatasetContinuation{token}
-}
-
-func (httpDatasetSource *HttpDatasetSource) EncodeToken(token DatasetContinuation) string {
-	return token.GetToken()
-}
 
 func (httpDatasetSource *HttpDatasetSource) StartFullSync() {
 	// empty for now (this makes sonar not complain)
