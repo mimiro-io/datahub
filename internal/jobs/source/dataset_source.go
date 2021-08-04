@@ -1,7 +1,6 @@
 package source
 
 import (
-	"encoding/json"
 	"errors"
 	"strconv"
 
@@ -70,12 +69,9 @@ func (datasetSource *DatasetSource) GetConfig() map[string]interface{} {
 }
 
 func (datasetSource *DatasetSource) DecodeToken(token string) DatasetContinuation {
-	result := &StringDatasetContinuation{}
-	_ = json.Unmarshal([]byte(token), result)
-	return result
+	return &StringDatasetContinuation{token}
 }
 
 func (datasetSource *DatasetSource) EncodeToken(token DatasetContinuation) string {
-	result, _ := json.Marshal(token)
-	return string(result)
+	return token.GetToken()
 }

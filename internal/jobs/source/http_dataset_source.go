@@ -2,7 +2,6 @@ package source
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -26,16 +25,12 @@ type HttpDatasetSource struct {
 	Store          *server.Store
 	Logger         *zap.SugaredLogger
 }
-
 func (httpDatasetSource *HttpDatasetSource) DecodeToken(token string) DatasetContinuation {
-	result := &StringDatasetContinuation{}
-	_ = json.Unmarshal([]byte(token), result)
-	return result
+	return &StringDatasetContinuation{token}
 }
 
 func (httpDatasetSource *HttpDatasetSource) EncodeToken(token DatasetContinuation) string {
-	result, _ := json.Marshal(token)
-	return string(result)
+	return token.GetToken()
 }
 
 func (httpDatasetSource *HttpDatasetSource) StartFullSync() {

@@ -1,7 +1,6 @@
 package source
 
 import (
-	"encoding/json"
 	"strconv"
 	"time"
 
@@ -14,14 +13,11 @@ type SlowSource struct {
 }
 
 func (source *SlowSource) DecodeToken(token string) DatasetContinuation {
-	result := &StringDatasetContinuation{}
-	_ = json.Unmarshal([]byte(token), result)
-	return result
+	return &StringDatasetContinuation{token}
 }
 
 func (source *SlowSource) EncodeToken(token DatasetContinuation) string {
-	result, _ := json.Marshal(token)
-	return string(result)
+	return token.GetToken()
 }
 
 func (source *SlowSource) StartFullSync() {

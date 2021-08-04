@@ -1,7 +1,6 @@
 package source
 
 import (
-	"encoding/json"
 	"strconv"
 
 	"github.com/mimiro-io/datahub/internal/server"
@@ -14,14 +13,11 @@ type SampleSource struct {
 }
 
 func (source *SampleSource) DecodeToken(token string) DatasetContinuation {
-	result := &StringDatasetContinuation{}
-	_ = json.Unmarshal([]byte(token), result)
-	return result
+	return &StringDatasetContinuation{token}
 }
 
 func (source *SampleSource) EncodeToken(token DatasetContinuation) string {
-	result, _ := json.Marshal(token)
-	return string(result)
+	return token.GetToken()
 }
 
 func (source *SampleSource) StartFullSync() {
