@@ -105,7 +105,7 @@ func (multiSource *MultiSource) ReadEntities(since DatasetContinuation, batchSiz
 			}
 		}
 	} else {
-		//set watermarks
+		//set watermarks before starting fullsync
 		for depName, waterMark := range multiSource.waterMarks {
 			if d.dependencyTokens == nil {
 				d.dependencyTokens = make(map[string]*StringDatasetContinuation)
@@ -151,15 +151,49 @@ func (multiSource *MultiSource) processDependency(dep dependency, d *MultiDatase
 			return fmt.Errorf("GetManyRelatedEntities failed for join %+v, %w", join, err)
 		}
 
-		//we reached the end
+		// For non-inverse first-joins, we need to query back in time aswell,
+		// to find relatedEntities that have had their relation removed since "then"
+		if idx == 0 && !join.Inverse {
+			//get last change of previous run (cont-token minus 1 should give the last change index of previous processing run)
+			since := uint64(0)
+			if depSince.AsIncrToken() > 0 {
+				since = depSince.AsIncrToken() - 1
+			}
+			changes, err := depDataset.GetChanges(since, 1)
+			if err != nil {
+				return err
+			}
+
+			timestamp := int64(changes.Entities[0].Recorded)
+
+			prevRelatedEntities, err := multiSource.Store.GetManyRelatedEntitiesAtTime(
+				uris, join.Predicate, join.Inverse, nil, timestamp)
+			if err != nil {
+				return fmt.Errorf("previous GetManyRelatedEntities failed for join %+v at timestamp %v, %w", join, timestamp, err)
+			}
+
+			relatedEntities = append(relatedEntities, prevRelatedEntities...)
+		}
+
+		dedupCache := map[uint64]bool{}
 		if idx == len(dep.Joins)-1 {
+			//we reached the end
 			for _, r := range relatedEntities {
-				entities = append(entities, r[2].(*server.Entity))
+				e := r[2].(*server.Entity)
+				if _, ok := dedupCache[e.InternalID]; !ok {
+					dedupCache[e.InternalID] = true
+					entities = append(entities, e)
+				}
 			}
 		} else {
+			//prepare uris list for next join
 			uris = make([]string, 0)
 			for _, r := range relatedEntities {
-				uris = append(uris, r[2].(*server.Entity).ID)
+				e := r[2].(*server.Entity)
+				if _, ok := dedupCache[e.InternalID]; !ok {
+					dedupCache[e.InternalID] = true
+					uris = append(uris, e.ID)
+				}
 			}
 		}
 	}

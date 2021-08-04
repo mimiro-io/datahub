@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/DataDog/datadog-go/statsd"
 	"github.com/franela/goblin"
@@ -105,7 +104,6 @@ func TestMultiSource(t *testing.T) {
 		})
 
 		g.It("should capture watermarks during initial fullsync", func() {
-			g.Timeout(1 * time.Hour)
 			_, addressPrefix := createTestDataset("address", []string{"Mainstreet", "Sidealley"}, nil, dsm, g, store)
 			peoplePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://people/")
 			createTestDataset("people", []string{"Bob", "Alice"}, map[string]map[string]interface{}{
@@ -264,14 +262,13 @@ func TestMultiSource(t *testing.T) {
 			g.Assert(recordedEntities[0].Properties["name"]).Eql("Bob")
 		})
 
-		g.It("should emit main entity if indirect dependency was changed after fullsync", func() {
-			g.Timeout(1 * time.Hour)
+		g.It("should emit main entity if inverse dependency was changed after fullsync", func() {
 			_, peoplePrefix := createTestDataset("people", []string{"Bob", "Alice"}, nil, dsm, g, store)
 			employments, employmentPrefix := createTestDataset("employment",
-				[]string{"MediumCorp", "LittleSweatshop", "SparetimeYardSale"}, map[string]map[string]interface{}{
-					"MediumCorp":        {peoplePrefix + ":employment": peoplePrefix + ":Bob"},
-					"LittleSweatshop":   {peoplePrefix + ":employment": peoplePrefix + ":Alice"},
-					"SparetimeYardSale": {peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"}},
+				[]string{"MediumCorp", "LittleSweatshop", "YardSale"}, map[string]map[string]interface{}{
+					"MediumCorp":      {peoplePrefix + ":employment": peoplePrefix + ":Bob"},
+					"LittleSweatshop": {peoplePrefix + ":employment": peoplePrefix + ":Alice"},
+					"YardSale":        {peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"}},
 				}, dsm, g, store)
 
 			testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
@@ -320,11 +317,11 @@ func TestMultiSource(t *testing.T) {
 			//Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
 			g.Assert(recordedEntities[0].Properties["name"]).Eql("Bob")
 
-			//also, modify SparetimeYardSale employment and verify that both Bob and Alice emitted in next read
+			//also, modify YardSale employment and verify that both Bob and Alice emitted in next read
 			err = employments.StoreEntities([]*server.Entity{
 				server.NewEntityFromMap(map[string]interface{}{
-					"id":    employmentPrefix + ":SparetimeYardSale",
-					"props": map[string]interface{}{"name": "SparetimeYardSale-changed"},
+					"id":    employmentPrefix + ":YardSale",
+					"props": map[string]interface{}{"name": "YardSale-changed"},
 					"refs":  map[string]interface{}{peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"}},
 				}),
 			})
@@ -343,7 +340,6 @@ func TestMultiSource(t *testing.T) {
 		})
 
 		g.It("should emit main entity if multi hop dependency was changed after fullsync", func() {
-			g.Timeout(1 * time.Hour)
 			cities, cityPrefix := createTestDataset("city", []string{"Oslo", "Bergen"}, nil, dsm, g, store)
 			addressPrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://address/")
 			addresses, _ := createTestDataset("address", []string{"Mainstreet", "Sidealley"},
@@ -423,6 +419,127 @@ func TestMultiSource(t *testing.T) {
 			})
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(1)
+		})
+
+		g.It("Should emit main entity if inverse multi hop dependency is changed", func() {
+			// people <- employment <- salary
+			_, peoplePrefix := createTestDataset("people", []string{"Bob", "Alice"}, nil, dsm, g, store)
+			_, employmentPrefix := createTestDataset("employment",
+				[]string{"MediumCorp", "LittleSweatshop", "YardSale"}, map[string]map[string]interface{}{
+					"MediumCorp":      {peoplePrefix + ":employment": peoplePrefix + ":Bob"},
+					"LittleSweatshop": {peoplePrefix + ":employment": peoplePrefix + ":Alice"},
+					"YardSale":        {peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"}},
+				}, dsm, g, store)
+			incomeRanges, _ := createTestDataset("incomeRange",
+				[]string{"High", "Medium", "Low"}, map[string]map[string]interface{}{
+					"High": {employmentPrefix + ":employment": employmentPrefix + ":MediumCorp"},
+					"Low":  {employmentPrefix + ":employment": []string{employmentPrefix + ":MediumCorp", employmentPrefix + "YardSale"}},
+				}, dsm, g, store)
+
+			testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
+			srcJSON := `{ "Type" : "MultiSource", "Name" : "people", "Dependencies": [ {
+							"dataset": "incomeRange",
+							"joins": [ { "dataset": "employment", "predicate": "http://employment/employment", "inverse": false },
+									   { "dataset": "people", "predicate": "http://people/employment", "inverse": false }
+                                     ] } ] }`
+
+
+			srcConfig := map[string]interface{}{}
+			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
+			_ = testSource.ParseDependencies(srcConfig["Dependencies"])
+
+			//fullsync
+			var recordedEntities []server.Entity
+			token := &source.MultiDatasetContinuation{}
+			var lastToken source.DatasetContinuation
+			testSource.StartFullSync()
+			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			testSource.EndFullSync()
+
+			//now, modify High incomeRange and verify that we get Bob emitted in next read (MediumCorp is inverse dependency to bob via employment MediumCorp)
+			err = incomeRanges.StoreEntities([]*server.Entity{
+				server.NewEntityFromMap(map[string]interface{}{
+					"id":    employmentPrefix + ":High",
+					"props": map[string]interface{}{"name": "High-changed"},
+					"refs":  map[string]interface{}{employmentPrefix + ":employment": employmentPrefix + ":MediumCorp"},
+				}),
+			})
+
+			recordedEntities = []server.Entity{}
+			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			g.Assert(len(recordedEntities)).Eql(1)
+			//Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
+			g.Assert(recordedEntities[0].Properties["name"]).Eql("Bob")
+		})
+
+		g.It("should emit main entity if inverse dependency ref is removed", func() {
+			_, peoplePrefix := createTestDataset("people", []string{"Bob", "Alice"}, nil, dsm, g, store)
+			employments, employmentPrefix := createTestDataset("employment",
+				[]string{"MediumCorp", "LittleSweatshop", "YardSale"}, map[string]map[string]interface{}{
+					"MediumCorp":      {peoplePrefix + ":employment": peoplePrefix + ":Bob"},
+					"LittleSweatshop": {peoplePrefix + ":employment": peoplePrefix + ":Alice"},
+					"YardSale":        {peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"}},
+				}, dsm, g, store)
+
+			testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
+			srcJSON := `{ "Type" : "MultiSource", "Name" : "people", "Dependencies": [ {
+							"dataset": "employment",
+							"joins": [ { "dataset": "people", "predicate": "http://people/employment", "inverse": false } ] } ] }`
+
+			srcConfig := map[string]interface{}{}
+			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
+			_ = testSource.ParseDependencies(srcConfig["Dependencies"])
+
+			//fullsync
+			var recordedEntities []server.Entity
+			token := &source.MultiDatasetContinuation{}
+			var lastToken source.DatasetContinuation
+			testSource.StartFullSync()
+			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			testSource.EndFullSync()
+
+			//now, remove all refs  from MediumCorp.  this should emit bob because the dependency was changed
+			err = employments.StoreEntities([]*server.Entity{
+				server.NewEntityFromMap(map[string]interface{}{
+					"id":    employmentPrefix + ":MediumCorp",
+					"props": map[string]interface{}{"name": "MediumCorp-changed"},
+					"refs":  map[string]interface{}{},
+				}),
+			})
+
+			recordedEntities = []server.Entity{}
+			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			g.Assert(len(recordedEntities)).Eql(1)
+			//Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
+			g.Assert(recordedEntities[0].Properties["name"]).Eql("Bob")
 		})
 	})
 

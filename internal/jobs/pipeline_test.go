@@ -18,12 +18,13 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"github.com/mimiro-io/datahub/internal/jobs/source"
 	"os"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/mimiro-io/datahub/internal/jobs/source"
 
 	"github.com/franela/goblin"
 
