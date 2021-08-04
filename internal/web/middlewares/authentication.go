@@ -73,6 +73,9 @@ type JSONWebKeys struct {
 // Errors
 var (
 	ErrJWTMissing = echo.NewHTTPError(http.StatusBadRequest, "missing or malformed jwt")
+	parser        = jwt.Parser{
+		ValidMethods: []string{"RS256"},
+	}
 )
 
 func newCache(wellknown string) cache.LoadingCache {
@@ -119,12 +122,15 @@ func JWTHandler(config *JwtConfig) echo.MiddlewareFunc {
 			}
 
 			token := new(jwt.Token)
-			token, err = jwt.ParseWithClaims(auth, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+			token, err = parser.ParseWithClaims(auth, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 				cert, err := getPemCert(token, config)
 				if err != nil {
-					return nil, echo.NewHTTPError(http.StatusUnauthorized, err.Error())
+					return nil, err
 				}
-				result, _ := jwt.ParseRSAPublicKeyFromPEM([]byte(cert))
+				result, err := jwt.ParseRSAPublicKeyFromPEM([]byte(cert))
+				if err != nil {
+					return nil, err
+				}
 				return result, nil
 			})
 
@@ -141,19 +147,16 @@ func JWTHandler(config *JwtConfig) echo.MiddlewareFunc {
 			audience = config.Audience
 			issuer = config.Issuer
 
-			checkAud := claims.VerifyAudience(audience, false)
+			// verify the audience is correct, audience must be set
+			checkAud := claims.VerifyAudience(audience, true)
 			if !checkAud {
 				err = errors.New("invalid audience")
 			}
 
-			checkIss := claims.VerifyIssuer(issuer, false)
+			// verify the issuer of the token, issuer must be set
+			checkIss := claims.VerifyIssuer(issuer, true)
 			if !checkIss {
 				err = errors.New("invalid issuer")
-			}
-
-			checkSigningMethod := token.Method.Alg() == "RS256"
-			if !checkSigningMethod {
-				err = errors.New("non matching signing method")
 			}
 
 			if err == nil {
