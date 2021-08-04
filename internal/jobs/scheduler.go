@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/mimiro-io/datahub/internal/jobs/source"
-	"github.com/mimiro-io/datahub/internal/security"
 
 	"github.com/bamzi/jobrunner"
 	"github.com/robfig/cron/v3"
@@ -536,9 +535,8 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 					// security
 					if tokenProviderName != "" {
 						// attempt to parse the token provider
-						provider, ok := s.Runner.tokenProviders.Providers[strings.ToLower(tokenProviderName)]
-						if ok {
-							src.TokenProvider = provider.(security.TokenProvider)
+						if provider, ok := s.Runner.tokenProviders.Get(strings.ToLower(tokenProviderName)); ok {
+							src.TokenProvider = provider
 						}
 					}
 				}

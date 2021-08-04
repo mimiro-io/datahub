@@ -30,13 +30,8 @@ type SsmManagerConfig struct {
 	Env         string
 	Key         string
 	Logger      *zap.SugaredLogger
-	cache       *map[string]interface{}
+	cache       map[string]interface{}
 	lastUpdated time.Time
-}
-
-type ssmProps interface {
-	HasKey(key string) bool
-	Value(key string) (string, bool)
 }
 
 /*
@@ -45,6 +40,7 @@ The store will refresh at intervals
 */
 type SsmProperties struct {
 	config *SsmManagerConfig
+	client *awsssm.ParameterStore
 }
 
 const localEndpoint = "http://localhost:4566"
@@ -56,14 +52,24 @@ const localEndpoint = "http://localhost:4566"
 // It will attempt to load the Key string given from ssm, and it
 // will map all values to a map
 func NewSsm(config *SsmManagerConfig) (*SsmProperties, error) {
-
+	config.cache = make(map[string]interface{})
 	params, err := config.loadParams()
 	if err != nil {
 		return nil, err
 	}
 	config.cache = params
 	config.lastUpdated = time.Now()
-	return &SsmProperties{config: config}, nil
+
+	props := &SsmProperties{
+		config: config,
+	}
+	if client, err := config.getClient(); err != nil {
+		return nil, err
+	} else {
+		props.client = client
+	}
+
+	return props, nil
 }
 
 // HasKey validates if the Key given exists in the cache
@@ -72,20 +78,24 @@ func (p *SsmProperties) HasKey(key string) bool {
 	if p.config.cache == nil {
 		return false
 	}
-	c := *p.config.cache
-	_, ok := c[key]
+	_, ok := p.config.cache[key]
 	return ok
 }
 
 // Value returns the (value, true) if found, or ("", false) if not
 // It performs a nil check against the cache
 func (p *SsmProperties) Value(key string) (string, bool) {
-	if p.config.cache == nil {
-		return "", false
+	if val, ok := p.config.cache[key]; ok {
+		return val.(string), ok
+	} else {
+		val, err := p.loadParam(key)
+		if err != nil {
+			return "", false
+		}
+		p.config.cache[key] = val
+		return val, true
 	}
-	c := *p.config.cache
-	val, ok := c[key]
-	return val.(string), ok
+
 }
 
 // Params returns the full cached set of parameters as a map.
@@ -94,10 +104,19 @@ func (p *SsmProperties) Params() *map[string]interface{} {
 	if p == nil || p.config == nil || p.config.cache == nil { // this happens in test environments
 		return &map[string]interface{}{}
 	}
-	return p.config.cache
+	return &p.config.cache
 }
 
-func (c *SsmManagerConfig) loadParams() (*map[string]interface{}, error) {
+func (p *SsmProperties) loadParam(key string) (string, error) {
+	if param, err := p.client.GetParameter(key, true); err != nil {
+		return "", err
+	} else {
+		return *param.Value, nil
+	}
+
+}
+
+func (c *SsmManagerConfig) loadParams() (map[string]interface{}, error) {
 	store, err := c.getClient()
 	if err != nil {
 		return nil, err
@@ -108,8 +127,8 @@ func (c *SsmManagerConfig) loadParams() (*map[string]interface{}, error) {
 		return nil, err
 	}
 
-	out := &map[string]interface{}{}
-	err = params.Decode(out)
+	out := map[string]interface{}{}
+	err = params.Decode(&out)
 	if err != nil {
 		return nil, err
 	}

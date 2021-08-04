@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/franela/goblin"
-	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/zap"
 )
 
@@ -30,17 +29,32 @@ func TestDlJwt(t *testing.T) {
 	g := goblin.Goblin(t)
 	g.Describe("DL Jwt configuration", func() {
 		g.It("Should be correctly built from env properties", func() {
-			env := &conf.Env{
-				DlJwtConfig: &conf.DatalayerJwtConfig{
-					ClientId:     "id1",
-					ClientSecret: "some-secret",
-					Audience:     "mimiro",
-					GrantType:    "test_grant",
-					Endpoint:     "http://localhost",
+			provider := ProviderConfig{
+				Name: "jwt",
+				Type: "bearer",
+				ClientId: &ValueProvider{
+					Type:  "text",
+					Value: "id1",
+				},
+				ClientSecret: &ValueProvider{
+					Type:  "text",
+					Value: "some-secret",
+				},
+				Audience: &ValueProvider{
+					Type:  "text",
+					Value: "mimiro",
+				},
+				GrantType: &ValueProvider{
+					Type:  "text",
+					Value: "test_grant",
+				},
+				Endpoint: &ValueProvider{
+					Type:  "text",
+					Value: "http://localhost",
 				},
 			}
 
-			config := NewDlJwtConfig(zap.NewNop().Sugar(), env)
+			config := NewDlJwtConfig(zap.NewNop().Sugar(), provider, &ProviderManager{})
 			g.Assert(config.ClientId).Eql("id1")
 			g.Assert(config.ClientSecret).Eql("some-secret")
 		})
@@ -48,7 +62,7 @@ func TestDlJwt(t *testing.T) {
 		g.It("Should call a remote token endpoint", func() {
 			srv := serverMock()
 
-			config := DlJwtConfig{
+			config := JwtBearerProvider{
 				ClientId:     "123",
 				ClientSecret: "456",
 				Audience:     "",
@@ -67,7 +81,7 @@ func TestDlJwt(t *testing.T) {
 		g.It("Should use token cache if configured", func() {
 			srv := serverMock()
 
-			config := DlJwtConfig{
+			config := JwtBearerProvider{
 				ClientId:     "123",
 				ClientSecret: "456",
 				Audience:     "",
@@ -82,7 +96,7 @@ func TestDlJwt(t *testing.T) {
 			g.Assert(res).Eql("hello-world", "remote mock server should generate hello-world")
 
 			// cache is set and time is in the future, so it should return the cached version
-			config = DlJwtConfig{
+			config = JwtBearerProvider{
 				ClientId:     "123",
 				ClientSecret: "456",
 				Audience:     "",
@@ -100,7 +114,7 @@ func TestDlJwt(t *testing.T) {
 			g.Assert(res).Eql("cached token", "cache should be used")
 
 			// cache is set but time is in the past, so it should return a new token
-			config = DlJwtConfig{
+			config = JwtBearerProvider{
 				ClientId:     "123",
 				ClientSecret: "456",
 				Audience:     "",

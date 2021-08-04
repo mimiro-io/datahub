@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -73,6 +74,14 @@ func (httpDatasetSource *HttpDatasetSource) ReadEntities(since DatasetContinuati
 	}
 
 	// security
+	// security
+	if httpDatasetSource.TokenProvider != "" {
+		// attempt to parse the token provider
+		if provider, ok := runner.tokenProviders.Get(strings.ToLower(httpDatasetSource.TokenProvider)); ok {
+			provider.Authorize(req)
+		}
+	}
+
 	if httpDatasetSource.TokenProvider != nil {
 		bearer, err := httpDatasetSource.TokenProvider.Token()
 		if err != nil {
