@@ -430,7 +430,7 @@ func TestMultiSource(t *testing.T) {
 					"LittleSweatshop": {peoplePrefix + ":employment": peoplePrefix + ":Alice"},
 					"YardSale":        {peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"}},
 				}, dsm, g, store)
-			incomeRanges, _ := createTestDataset("incomeRange",
+			incomeRanges, incomeRangePrefix := createTestDataset("incomeRange",
 				[]string{"High", "Medium", "Low"}, map[string]map[string]interface{}{
 					"High": {employmentPrefix + ":employment": employmentPrefix + ":MediumCorp"},
 					"Low":  {employmentPrefix + ":employment": []string{employmentPrefix + ":MediumCorp", employmentPrefix + "YardSale"}},
@@ -466,7 +466,7 @@ func TestMultiSource(t *testing.T) {
 			//now, modify High incomeRange and verify that we get Bob emitted in next read (MediumCorp is inverse dependency to bob via employment MediumCorp)
 			err = incomeRanges.StoreEntities([]*server.Entity{
 				server.NewEntityFromMap(map[string]interface{}{
-					"id":    employmentPrefix + ":High",
+					"id":    incomeRangePrefix + ":High",
 					"props": map[string]interface{}{"name": "High-changed"},
 					"refs":  map[string]interface{}{employmentPrefix + ":employment": employmentPrefix + ":MediumCorp"},
 				}),
@@ -540,6 +540,79 @@ func TestMultiSource(t *testing.T) {
 			g.Assert(len(recordedEntities)).Eql(1)
 			//Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
 			g.Assert(recordedEntities[0].Properties["name"]).Eql("Bob")
+		})
+
+		g.It("should emit main enitity if inverse multi hop dependency is removed", func() {
+			// people <- employment <- salary
+			_, peoplePrefix := createTestDataset("people", []string{"Bob", "Alice", "Hank"}, nil, dsm, g, store)
+			_, employmentPrefix := createTestDataset("employment",
+				[]string{"MediumCorp", "LittleSweatshop", "YardSale", "BigCorp"}, map[string]map[string]interface{}{
+					"MediumCorp":      {peoplePrefix + ":employment": peoplePrefix + ":Bob"},
+					"BigCorp":      {peoplePrefix + ":employment": peoplePrefix + ":Hank"},
+					"LittleSweatshop": {peoplePrefix + ":employment": peoplePrefix + ":Alice"},
+					"YardSale":        {peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"}},
+				}, dsm, g, store)
+			incomeRanges, incomeRangePrefix := createTestDataset("incomeRange",
+				[]string{"High", "Medium", "Low"}, map[string]map[string]interface{}{
+					"High": {employmentPrefix + ":employment": employmentPrefix + ":MediumCorp"},
+					"Low":  {employmentPrefix + ":employment": []string{employmentPrefix + ":MediumCorp", employmentPrefix + "YardSale"}},
+				}, dsm, g, store)
+
+			testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
+			srcJSON := `{ "Type" : "MultiSource", "Name" : "people", "Dependencies": [ {
+							"dataset": "incomeRange",
+							"joins": [ { "dataset": "employment", "predicate": "http://employment/employment", "inverse": false },
+									   { "dataset": "people", "predicate": "http://people/employment", "inverse": false }
+                                     ] } ] }`
+
+
+			srcConfig := map[string]interface{}{}
+			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
+			_ = testSource.ParseDependencies(srcConfig["Dependencies"])
+
+			//fullsync
+			var recordedEntities []server.Entity
+			token := &source.MultiDatasetContinuation{}
+			var lastToken source.DatasetContinuation
+			testSource.StartFullSync()
+			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			testSource.EndFullSync()
+
+			//now, point High incomeRange from MediumCorp to BigCorp.
+			//Hank and Bob should be emitted (Hank, because he gained High incomeRange. Bob, because he lost it).
+			err = incomeRanges.StoreEntities([]*server.Entity{
+				server.NewEntityFromMap(map[string]interface{}{
+					"id":    incomeRangePrefix + ":High",
+					"props": map[string]interface{}{"name": "High"},
+					"refs":  map[string]interface{}{employmentPrefix + ":employment": employmentPrefix + ":BigCorp"},
+				}),
+			})
+
+			recordedEntities = []server.Entity{}
+			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			g.Assert(len(recordedEntities)).Eql(2)
+			var seenBob, seenHank bool
+			for _,re:=range recordedEntities {
+				seenBob = seenBob || re.ID == peoplePrefix+":Bob"
+				seenHank = seenHank || re.ID == peoplePrefix+":Hank"
+			}
+			g.Assert(seenBob).IsTrue("expected to find Bob in emitted entities")
+			g.Assert(seenHank).IsTrue("expected to find Hank in emitted entities")
+
 		})
 	})
 
