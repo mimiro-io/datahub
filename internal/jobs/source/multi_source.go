@@ -9,20 +9,23 @@ import (
 	"github.com/mimiro-io/datahub/internal/server"
 )
 
-type join struct {
+/**
+  MultiSource only operates on changes, but accepts calls to FullsyncStart to avoid processing dependencies during initial load
+*/
+type Join struct {
 	Dataset   string
 	Predicate string
 	Inverse   bool
 }
 
-type dependency struct {
+type Dependency struct {
 	Dataset string // name of the dependent dataset
-	Joins   []join
+	Joins   []Join
 }
 
 type MultiSource struct {
 	DatasetName    string
-	Dependencies   []dependency // the dependency queries
+	Dependencies   []Dependency // the Dependency queries
 	Store          *server.Store
 	DatasetManager *server.DsManager
 	isFullSync     bool
@@ -32,7 +35,7 @@ type MultiSource struct {
 type MultiDatasetContinuation struct {
 	MainToken        string
 	DependencyTokens map[string]*StringDatasetContinuation
-	ActiveDS         string
+	activeDS         string
 }
 
 func (c *MultiDatasetContinuation) Encode() (string, error) {
@@ -44,16 +47,16 @@ func (c *MultiDatasetContinuation) Encode() (string, error) {
 }
 
 func (c *MultiDatasetContinuation) GetToken() string {
-	if c.ActiveDS != "" {
-		return c.DependencyTokens[c.ActiveDS].GetToken()
+	if c.activeDS != "" {
+		return c.DependencyTokens[c.activeDS].GetToken()
 	}
 
 	return c.MainToken
 }
 
 func (c *MultiDatasetContinuation) AsIncrToken() uint64 {
-	if c.ActiveDS != "" {
-		return c.DependencyTokens[c.ActiveDS].AsIncrToken()
+	if c.activeDS != "" {
+		return c.DependencyTokens[c.activeDS].AsIncrToken()
 	}
 
 	i, err := strconv.Atoi(c.MainToken)
@@ -112,22 +115,22 @@ func (multiSource *MultiSource) ReadEntities(since DatasetContinuation, batchSiz
 				d.DependencyTokens = make(map[string]*StringDatasetContinuation)
 			}
 
-			d.DependencyTokens[depName] = &StringDatasetContinuation{token: strconv.Itoa(int(waterMark))}
+			d.DependencyTokens[depName] = &StringDatasetContinuation{Token: strconv.Itoa(int(waterMark))}
 		}
 	}
 
-	d.ActiveDS = ""
+	d.activeDS = ""
 
 	return multiSource.incrementalRead(since, batchSize, processEntities, dataset)
 }
 
-func (multiSource *MultiSource) processDependency(dep dependency, d *MultiDatasetContinuation, batchSize int,
+func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatasetContinuation, batchSize int,
 	processEntities func([]*server.Entity, DatasetContinuation) error) error {
 	depDataset, err2 := multiSource.getDatasetFor(dep)
 	if err2 != nil {
 		return err2
 	}
-	d.ActiveDS = dep.Dataset
+	d.activeDS = dep.Dataset
 
 	depSince := d.DependencyTokens[dep.Dataset]
 	if depSince == nil {
@@ -149,7 +152,7 @@ func (multiSource *MultiSource) processDependency(dep dependency, d *MultiDatase
 		// TODO: create GetManyRelated variant that takes internal ids as "startUris" ?
 		relatedEntities, err := multiSource.Store.GetManyRelatedEntities(uris, join.Predicate, join.Inverse, nil)
 		if err != nil {
-			return fmt.Errorf("GetManyRelatedEntities failed for join %+v, %w", join, err)
+			return fmt.Errorf("GetManyRelatedEntities failed for Join %+v, %w", join, err)
 		}
 
 		// For non-inverse first-joins, we need to query back in time aswell,
@@ -170,7 +173,7 @@ func (multiSource *MultiSource) processDependency(dep dependency, d *MultiDatase
 			prevRelatedEntities, err := multiSource.Store.GetManyRelatedEntitiesAtTime(
 				uris, join.Predicate, join.Inverse, nil, timestamp)
 			if err != nil {
-				return fmt.Errorf("previous GetManyRelatedEntities failed for join %+v at timestamp %v, %w", join, timestamp, err)
+				return fmt.Errorf("previous GetManyRelatedEntities failed for Join %+v at timestamp %v, %w", join, timestamp, err)
 			}
 
 			relatedEntities = append(relatedEntities, prevRelatedEntities...)
@@ -203,7 +206,7 @@ func (multiSource *MultiSource) processDependency(dep dependency, d *MultiDatase
 		d.DependencyTokens = make(map[string]*StringDatasetContinuation)
 	}
 
-	d.DependencyTokens[dep.Dataset] = &StringDatasetContinuation{token: strconv.Itoa(int(continuation))}
+	d.DependencyTokens[dep.Dataset] = &StringDatasetContinuation{Token: strconv.Itoa(int(continuation))}
 
 	err = processEntities(entities, d)
 	if err != nil {
@@ -213,7 +216,7 @@ func (multiSource *MultiSource) processDependency(dep dependency, d *MultiDatase
 	return nil
 }
 
-func (multiSource *MultiSource) getDatasetFor(dep dependency) (*server.Dataset, error) {
+func (multiSource *MultiSource) getDatasetFor(dep Dependency) (*server.Dataset, error) {
 	if exists := multiSource.DatasetManager.IsDataset(dep.Dataset); !exists {
 		return nil, fmt.Errorf("dependency dataset is missing: %v, %w", dep.Dataset, ErrDatasetMissing)
 	}
@@ -246,11 +249,11 @@ func (multiSource *MultiSource) ParseDependencies(dependenciesConfig interface{}
 	if depsList, ok := dependenciesConfig.([]interface{}); ok {
 		for _, dep := range depsList {
 			if m, ok := dep.(map[string]interface{}); ok {
-				newDep := dependency{}
+				newDep := Dependency{}
 				newDep.Dataset = m["dataset"].(string)
 
 				for _, j := range m["joins"].([]interface{}) {
-					newJoin := join{}
+					newJoin := Join{}
 					m := j.(map[string]interface{})
 					newJoin.Dataset = m["dataset"].(string)
 					newJoin.Predicate = m["predicate"].(string)

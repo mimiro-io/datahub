@@ -74,7 +74,6 @@ func TestPipeline(t *testing.T) {
 			_ = os.RemoveAll(storeLocation)
 		})
 
-
 		g.It("Should support internal js transform with txn writing to several datasets", func() {
 			// populate dataset with some entities
 			ds, _ := dsm.CreateDataset("Products")
@@ -152,7 +151,6 @@ func TestPipeline(t *testing.T) {
 
 			g.Assert(len(result.Entities)).Eql(1, "incorrect number of entities retrieved")
 		})
-
 
 		g.It("Should support internal js transform with txn", func() {
 			// populate dataset with some entities
@@ -1050,6 +1048,115 @@ func TestPipeline(t *testing.T) {
 			sinkChanges := mockService.getRecordedEntitiesForDataset("fulltest")
 			g.Assert(len(sinkChanges)).Eql(2, "Expected only 2 entities in current state in fullsync")
 
+		})
+
+		g.It("Should store dependency watermarks after fullsync in MultiSource jobs", func() {
+			srcDs, _ := dsm.CreateDataset("src")
+			_ = srcDs.StoreEntities([]*server.Entity{
+				server.NewEntity("1", 0),
+				server.NewEntity("2", 0)})
+
+			depDs, _ := dsm.CreateDataset("dep")
+			_ = depDs.StoreEntities([]*server.Entity{
+				server.NewEntity("3", 0),
+				server.NewEntity("4", 0),
+				server.NewEntity("5", 0)})
+
+			pipeline := &FullSyncPipeline{PipelineSpec{
+				batchSize: 5,
+				source: &source.MultiSource{DatasetName: "src", Store: store, DatasetManager: dsm, Dependencies: []source.Dependency{
+					{Dataset: "dep", Joins: []source.Join{{Dataset: "src", Predicate: "http:/a/predicate", Inverse: false}}},
+				}},
+				sink: &httpDatasetSink{Endpoint: "http://localhost:7777/datasets/fulltest/fullsync", Store: store},
+			}}
+			job := &job{id: "fs-1", pipeline: pipeline, runner: runner}
+			job.Run()
+
+			sinkChanges := mockService.getRecordedEntitiesForDataset("fulltest")
+			g.Assert(len(sinkChanges)).Eql(2, "Expected only 2 entities in current state in fullsync")
+
+			syncJobState := &SyncJobState{}
+			err := store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+			g.Assert(err).IsNil()
+			token := syncJobState.ContinuationToken
+			g.Assert(token).Eql("{\"MainToken\":\"2\",\"DependencyTokens\":{\"dep\":{\"Token\":\"3\"}}}",
+				"after job there should be a token")
+
+		})
+
+		g.It("Should store dependency watermarks after incremental in MultiSource jobs", func() {
+			g.Timeout(1 * time.Hour)
+			srcDs, _ := dsm.CreateDataset("src")
+			ns, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://namespace/")
+			_ = srcDs.StoreEntities([]*server.Entity{
+				server.NewEntity(ns+":1", 0),
+				server.NewEntity(ns+":2", 0)})
+
+			depDs, _ := dsm.CreateDataset("dep")
+			_ = depDs.StoreEntities([]*server.Entity{
+				server.NewEntity(ns+":3", 0),
+				server.NewEntity(ns+":4", 0),
+				server.NewEntity(ns+":5", 0)})
+
+			pipeline := &IncrementalPipeline{PipelineSpec{
+				batchSize: 5,
+				source: &source.MultiSource{DatasetName: "src", Store: store, DatasetManager: dsm, Dependencies: []source.Dependency{
+					{Dataset: "dep", Joins: []source.Join{{Dataset: "src", Predicate: ns+":predicate", Inverse: false}}},
+				}},
+				sink: &httpDatasetSink{Endpoint: "http://localhost:7777/datasets/fulltest/fullsync", Store: store},
+			}}
+			job := &job{id: "fs-1", pipeline: pipeline, runner: runner}
+			job.Run()
+
+			sinkChanges := mockService.getRecordedEntitiesForDataset("fulltest")
+			g.Assert(len(sinkChanges)).Eql(2, "Expected only 2 entities")
+
+			syncJobState := &SyncJobState{}
+			err := store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+			g.Assert(err).IsNil()
+			token := syncJobState.ContinuationToken
+			g.Assert(token).Eql("{\"MainToken\":\"2\",\"DependencyTokens\":{\"dep\":{\"Token\":\"3\"}}}",
+				"after job there should be a token")
+
+			//reset recorder
+			for k,_:=range mockService.RecordedEntities {
+				delete(mockService.RecordedEntities,k)
+			}
+			//add dependency link
+			e := server.NewEntity(ns+":5", 0)
+			e.References[ns+":predicate"]=ns+":1"
+			_ = depDs.StoreEntities([]*server.Entity{e})
+
+			job.Run()
+
+			sinkChanges = mockService.getRecordedEntitiesForDataset("fulltest")
+			g.Assert(len(sinkChanges)).Eql(1, "Expected only 1 entity (id=1 was linked to by dependency)")
+			g.Assert(sinkChanges[0].ID).Eql(ns+":1", "new dependency points to id 1")
+
+			syncJobState = &SyncJobState{}
+			err = store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+			g.Assert(err).IsNil()
+			token = syncJobState.ContinuationToken
+			g.Assert(token).Eql("{\"MainToken\":\"2\",\"DependencyTokens\":{\"dep\":{\"Token\":\"4\"}}}",
+				"dependency watermarks should be forwarded by 1")
+
+			//reset recorder
+			for k,_:=range mockService.RecordedEntities {
+				delete(mockService.RecordedEntities,k)
+			}
+
+			// run one more time without changes to source data, make sure nothing is done
+			job.Run()
+
+			sinkChanges = mockService.getRecordedEntitiesForDataset("fulltest")
+			g.Assert(len(sinkChanges)).Eql(0)
+
+			syncJobState = &SyncJobState{}
+			err = store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+			g.Assert(err).IsNil()
+			token = syncJobState.ContinuationToken
+			g.Assert(token).Eql("{\"MainToken\":\"2\",\"DependencyTokens\":{\"dep\":{\"Token\":\"4\"}}}",
+				"dependency watermarks should be unchanged")
 		})
 	})
 }

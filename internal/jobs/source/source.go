@@ -36,15 +36,15 @@ type DatasetContinuation interface {
 }
 
 type StringDatasetContinuation struct {
-	token string
+	Token string
 }
 
 func (c *StringDatasetContinuation) GetToken() string {
-	return c.token
+	return c.Token
 }
 func (c *StringDatasetContinuation) AsIncrToken() uint64 {
-	if c.token != "" {
-		i, err := strconv.Atoi(c.token)
+	if c.Token != "" {
+		i, err := strconv.Atoi(c.Token)
 		if err != nil {
 			return 0
 		}
@@ -59,9 +59,11 @@ func (c *StringDatasetContinuation) Encode() (string, error) {
 func DecodeToken(sourceType interface{}, token string) (DatasetContinuation, error) {
 	if sourceType == "MultiSource" {
 		result := &MultiDatasetContinuation{}
-		err := json.Unmarshal([]byte(token), result)
-		if err != nil {
-			return nil, err
+		if token != "" {
+			err := json.Unmarshal([]byte(token), result)
+			if err != nil {
+				return nil, err
+			}
 		}
 		return result, nil
 	}

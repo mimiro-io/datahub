@@ -102,7 +102,7 @@ func (httpDatasetSource *HttpDatasetSource) ReadEntities(since DatasetContinuati
 	esp := server.NewEntityStreamParser(httpDatasetSource.Store)
 	err = esp.ParseStream(res.Body, func(entity *server.Entity) error {
 		if entity.ID == "@continuation" {
-			continuationToken.token = entity.GetStringProperty("token")
+			continuationToken.Token = entity.GetStringProperty("token")
 		} else {
 			entities = append(entities, entity)
 			read++

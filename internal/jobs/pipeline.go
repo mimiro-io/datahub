@@ -62,15 +62,13 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 	keepReading := true
 
 	//dont call source.startFullSync, just sink.startFullSync. to make sure we run on changes.
-	//exception is when the sink is http.
-	if pipeline.sink.GetConfig()["Type"] == "HttpDatasetSink" {
+	//exception is when the sink is http(we want to process entities instead of changes)
+	//or source is multisource (we need to grab watermarks at beginning of fullsync)
+	if pipeline.sink.GetConfig()["Type"] == "HttpDatasetSink" ||
+	 pipeline.source.GetConfig()["Type"] == "MultiSource" {
 		if pipeline.source.GetConfig()["Type"] == "MultiSource" {
-			return errors.New("MultiSource can only produce changes and must therefore not be used with HttpDatasetSink")
+			//return errors.New("MultiSource can only produce changes and must therefore not be used with HttpDatasetSink")
 		}
-		pipeline.source.StartFullSync()
-	}
-	//start fullsync for multisource, to avoid dependency processing until fullsync is done
-	if pipeline.source.GetConfig()["Type"] == "MultiSource" {
 		pipeline.source.StartFullSync()
 	}
 	err = pipeline.sink.startFullSync(runner)
@@ -156,7 +154,10 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 
 	//Do not store syncState when the target is an http sink.
 	//Since we use entities for httpsinks, the continuation tokens are base64 strings and not compatible with incremental tokens
-	if pipeline.sink.GetConfig()["Type"] != "HttpDatasetSink" {
+    //
+	//Exception is when used with MultiSource... MultiSource only operates on changes. also in fullsync mode.
+	//   Difference there between fullsync and incremental is whether dependencies are processed
+	if pipeline.sink.GetConfig()["Type"] != "HttpDatasetSink" || pipeline.source.GetConfig()["Type"] == "MultiSource" {
 		err = runner.store.StoreObject(server.JOB_DATA_INDEX, job.id, syncJobState)
 		if err != nil {
 			return err
