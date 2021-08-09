@@ -584,7 +584,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Content'            
+              $ref: '#/components/schemas/Content'
       responses:
         '201':
           description: Created
@@ -647,7 +647,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Content'            
+              $ref: '#/components/schemas/Content'
       responses:
         '201':
           description: Created
@@ -753,25 +753,30 @@ components:
           type: string
           description: Job id
           example: sync-samplesource-to-datasetsink
-        incrementalSchedule:
-          type: string
-          description: Cron description of when to run the job incrementally
-          example: '@every 2s'
-        fullSyncSchedule:
-          type: string
-          description: Cron description of when to run a full sync
-          example: '@every 2h30m'
-        runOnce:
-          type: boolean
-          description: If true, the job is a one time job, if not, it will be repeated
-          example: false
+        triggers:
+          type: array
+          items:
+            properties:
+              triggerType:
+                type: string
+                description: can be either 'cron' or 'onchange'
+              jobType:
+                type: string
+                description: either 'fullsync' or 'incremental'. fullsync jobs always process the whole dataset from start. incremental jobs keep track of how far they go and only process new changes in each run.
+              schedule:
+                type: string
+                description: a cron expression. used with triggerType=cron to specify when the job is run periodically.
+                example: 0 1 * * *
+              monitoredDataset:
+                type: string
+                description: used with triggerType=onchange, specify the name of an existing dataset. every change to that dataset will trigger this job.
         paused:
           type: boolean
           description: If true, the job is currently paused. If a job is added with this to true, it will not start.
           example: false
         source:
           type: object
-          description: An object describing the Source of the Job          
+          description: An object describing the Source of the Job
         sink:
           type: object
           description: An object describing the Sink of the Job

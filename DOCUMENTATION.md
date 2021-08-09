@@ -398,11 +398,46 @@ The dataset source reads entities from a dataset in the data hub.
 
 ```json
 {
-    ...,
     "source": {
         "Type": "DatasetSource",
         "Name": "name of the dataset to read from",
         "BatchSize" : "optional int value of how many to read at a time"
+    }
+}
+```
+
+#### Multi Source
+
+This source has one main dataset which works like a `DatasetSource`. In addition, a list of `dependency` datasets can be configured.
+
+A `dependency` is typically a dataset which is used in the job's transform queries to construct composite entities with attributes from both
+main dataset and dependency dataset(s).
+
+By declaring a dependency dataset, and defining how to link entities in the dependency dataset to entities in the main dataset via a sequence of `joins`,
+MultiSource can in incremental jobs emit entities that have not been changed themselves, but which need to be reprocessed due to changed dependencies.
+
+```json
+{
+    "source": {
+        "Type": "MultiSource",
+        "Name": "name of the main dataset",
+        "Dependencies": [
+            {
+                "dataset": "name of a dependency dataset",
+                "joins": [
+                    {
+                        "dataset": "name of a linking dataset",
+                        "predicate": "ref-name containing the link URI",
+                        "inverse": true
+                    },
+                    {
+                        "dataset": "name of main dataset. the last join in a dependency should link back to the main dataset",
+                        "predicate": "ref-name containing  link to main entity",
+                        "inverse": false
+                    }
+                ]
+            }
+        ]
     }
 }
 ```
@@ -1107,7 +1142,7 @@ function transform_entities(entities) {
 
 #### NewTransaction
 
-`NewTransaction()` is used to create a new transaction object. A transaction can then be executed using the ExecuteTransaction function. Note that this function simply returns an empty transaction data structure. It does not open a transaction. 
+`NewTransaction()` is used to create a new transaction object. A transaction can then be executed using the ExecuteTransaction function. Note that this function simply returns an empty transaction data structure. It does not open a transaction.
 
 #### ExecuteTransaction
 
