@@ -30,6 +30,7 @@ type MultiSource struct {
 	DatasetManager *server.DsManager
 	isFullSync     bool
 	waterMarks     map[string]uint64
+	changesCache   map[string]changeURIData
 }
 
 type MultiDatasetContinuation struct {
@@ -90,6 +91,9 @@ var ErrTokenType = fmt.Errorf("continuation token is of wrong type")
 func (multiSource *MultiSource) ReadEntities(since DatasetContinuation, batchSize int,
 	processEntities func([]*server.Entity, DatasetContinuation) error) error {
 
+	multiSource.resetChangesCache()
+	defer multiSource.resetChangesCache()
+
 	if exists := multiSource.DatasetManager.IsDataset(multiSource.DatasetName); !exists {
 		return fmt.Errorf("dataset %v is missing, %w", multiSource.DatasetName, ErrDatasetMissing)
 	}
@@ -124,6 +128,10 @@ func (multiSource *MultiSource) ReadEntities(since DatasetContinuation, batchSiz
 	return multiSource.incrementalRead(since, batchSize, processEntities, dataset)
 }
 
+func (multiSource *MultiSource) resetChangesCache() {
+	multiSource.changesCache = make(map[string]changeURIData)
+}
+
 func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatasetContinuation, batchSize int,
 	processEntities func([]*server.Entity, DatasetContinuation) error) error {
 	depDataset, err2 := multiSource.getDatasetFor(dep)
@@ -132,15 +140,12 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 	}
 	d.activeDS = dep.Dataset
 
-	depSince := d.DependencyTokens[dep.Dataset]
+	depSince := d.DependencyTokens[d.activeDS]
 	if depSince == nil {
 		depSince = &StringDatasetContinuation{}
 	}
 
-	uris := make([]string, 0)
-	continuation, err := depDataset.ProcessChanges(depSince.AsIncrToken(), batchSize, func(entity *server.Entity) {
-		uris = append(uris, entity.ID)
-	})
+	uris, continuation, err := multiSource.findChangeURIs(depDataset, depSince, batchSize)
 
 	if err != nil {
 		return fmt.Errorf("detecting changes in dependency dataset %+v failed, %w", dep, err)
@@ -214,6 +219,26 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 	}
 
 	return nil
+}
+
+type changeURIData struct {
+	URIs         []string
+	continuation uint64
+}
+
+func (multiSource *MultiSource) findChangeURIs(depDataset *server.Dataset, depSince *StringDatasetContinuation,
+	batchSize int) ([]string, uint64, error) {
+	if changes, ok := multiSource.changesCache[depDataset.ID]; ok {
+		return changes.URIs, changes.continuation, nil
+	}
+
+	uris := make([]string, 0)
+	continuation, err := depDataset.ProcessChanges(depSince.AsIncrToken(), batchSize, func(entity *server.Entity) {
+		uris = append(uris, entity.ID)
+	})
+	multiSource.changesCache[depDataset.ID] = changeURIData{uris, continuation}
+
+	return uris, continuation, err
 }
 
 func (multiSource *MultiSource) getDatasetFor(dep Dependency) (*server.Dataset, error) {

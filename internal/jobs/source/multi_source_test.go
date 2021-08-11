@@ -443,7 +443,6 @@ func TestMultiSource(t *testing.T) {
 									   { "dataset": "people", "predicate": "http://people/employment", "inverse": false }
                                      ] } ] }`
 
-
 			srcConfig := map[string]interface{}{}
 			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
 			_ = testSource.ParseDependencies(srcConfig["Dependencies"])
@@ -548,7 +547,7 @@ func TestMultiSource(t *testing.T) {
 			_, employmentPrefix := createTestDataset("employment",
 				[]string{"MediumCorp", "LittleSweatshop", "YardSale", "BigCorp"}, map[string]map[string]interface{}{
 					"MediumCorp":      {peoplePrefix + ":employment": peoplePrefix + ":Bob"},
-					"BigCorp":      {peoplePrefix + ":employment": peoplePrefix + ":Hank"},
+					"BigCorp":         {peoplePrefix + ":employment": peoplePrefix + ":Hank"},
 					"LittleSweatshop": {peoplePrefix + ":employment": peoplePrefix + ":Alice"},
 					"YardSale":        {peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"}},
 				}, dsm, g, store)
@@ -564,7 +563,6 @@ func TestMultiSource(t *testing.T) {
 							"joins": [ { "dataset": "employment", "predicate": "http://employment/employment", "inverse": false },
 									   { "dataset": "people", "predicate": "http://people/employment", "inverse": false }
                                      ] } ] }`
-
 
 			srcConfig := map[string]interface{}{}
 			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
@@ -606,12 +604,98 @@ func TestMultiSource(t *testing.T) {
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(2)
 			var seenBob, seenHank bool
-			for _,re:=range recordedEntities {
+			for _, re := range recordedEntities {
 				seenBob = seenBob || re.ID == peoplePrefix+":Bob"
 				seenHank = seenHank || re.ID == peoplePrefix+":Hank"
 			}
 			g.Assert(seenBob).IsTrue("expected to find Bob in emitted entities")
 			g.Assert(seenHank).IsTrue("expected to find Hank in emitted entities")
+
+		})
+
+		g.It("should support same dataset as dependency multiple times", func() {
+			// people <- employment <- salary
+			// people <- demographic -> salary
+			_, peoplePrefix := createTestDataset("people", []string{"Bob", "Alice", "Hank"}, nil, dsm, g, store)
+			_, employmentPrefix := createTestDataset("employment",
+				[]string{"MediumCorp", "LittleSweatshop", "YardSale", "BigCorp"}, map[string]map[string]interface{}{
+					"MediumCorp":      {peoplePrefix + ":employment": peoplePrefix + ":Bob"},
+					"BigCorp":         {peoplePrefix + ":employment": peoplePrefix + ":Hank"},
+					"LittleSweatshop": {peoplePrefix + ":employment": peoplePrefix + ":Alice"},
+					"YardSale":        {peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"}},
+				}, dsm, g, store)
+			incomeRanges, incomeRangePrefix := createTestDataset("incomeRange",
+				[]string{"High", "Medium", "Low"}, map[string]map[string]interface{}{
+					"High": {employmentPrefix + ":employment": employmentPrefix + ":MediumCorp"},
+					"Low":  {employmentPrefix + ":employment": []string{employmentPrefix + ":MediumCorp", employmentPrefix + "YardSale"}},
+				}, dsm, g, store)
+			_, _ = createTestDataset("demographic", []string{"young", "middle-aged", "senior"},
+				map[string]map[string]interface{}{
+					"young": {
+						peoplePrefix + ":people":           peoplePrefix + ":Alice",
+						incomeRangePrefix + ":incomeRange": incomeRangePrefix + ":High",
+					},
+				}, dsm, g, store)
+
+			testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
+			srcJSON := `{ "Type" : "MultiSource", "Name" : "people", "Dependencies": [
+                          {
+							"dataset": "incomeRange",
+							"joins": [ { "dataset": "employment", "predicate": "http://employment/employment", "inverse": false },
+									   { "dataset": "people", "predicate": "http://people/employment", "inverse": false } ]
+                          }, {
+                            "dataset": "incomeRange",
+                            "joins": [ { "dataset": "demographic", "predicate": "http://incomeRange/incomeRange", "inverse": true },
+                                       { "dataset": "people", "predicate": "http://people/people", "inverse": false }]
+                          }
+                        ] }`
+
+			srcConfig := map[string]interface{}{}
+			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
+			_ = testSource.ParseDependencies(srcConfig["Dependencies"])
+
+			//fullsync
+			var recordedEntities []server.Entity
+			token := &source.MultiDatasetContinuation{}
+			var lastToken source.DatasetContinuation
+			testSource.StartFullSync()
+			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			testSource.EndFullSync()
+
+			// Now, change name of "High" incomeRange. expected Bob emitted through first dependency via employment.
+			// Expect also Alice through 2nd dependency via demographic
+			err = incomeRanges.StoreEntities([]*server.Entity{
+				server.NewEntityFromMap(map[string]interface{}{
+					"id":    incomeRangePrefix + ":High",
+					"props": map[string]interface{}{"name": "High-changed"},
+					"refs":  map[string]interface{}{employmentPrefix + ":employment": employmentPrefix + ":MediumCorp"},
+				}),
+			})
+
+			recordedEntities = []server.Entity{}
+			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			g.Assert(len(recordedEntities)).Eql(2)
+			var seenBob, seenAlice bool
+			for _, re := range recordedEntities {
+				seenBob = seenBob || re.ID == peoplePrefix+":Bob"
+				seenAlice = seenAlice || re.ID == peoplePrefix+":Alice"
+			}
+			g.Assert(seenBob).IsTrue("expected to find Bob in emitted entities via 1st dep")
+			g.Assert(seenAlice).IsTrue("expected to find Alice in emitted entities via 2nd dep")
 
 		})
 	})
