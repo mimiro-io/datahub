@@ -698,6 +698,226 @@ func TestMultiSource(t *testing.T) {
 			g.Assert(seenAlice).IsTrue("expected to find Alice in emitted entities via 2nd dep")
 
 		})
+
+		g.It("should support multiple link predicates per join", func() {
+			// people <- band -> people
+			people, peoplePrefix := createTestDataset("people", []string{"Bob", "Rob", "Mary", "Alice", "Hank", "Lisa"}, nil, dsm, g, store)
+
+			_, _ = createTestDataset("band", []string{"Rockbuds", "SideshowBand"},
+				map[string]map[string]interface{}{
+					"Rockbuds": {
+						peoplePrefix + ":singer":  []string{peoplePrefix + ":Rob", peoplePrefix + ":Mary", peoplePrefix + ":Lisa"},
+						peoplePrefix + ":drummer": []string{peoplePrefix + ":Alice"},
+					},
+					"SideshowBand": {
+						peoplePrefix + ":singer":  peoplePrefix + ":Bob",
+						peoplePrefix + ":drummer": []string{peoplePrefix + ":Hank"},
+					},
+				}, dsm, g, store)
+
+			testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
+			srcJSON := `{ "Type" : "MultiSource", "Name" : "people", "Dependencies": [
+                          {
+							"dataset": "people",
+							"joins": [ { "dataset": "band", "predicate": "http://people/drummer", "inverse": true },
+									   { "dataset": "people", "predicate": "http://people/singer", "inverse": false } ]
+                          },
+                          {
+							"dataset": "people",
+							"joins": [ { "dataset": "band", "predicate": "http://people/singer", "inverse": true },
+									   { "dataset": "people", "predicate": "http://people/drummer", "inverse": false } ]
+                          },
+                          {
+							"dataset": "people",
+							"joins": [ { "dataset": "band", "predicate": "http://people/singer", "inverse": true },
+									   { "dataset": "people", "predicate": "http://people/singer", "inverse": false } ]
+                          }
+                        ] }`
+
+			srcConfig := map[string]interface{}{}
+			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
+			_ = testSource.ParseDependencies(srcConfig["Dependencies"])
+
+			//fullsync
+			var recordedEntities []server.Entity
+			token := &source.MultiDatasetContinuation{}
+			var lastToken source.DatasetContinuation
+			testSource.StartFullSync()
+			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			testSource.EndFullSync()
+
+			// Rename Hank, expect Hank himself (main dataset change) and Bob, who is singer in Hank's band "Sideshow", to be emitted
+			err = people.StoreEntities([]*server.Entity{
+				server.NewEntityFromMap(map[string]interface{}{
+					"id":    peoplePrefix + ":Hank",
+					"props": map[string]interface{}{"name": "Hank-changed"},
+					"refs":  map[string]interface{}{},
+				}),
+			})
+
+			recordedEntities = []server.Entity{}
+			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			g.Assert(len(recordedEntities)).Eql(2)
+			var seenBob, seenHank bool
+			for _, re := range recordedEntities {
+				seenBob = seenBob || re.ID == peoplePrefix+":Bob"
+				seenHank = seenHank || re.ID == peoplePrefix+":Hank"
+			}
+			g.Assert(seenBob).IsTrue("expected to find Bob in emitted entities via 1st dep")
+			g.Assert(seenHank).IsTrue("expected to find Hank because Hank was changed in main dataset")
+
+			// Rename Lisa. expect Lisa herself. and all her bandmates (singers Rob+Mary and drummer Alice)
+			// Lisa will currently be emitted twice. once from main dataset, and once because lisa is her own singer-singer relation aswell
+			err = people.StoreEntities([]*server.Entity{
+				server.NewEntityFromMap(map[string]interface{}{
+					"id":    peoplePrefix + ":Lisa",
+					"props": map[string]interface{}{"name": "Lisa-changed"},
+					"refs":  map[string]interface{}{},
+				}),
+			})
+
+			recordedEntities = []server.Entity{}
+			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			g.Assert(len(recordedEntities)).Eql(5)
+			var lisaSeen, robSeen, marySeen, aliceSeen bool
+			lisaCnt := 0
+			for _, re := range recordedEntities {
+				lisaSeen = lisaSeen || re.ID == peoplePrefix+":Lisa"
+				robSeen = robSeen || re.ID == peoplePrefix+":Rob"
+				marySeen = marySeen || re.ID == peoplePrefix+":Mary"
+				aliceSeen = aliceSeen || re.ID == peoplePrefix+":Alice"
+				if re.ID == peoplePrefix+":Lisa" {
+					lisaCnt++
+				}
+			}
+			g.Assert(lisaSeen).IsTrue()
+			g.Assert(robSeen).IsTrue()
+			g.Assert(marySeen).IsTrue()
+			g.Assert(aliceSeen).IsTrue()
+			g.Assert(lisaCnt).Eql(2)
+		})
+
+		g.It("should support deep join paths", func() {
+			// people <------ team -----------> people <------------- office -------> address
+			//         member      team-lead            contact-person        address
+			_, peoplePrefix := createTestDataset("people",
+				[]string{"Bob", "Rob", "Mary", "Alice", "Hank", "Lisa"}, nil, dsm, g, store)
+
+			teamPrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://team/")
+			_, _ = createTestDataset("team", []string{"product", "development"},
+				map[string]map[string]interface{}{
+					"product": {
+						teamPrefix + ":lead":   peoplePrefix + ":Bob",
+						teamPrefix + ":member": []string{peoplePrefix + ":Bob", peoplePrefix + ":Rob", peoplePrefix + ":Mary"},
+					},
+					"development": {
+						teamPrefix + ":lead":   peoplePrefix + ":Alice",
+						teamPrefix + ":member": []string{peoplePrefix + ":Alice", peoplePrefix + ":Hank", peoplePrefix + ":Lisa"},
+					},
+				}, dsm, g, store)
+
+			addresses, addressPrefix := createTestDataset("address", []string{"BigSquare 1", "Lillevegen 9"},
+				nil, dsm, g, store)
+
+			officePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://office/")
+			createTestDataset("office", []string{"Brisbane", "Stavanger"}, map[string]map[string]interface{}{
+				"Brisbane": {
+					officePrefix + ":contact":  peoplePrefix + ":Bob",
+					officePrefix + ":location": addressPrefix + ":BigSquare 1",
+				},
+				"Stavanger": {
+					officePrefix + ":contact":  peoplePrefix + ":Alice",
+					officePrefix + ":location": addressPrefix + ":Lillevegen 9",
+				},
+			}, dsm, g, store)
+
+			testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
+			srcJSON := `{ "Type" : "MultiSource", "Name" : "people", "Dependencies": [
+                          {
+							"dataset": "address",
+							"joins": [
+							  { "dataset": "office", "predicate": "http://office/location", "inverse": true },
+							  { "dataset": "people", "predicate": "http://office/contact", "inverse": false },
+							  { "dataset": "team", "predicate": "http://team/lead", "inverse": true },
+							  { "dataset": "people", "predicate": "http://team/member", "inverse": false }
+							]
+                          }
+                        ] }`
+
+			srcConfig := map[string]interface{}{}
+			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
+			_ = testSource.ParseDependencies(srcConfig["Dependencies"])
+
+			//fullsync
+			var recordedEntities []server.Entity
+			token := &source.MultiDatasetContinuation{}
+			var lastToken source.DatasetContinuation
+			testSource.StartFullSync()
+			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			testSource.EndFullSync()
+
+			// delete Lillevegen 9, verify that all 3 team members at that address are emitted (Alice, Hank, Lisa)
+			fromMap := server.NewEntityFromMap(map[string]interface{}{
+				"id":    addressPrefix + ":Lillevegen 9",
+				"props": map[string]interface{}{"name": "Lillevegen 9"},
+				"refs":  map[string]interface{}{},
+			})
+			fromMap.References = nil
+			fromMap.IsDeleted = true
+			err = addresses.StoreEntities([]*server.Entity{fromMap})
+			g.Assert(err).IsNil()
+
+			recordedEntities = []server.Entity{}
+			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+
+			g.Assert(err).IsNil()
+			g.Assert(len(recordedEntities)).Eql(3)
+
+			m := make(map[string]bool)
+			for _, re := range recordedEntities {
+				m["Alice"] = m["Alice"] || re.ID == peoplePrefix+":Alice"
+				m["Hank"] = m["Hank"] || re.ID == peoplePrefix+":Hank"
+				m["Lisa"] = m["Lisa"] || re.ID == peoplePrefix+":Lisa"
+			}
+			g.Assert(m["Alice"]).IsTrue()
+			g.Assert(m["Hank"]).IsTrue()
+			g.Assert(m["Lisa"]).IsTrue()
+		})
+
 	})
 
 	g.Describe("parseDependencies", func() {
