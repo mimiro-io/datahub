@@ -1,8 +1,9 @@
 package source
 
 import (
-	"github.com/mimiro-io/datahub/internal/server"
 	"strconv"
+
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 type SampleSource struct {
@@ -26,16 +27,10 @@ func (source *SampleSource) GetConfig() map[string]interface{} {
 	return config
 }
 
-func (source *SampleSource) ReadEntities(since string, batchSize int, processEntities func([]*server.Entity, string) error) error {
+func (source *SampleSource) ReadEntities(since DatasetContinuation, batchSize int, processEntities func([]*server.Entity, DatasetContinuation) error) error {
 
-	var sinceOffset = 0
 	var err error
-	if since != "" {
-		sinceOffset, err = strconv.Atoi(since)
-		if err != nil {
-			return err
-		}
-	}
+	sinceOffset := int(since.AsIncrToken())
 	if source.NumberOfEntities < batchSize {
 		batchSize = source.NumberOfEntities
 	}
@@ -57,6 +52,6 @@ func (source *SampleSource) ReadEntities(since string, batchSize int, processEnt
 		entities = append(entities, e)
 	}
 
-	sinceToken := strconv.Itoa(endIndex)
+	sinceToken := &StringDatasetContinuation{strconv.Itoa(endIndex)}
 	return processEntities(entities, sinceToken)
 }

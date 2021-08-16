@@ -45,7 +45,11 @@ var (
 	HttpJobSchedulingErr    = func(detail error) error { return fmt.Errorf("failed at scheduling the job definition: %w", detail) }
 	HttpJsonParsingErr      = func(detail error) error { return fmt.Errorf("failed parsing the json body: %w", detail) }
 	HttpContentStoreErr     = func(detail error) error { return fmt.Errorf("failed updating the content: %w", detail) }
-	HttpQueryParamErr       = func(detail error) error { return fmt.Errorf("one or more of the query parameters failed its validation: %w", detail) }
-	HttpGenericErr          = func(detail error) error { return fmt.Errorf("internal failure: %w", detail) }
-	HttpFullsyncErr         = func(detail error) error { return fmt.Errorf("an error occured trying to start or update a full sync: %w", detail) }
+	HttpQueryParamErr       = func(detail error) error {
+		return fmt.Errorf("one or more of the query parameters failed its validation: %w", detail)
+	}
+	HttpGenericErr  = func(detail error) error { return fmt.Errorf("internal failure: %w", detail) }
+	HttpFullsyncErr = func(detail error) error {
+		return fmt.Errorf("an error occured trying to start or update a full sync: %w", detail)
+	}
 )

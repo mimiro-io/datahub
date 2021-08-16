@@ -1,9 +1,10 @@
 package source
 
 import (
-	"github.com/mimiro-io/datahub/internal/server"
 	"strconv"
 	"time"
+
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 type SlowSource struct {
@@ -28,7 +29,7 @@ func (source *SlowSource) GetConfig() map[string]interface{} {
 	return config
 }
 
-func (source *SlowSource) ReadEntities(since string, batchSize int, processEntities func([]*server.Entity, string) error) error {
+func (source *SlowSource) ReadEntities(since DatasetContinuation, batchSize int, processEntities func([]*server.Entity, DatasetContinuation) error) error {
 	// assert sample source namespace
 
 	entities := make([]*server.Entity, source.BatchSize)
@@ -42,5 +43,5 @@ func (source *SlowSource) ReadEntities(since string, batchSize int, processEntit
 	}
 	time.Sleep(d)
 
-	return processEntities(entities, "")
+	return processEntities(entities, &StringDatasetContinuation{""})
 }

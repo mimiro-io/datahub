@@ -17,11 +17,12 @@ package jobs
 import (
 	"context"
 	"errors"
-	jobSource "github.com/mimiro-io/datahub/internal/jobs/source"
 	"math"
 	"reflect"
 	"sync"
 	"time"
+
+	jobSource "github.com/mimiro-io/datahub/internal/jobs/source"
 
 	"github.com/mimiro-io/datahub/internal/server"
 )
@@ -61,8 +62,13 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 	keepReading := true
 
 	//dont call source.startFullSync, just sink.startFullSync. to make sure we run on changes.
-	//exception is when the sink is http.
-	if pipeline.sink.GetConfig()["Type"] == "HttpDatasetSink" {
+	//exception is when the sink is http(we want to process entities instead of changes)
+	//or source is multisource (we need to grab watermarks at beginning of fullsync)
+	if pipeline.sink.GetConfig()["Type"] == "HttpDatasetSink" ||
+	 pipeline.source.GetConfig()["Type"] == "MultiSource" {
+		if pipeline.source.GetConfig()["Type"] == "MultiSource" {
+			//return errors.New("MultiSource can only produce changes and must therefore not be used with HttpDatasetSink")
+		}
 		pipeline.source.StartFullSync()
 	}
 	err = pipeline.sink.startFullSync(runner)
@@ -74,7 +80,7 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 	tags := []string{"application:datahub", "job:" + job.id}
 	for keepReading {
 
-		processEntities := func(entities []*server.Entity, continuationToken string) error {
+		processEntities := func(entities []*server.Entity, continuationToken jobSource.DatasetContinuation) error {
 			select {
 			// if the cancellable context is cancelled, ctx.Done will trigger, and it will break out. The only way I
 			// found to do so, was to trigger an error, and then check for that in the jobs.Runner.
@@ -106,13 +112,15 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 				}
 
 				// capture token if there is one
-				if continuationToken != "" {
-					syncJobState.ContinuationToken = continuationToken
-
+				if continuationToken.GetToken() != "" {
+					syncJobState.ContinuationToken, err = continuationToken.Encode()
+					if err != nil {
+						return err
+					}
 				}
 
 				if incomingEntityCount == 0 || // if this was the last page (empty) of a tokenized source
-					continuationToken == "" { // OR it was not a tokenized  source
+					continuationToken.GetToken() == "" { // OR it was not a tokenized  source
 					keepReading = false // then stop reading, we are done
 				}
 			}
@@ -120,10 +128,15 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 		}
 
 		readTs := time.Now()
-		err := pipeline.source.ReadEntities(syncJobState.ContinuationToken, pipeline.batchSize,
-			func(entities []*server.Entity, s string) error {
+		token, err := jobSource.DecodeToken(pipeline.source.GetConfig()["Type"], syncJobState.ContinuationToken)
+		if err != nil {
+			return err
+		}
+
+		err = pipeline.source.ReadEntities(token, pipeline.batchSize,
+			func(entities []*server.Entity, c jobSource.DatasetContinuation) error {
 				_ = runner.statsdClient.Timing("pipeline.source.batch", time.Since(readTs), tags, 1)
-				result := processEntities(entities, s)
+				result := processEntities(entities, c)
 				readTs = time.Now()
 				return result
 			})
@@ -141,7 +154,10 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 
 	//Do not store syncState when the target is an http sink.
 	//Since we use entities for httpsinks, the continuation tokens are base64 strings and not compatible with incremental tokens
-	if pipeline.sink.GetConfig()["Type"] != "HttpDatasetSink" {
+    //
+	//Exception is when used with MultiSource... MultiSource only operates on changes. also in fullsync mode.
+	//   Difference there between fullsync and incremental is whether dependencies are processed
+	if pipeline.sink.GetConfig()["Type"] != "HttpDatasetSink" || pipeline.source.GetConfig()["Type"] == "MultiSource" {
 		err = runner.store.StoreObject(server.JOB_DATA_INDEX, job.id, syncJobState)
 		if err != nil {
 			return err
@@ -174,7 +190,7 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 	tags := []string{"application:datahub", "job:" + job.id}
 	for keepReading {
 
-		processEntities := func(entities []*server.Entity, continuationToken string) error {
+		processEntities := func(entities []*server.Entity, continuationToken jobSource.DatasetContinuation) error {
 			select {
 			// if the cancellable context is cancelled, ctx.Done will trigger, and it will break out. The only way I
 			// found to do so, was to trigger an error, and then check for that in the jobs.Runner.
@@ -263,8 +279,11 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 				}
 
 				// store token if there is one
-				if continuationToken != "" {
-					syncJobState.ContinuationToken = continuationToken
+				if continuationToken.GetToken() != "" {
+					syncJobState.ContinuationToken, err = continuationToken.Encode()
+					if err != nil {
+						return err
+					}
 
 					err = runner.store.StoreObject(server.JOB_DATA_INDEX, job.id, syncJobState)
 					if err != nil {
@@ -273,7 +292,7 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 				}
 
 				if incomingEntityCount == 0 || // if this was the last page (empty) of a tokenized source
-					continuationToken == "" { // OR it was not a tokenized  source
+					continuationToken.GetToken() == "" { // OR it was not a tokenized  source
 					keepReading = false // then stop reading, we are done
 				}
 			}
@@ -281,10 +300,15 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 		}
 
 		readTs := time.Now()
-		err := pipeline.source.ReadEntities(syncJobState.ContinuationToken, pipeline.batchSize,
-			func(entities []*server.Entity, s string) error {
+		since, err := jobSource.DecodeToken(pipeline.source.GetConfig()["Type"], syncJobState.ContinuationToken)
+		if err != nil {
+			return err
+		}
+		err = pipeline.source.ReadEntities(since,
+			pipeline.batchSize,
+			func(entities []*server.Entity, c jobSource.DatasetContinuation) error {
 				_ = runner.statsdClient.Timing("pipeline.source.batch", time.Since(readTs), tags, 1)
-				result := processEntities(entities, s)
+				result := processEntities(entities, c)
 				readTs = time.Now()
 				return result
 			})

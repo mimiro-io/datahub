@@ -4,14 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/mimiro-io/datahub/internal/security"
-	"github.com/mimiro-io/datahub/internal/server"
-	"go.uber.org/zap"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
 	"time"
+
+	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/security"
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 type HttpDatasetSource struct {
@@ -32,7 +34,8 @@ func (httpDatasetSource *HttpDatasetSource) EndFullSync() {
 	// empty for now (this makes sonar not complain)
 }
 
-func (httpDatasetSource *HttpDatasetSource) ReadEntities(since string, batchSize int, processEntities func([]*server.Entity, string) error) error {
+func (httpDatasetSource *HttpDatasetSource) ReadEntities(since DatasetContinuation, batchSize int,
+	processEntities func([]*server.Entity, DatasetContinuation) error) error {
 	// open connection
 	//timeout := 60 * time.Minute
 	//client := httpclient.NewClient(httpclient.WithHTTPTimeout(timeout))
@@ -42,9 +45,9 @@ func (httpDatasetSource *HttpDatasetSource) ReadEntities(since string, batchSize
 	if err != nil {
 		return err
 	}
-	if since != "" {
+	if since.GetToken() != "" {
 		q, _ := url.ParseQuery(endpoint.RawQuery)
-		q.Add("since", since)
+		q.Add("since", since.GetToken())
 		endpoint.RawQuery = q.Encode()
 	}
 
@@ -95,11 +98,11 @@ func (httpDatasetSource *HttpDatasetSource) ReadEntities(since string, batchSize
 
 	read := 0
 	entities := make([]*server.Entity, 0)
-	continuationToken := ""
+	continuationToken := &StringDatasetContinuation{}
 	esp := server.NewEntityStreamParser(httpDatasetSource.Store)
 	err = esp.ParseStream(res.Body, func(entity *server.Entity) error {
 		if entity.ID == "@continuation" {
-			continuationToken = entity.GetStringProperty("token")
+			continuationToken.Token = entity.GetStringProperty("token")
 		} else {
 			entities = append(entities, entity)
 			read++

@@ -15,13 +15,57 @@
 package source
 
 import (
+	"encoding/json"
+	"strconv"
+
 	"github.com/mimiro-io/datahub/internal/server"
 )
 
 // Source interface for pulling data
 type Source interface {
 	GetConfig() map[string]interface{}
-	ReadEntities(since string, batchSize int, processEntities func([]*server.Entity, string) error) error
+	ReadEntities(since DatasetContinuation, batchSize int, processEntities func([]*server.Entity, DatasetContinuation) error) error
 	StartFullSync()
 	EndFullSync()
+}
+
+type DatasetContinuation interface {
+	GetToken() string
+	AsIncrToken() uint64
+	Encode() (string, error)
+}
+
+type StringDatasetContinuation struct {
+	Token string
+}
+
+func (c *StringDatasetContinuation) GetToken() string {
+	return c.Token
+}
+func (c *StringDatasetContinuation) AsIncrToken() uint64 {
+	if c.Token != "" {
+		i, err := strconv.Atoi(c.Token)
+		if err != nil {
+			return 0
+		}
+		return uint64(i)
+	}
+	return 0
+}
+func (c *StringDatasetContinuation) Encode() (string, error) {
+	return c.GetToken(), nil
+}
+
+func DecodeToken(sourceType interface{}, token string) (DatasetContinuation, error) {
+	if sourceType == "MultiSource" {
+		result := &MultiDatasetContinuation{}
+		if token != "" {
+			err := json.Unmarshal([]byte(token), result)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return result, nil
+	}
+	return &StringDatasetContinuation{token}, nil
 }
