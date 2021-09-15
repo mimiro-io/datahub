@@ -20,7 +20,7 @@ RUN go mod download
 # Copy the source from the current directory to the Working Directory inside the container
 COPY cmd ./cmd
 COPY internal ./internal
-COPY app.go ./
+COPY app.go .env-test ./
 
 # Build the Go app
 RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-extldflags=-static" -tags jemalloc,allocator -a -installsuffix cgo -o server cmd/datahub/main.go
