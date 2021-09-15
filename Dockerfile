@@ -30,6 +30,8 @@ RUN go test ./... -v
 
 FROM alpine:latest
 
+RUN apk --no-cache add ca-certificates rsync
+
 WORKDIR /root/
 
 COPY --from=builder /app/server .
