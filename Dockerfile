@@ -1,5 +1,10 @@
 FROM golang:1.17.1 as builder
 
+#install jemalloc
+RUN apt-get update -y
+RUN apt-get install libjemalloc-dev -y
+ENV LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libjemalloc.so"
+
 # Set the Current Working Directory inside the container
 WORKDIR /app
 
@@ -13,14 +18,17 @@ RUN go mod download
 COPY . .
 
 # Build the Go app
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o server cmd/datahub/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -tags="jemalloc,allocator" -a -installsuffix cgo -o server cmd/datahub/main.go
 
 # Run unit tests
-RUN go test ./... -v
+#RUN go test ./... -v
 
-FROM alpine:latest
+FROM ubuntu:latest
 
-RUN apk --no-cache add ca-certificates rsync
+# install jemalloc
+RUN apt-get update -y
+RUN apt-get install libjemalloc-dev -y
+ENV LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libjemalloc.so"
 
 WORKDIR /root/
 
