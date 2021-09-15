@@ -1,9 +1,12 @@
-FROM golang:1.17.1 as builder
+FROM golang:1.17.1 as builder_src
 
-#install jemalloc
+COPY jemalloc-install.sh .
+
 RUN apt-get update -y
-RUN apt-get install libjemalloc-dev -y
-ENV LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libjemalloc.so"
+RUN apt-get install bzip2 -y
+RUN bash jemalloc-install.sh
+
+FROM builder_src AS builder
 
 # Set the Current Working Directory inside the container
 WORKDIR /app
@@ -15,20 +18,17 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy the source from the current directory to the Working Directory inside the container
-COPY . .
+COPY cmd ./cmd
+COPY internal ./internal
+COPY app.go ./
 
 # Build the Go app
-RUN CGO_ENABLED=0 GOOS=linux go build -tags="jemalloc,allocator" -a -installsuffix cgo -o server cmd/datahub/main.go
+RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-extldflags=-static" -tags jemalloc,allocator -a -installsuffix cgo -o server cmd/datahub/main.go
 
 # Run unit tests
-#RUN go test ./... -v
+RUN go test ./... -v
 
-FROM ubuntu:latest
-
-# install jemalloc
-RUN apt-get update -y
-RUN apt-get install libjemalloc-dev -y
-ENV LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libjemalloc.so"
+FROM alpine:latest
 
 WORKDIR /root/
 
