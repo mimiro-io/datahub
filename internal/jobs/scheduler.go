@@ -63,13 +63,16 @@ type JobTrigger struct {
 // JobConfiguration is the external interfacing object to configure a job. It is also the one that gets persisted
 // in the store.
 type JobConfiguration struct {
-	Id        string                 `json:"id"`
-	Source    map[string]interface{} `json:"source"`
-	Sink      map[string]interface{} `json:"sink"`
-	Transform map[string]interface{} `json:"transform"`
-	Triggers  []JobTrigger           `json:"triggers"`
-	Paused    bool                   `json:"paused"`
-	BatchSize int                    `json:"batchSize"`
+	Id                string                 `json:"id"`
+	Title             string                 `json:"title"`
+	Description       string                 `json:"description"`
+	Tags              []string               `json:"tags"`
+	Source            map[string]interface{} `json:"source"`
+	Sink              map[string]interface{} `json:"sink"`
+	Transform         map[string]interface{} `json:"transform"`
+	Triggers          []JobTrigger           `json:"triggers"`
+	Paused            bool                   `json:"paused"`
+	BatchSize         int                    `json:"batchSize"`
 }
 
 type ScheduleEntries struct {
