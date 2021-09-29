@@ -20,9 +20,11 @@ import (
 	"testing"
 
 	"github.com/DataDog/datadog-go/statsd"
-	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal"
+	"github.com/mimiro-io/datahub/internal/conf"
 
 	"github.com/franela/goblin"
 )
@@ -49,15 +51,11 @@ func TestBackup(t *testing.T) {
 				StoreLocation: storeLocation,
 			}
 
-			devNull, _ := os.Open("/dev/null")
-			oldErr := os.Stderr
-			os.Stderr = devNull
-			lc := fxtest.NewLifecycle(t)
+			lc := fxtest.NewLifecycle(&internal.SwitchableLogger{T: t})
 			s = NewStore(lc, e, &statsd.NoOpClient{})
 
 			err = lc.Start(context.Background())
 			g.Assert(err).IsNil()
-			os.Stderr = oldErr
 
 			backup := &BackupManager{}
 			backup.store = s

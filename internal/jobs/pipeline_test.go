@@ -44,9 +44,7 @@ func TestPipeline(t *testing.T) {
 		g.BeforeEach(func() {
 			// temp redirect of stdout and stderr to swallow some annoying init messages in fx and jobrunner and mockService
 			devNull, _ := os.Open("/dev/null")
-			oldErr := os.Stderr
 			oldStd := os.Stdout
-			os.Stderr = devNull
 			os.Stdout = devNull
 
 			testCnt += 1
@@ -60,7 +58,6 @@ func TestPipeline(t *testing.T) {
 			scheduler, store, runner, dsm, _ = setupScheduler(storeLocation, t)
 
 			// undo redirect of stdout and stderr after successful init of fx and jobrunner
-			os.Stderr = oldErr
 			os.Stdout = oldStd
 
 		})

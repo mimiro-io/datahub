@@ -23,10 +23,12 @@ import (
 	"github.com/franela/goblin"
 
 	"github.com/DataDog/datadog-go/statsd"
-	"github.com/mimiro-io/datahub/internal/conf"
-	"github.com/mimiro-io/datahub/internal/server"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal"
+	"github.com/mimiro-io/datahub/internal/conf"
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 func TestContent(t *testing.T) {
@@ -51,14 +53,10 @@ func TestContent(t *testing.T) {
 			}
 			err := os.RemoveAll(e.StoreLocation)
 			g.Assert(err).IsNil("should be allowed to clean testfiles in " + e.StoreLocation)
-			devNull, _ := os.Open("/dev/null")
-			oldErr := os.Stderr
-			os.Stderr = devNull
-			lc := fxtest.NewLifecycle(t)
+			lc := fxtest.NewLifecycle(&internal.SwitchableLogger{T: t})
 			sc := &statsd.NoOpClient{}
 			store = server.NewStore(lc, e, sc)
 			lc.RequireStart()
-			os.Stderr = oldErr
 			contentConfig = NewContent(e, store, sc)
 		})
 		g.AfterEach(func() {

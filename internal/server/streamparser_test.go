@@ -26,8 +26,10 @@ import (
 
 	"github.com/franela/goblin"
 
-	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx/fxtest"
+
+	"github.com/mimiro-io/datahub/internal"
+	"github.com/mimiro-io/datahub/internal/conf"
 )
 
 func TestJsonOmitOnEntity(m *testing.T) {
@@ -55,13 +57,9 @@ func TestStreamParser(m *testing.T) {
 				StoreLocation: storeLocation,
 			}
 
-			devNull, _ := os.Open("/dev/null")
-			oldErr := os.Stderr
-			os.Stderr = devNull
-			lc := fxtest.NewLifecycle(m)
+			lc := fxtest.NewLifecycle(&internal.SwitchableLogger{T: m})
 			store = NewStore(lc, e, &statsd.NoOpClient{})
 			lc.RequireStart()
-			os.Stderr = oldErr
 		})
 		g.AfterEach(func() {
 			_ = store.Close()

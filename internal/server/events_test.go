@@ -27,6 +27,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/web"
 
 	"github.com/mimiro-io/datahub/internal/server"
@@ -36,9 +37,10 @@ import (
 	"github.com/mustafaturan/bus"
 
 	"github.com/DataDog/datadog-go/statsd"
-	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/conf"
 
 	"github.com/franela/goblin"
 )
@@ -72,12 +74,10 @@ func TestEvents(t *testing.T) {
 				Auth:          &conf.AuthConfig{Middleware: "noop"}}
 
 			devNull, _ := os.Open("/dev/null")
-			oldErr := os.Stderr
 			oldOut := os.Stdout
-			os.Stderr = devNull
 			os.Stdout = devNull
 
-			lc := fxtest.NewLifecycle(t)
+			lc := fxtest.NewLifecycle(&internal.SwitchableLogger{T: t})
 			store = server.NewStore(lc, e, &statsd.NoOpClient{})
 			newBus, _ := server.NewBus(&conf.Env{Logger: zap.NewNop().Sugar()})
 			eventBus = newBus.(*server.MEventBus)
@@ -95,7 +95,6 @@ func TestEvents(t *testing.T) {
 			err = lc.Start(context.Background())
 			g.Assert(err).IsNil()
 
-			os.Stderr = oldErr
 			os.Stdout = oldOut
 
 			peopleDs, err = dsm.CreateDataset("people")

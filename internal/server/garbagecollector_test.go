@@ -17,13 +17,16 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/DataDog/datadog-go/statsd"
-	"github.com/franela/goblin"
-	"github.com/mimiro-io/datahub/internal/conf"
-	"go.uber.org/fx/fxtest"
-	"go.uber.org/zap"
 	"os"
 	"testing"
+
+	"github.com/DataDog/datadog-go/statsd"
+	"github.com/franela/goblin"
+	"go.uber.org/fx/fxtest"
+	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal"
+	"github.com/mimiro-io/datahub/internal/conf"
 )
 
 func TestGC(t *testing.T) {
@@ -46,10 +49,7 @@ func TestGC(t *testing.T) {
 				StoreLocation: storeLocation,
 			}
 
-			devNull, _ := os.Open("/dev/null")
-			oldErr := os.Stderr
-			os.Stderr = devNull
-			lc = fxtest.NewLifecycle(t)
+			lc = fxtest.NewLifecycle(&internal.SwitchableLogger{T: t})
 			store = NewStore(lc, e, &statsd.NoOpClient{})
 			dsm = NewDsManager(lc, e, store, NoOpBus())
 			gc = NewGarbageCollector(lc, store, e)
@@ -57,7 +57,6 @@ func TestGC(t *testing.T) {
 
 			err = lc.Start(context.Background())
 			g.Assert(err).IsNil()
-			os.Stderr = oldErr
 		})
 		g.AfterEach(func() {
 			_ = store.Close()

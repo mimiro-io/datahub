@@ -31,13 +31,16 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"github.com/franela/goblin"
-	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx/fxtest"
+
+	"github.com/mimiro-io/datahub/internal"
+	"github.com/mimiro-io/datahub/internal/conf"
 
 	"github.com/DataDog/datadog-go/statsd"
 	"github.com/labstack/echo/v4"
-	"github.com/mimiro-io/datahub/internal/server"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 var logger = zap.NewNop().Sugar()
@@ -907,11 +910,9 @@ func setupScheduler(storeLocation string, t *testing.T) (*Scheduler, *server.Sto
 
 	// temp redirect of stdout and stderr to swallow some annoying init messages in fx and jobrunner and mockService
 	devNull, _ := os.Open("/dev/null")
-	oldErr := os.Stderr
 	oldStd := os.Stdout
-	os.Stderr = devNull
 	os.Stdout = devNull
-	lc := fxtest.NewLifecycle(t)
+	lc := fxtest.NewLifecycle(&internal.SwitchableLogger{T: t})
 	store := server.NewStore(lc, e, statsdClient)
 
 	runner := NewRunner(&RunnerConfig{
@@ -925,7 +926,6 @@ func setupScheduler(storeLocation string, t *testing.T) (*Scheduler, *server.Sto
 	s := NewScheduler(lc, e, store, dsm, runner)
 
 	// undo redirect of stdout and stderr after successful init of fx and jobrunner
-	os.Stderr = oldErr
 	os.Stdout = oldStd
 	err := lc.Start(context.Background())
 	if err != nil {
