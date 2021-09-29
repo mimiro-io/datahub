@@ -17,9 +17,10 @@ package conf
 import (
 	"flag"
 	"fmt"
-	"github.com/mimiro-io/datahub/internal/conf/secrets"
 	"os"
 	"strings"
+
+	"github.com/mimiro-io/datahub/internal/conf/secrets"
 
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -78,6 +79,7 @@ func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 		GcOnStartup:          viper.GetBool("GC_ON_STARTUP"),
 		FullsyncLeaseTimeout: viper.GetDuration("FULLSYNC_LEASE_TIMEOUT"),
 		BlockCacheSize:       viper.GetInt64("BLOCK_CACHE_SIZE"),
+		ValueLogFileSize:     viper.GetInt64("VALUE_LOG_FILE_SIZE"),
 	}, nil
 }
 

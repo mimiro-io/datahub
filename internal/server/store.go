@@ -56,6 +56,7 @@ type Store struct {
 	idmux                sync.Mutex
 	fullsyncLeaseTimeout time.Duration
 	blockCacheSize       int64
+	valueLogFileSize     int64
 }
 
 type BadgerLogger struct { // we use this to implement the Badger Logger interface
@@ -82,6 +83,7 @@ func NewStore(lc fx.Lifecycle, env *conf.Env, statsdClient statsd.ClientInterfac
 		statsdClient:         statsdClient,
 		fullsyncLeaseTimeout: fsTimeout,
 		blockCacheSize:       env.BlockCacheSize,
+		valueLogFileSize:     env.ValueLogFileSize,
 	}
 	store.NamespaceManager = NewNamespaceManager(store)
 
@@ -343,7 +345,13 @@ func (s *Store) Open() error {
 	} else {
 		opts.BlockCacheSize = int64(opts.BlockSize) * 1024 * 1024
 	}
-	opts.MemTableSize = 128 * 1024 * 1024 //128MB
+
+	//override default of 2GB (Int.Max)
+	if s.valueLogFileSize > 0 {
+		opts.ValueLogFileSize = s.valueLogFileSize
+	}
+
+	opts.MemTableSize = 128 * 1024 * 1024 // 128MB
 	opts.DetectConflicts = false
 	opts.NumVersionsToKeep = 1
 
@@ -583,7 +591,7 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(internalId uint64, at int64
 
 		// check if dataset has been deleted, or must be excluded
 		datasetDeleted := s.deletedDatasets[currentDatasetId]
-		datasetIncluded := len(targetDatasetIds) == 0 //no specified datasets means no restriction - all datasets are allowed
+		datasetIncluded := len(targetDatasetIds) == 0 // no specified datasets means no restriction - all datasets are allowed
 		if !datasetIncluded {
 			for _, id := range targetDatasetIds {
 				if id == currentDatasetId {
@@ -705,7 +713,7 @@ func (s *Store) GetRelatedEntitiesAtTime(uri string, predicate string, inverse b
 	return result, nil
 }
 
-//datasetsToInternalIDs map dataset IDs (strings) to InternaIDs (uint32)
+// datasetsToInternalIDs map dataset IDs (strings) to InternaIDs (uint32)
 func (s *Store) datasetsToInternalIDs(datasets []string) []uint32 {
 	var scopeArray []uint32
 	if len(datasets) > 0 {
@@ -804,7 +812,7 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 				// check dataset if deleted, or if excluded from search
 				datasetId := binary.BigEndian.Uint32(k[36:])
 
-				datasetIncluded := len(targetDatasetIds) == 0 //no specified datasets means no restriction - all datasets are allowed
+				datasetIncluded := len(targetDatasetIds) == 0 // no specified datasets means no restriction - all datasets are allowed
 				if !datasetIncluded {
 					for _, id := range targetDatasetIds {
 						if id == datasetId {
@@ -896,7 +904,7 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 
 				datasetId := binary.BigEndian.Uint32(k[36:])
 
-				datasetIncluded := len(targetDatasetIds) == 0 //no specified datasets means no restriction - all datasets are allowed
+				datasetIncluded := len(targetDatasetIds) == 0 // no specified datasets means no restriction - all datasets are allowed
 				if !datasetIncluded {
 					for _, id := range targetDatasetIds {
 						if id == datasetId {
@@ -1288,7 +1296,7 @@ func (s *Store) ExecuteTransaction(transaction *Transaction) error {
 	txn := s.database.NewTransaction(true)
 	defer txn.Discard()
 
-	for k,ds := range datasets {
+	for k, ds := range datasets {
 		entities := transaction.DatasetEntities[k]
 		_, err := ds.StoreEntitiesWithTransaction(entities, txnTime, txn)
 		if err != nil {

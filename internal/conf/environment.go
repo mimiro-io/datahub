@@ -15,8 +15,9 @@
 package conf
 
 import (
-	"go.uber.org/zap"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type Env struct {
@@ -33,6 +34,7 @@ type Env struct {
 	GcOnStartup          bool
 	FullsyncLeaseTimeout time.Duration
 	BlockCacheSize       int64
+	ValueLogFileSize     int64
 }
 
 type AuthConfig struct {
