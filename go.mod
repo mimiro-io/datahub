@@ -13,14 +13,13 @@ require (
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/dgraph-io/badger/v3 v3.2103.0
 	github.com/dgraph-io/ristretto v0.1.0 // indirect
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dop251/goja v0.0.0-20210427212725-462d53687b0d
 	github.com/franela/goblin v0.0.0-20210113153425-413781f5e6c8
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/goburrow/cache v0.1.3
 	github.com/gojektech/heimdall/v6 v6.1.0
-	github.com/golang-jwt/jwt v3.2.1+incompatible
 	github.com/gojektech/valkyrie v0.0.0-20190210220504-8f62c1e7ba45 // indirect
+	github.com/golang-jwt/jwt v3.2.1+incompatible
 	github.com/golang/glog v0.0.0-20210429001901-424d2337a529 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.3 // indirect
