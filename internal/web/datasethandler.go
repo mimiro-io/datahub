@@ -27,6 +27,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/labstack/echo/v4"
+
 	"github.com/mimiro-io/datahub/internal/server"
 )
 
@@ -170,7 +171,6 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 
 	var (
 		l    int
-		from []byte
 	)
 	limit := c.QueryParam("limit")
 	if limit != "" {
@@ -183,7 +183,7 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 
 	f := c.QueryParam("from")
 	if f != "" {
-		from, err = base64.StdEncoding.DecodeString(f)
+		_, err = base64.StdEncoding.DecodeString(f)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, server.SinceParseErr(err).Error())
 		}
@@ -210,7 +210,7 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 		return err
 	}
 
-	continuationToken, err := dataset.MapEntitiesRaw(string(from), l, func(jsonData []byte) error {
+	continuationToken, err := dataset.MapEntitiesRaw(f, l, func(jsonData []byte) error {
 		_, err := c.Response().Write([]byte(","))
 		if err != nil {
 			return err

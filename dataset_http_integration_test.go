@@ -18,16 +18,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/franela/goblin"
-	"github.com/mimiro-io/datahub/internal/server"
-	"go.uber.org/fx"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/franela/goblin"
+	"go.uber.org/fx"
+
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 func TestFullSync(t *testing.T) {
@@ -386,6 +389,58 @@ func TestFullSync(t *testing.T) {
 			g.Assert(res).IsNotZero()
 			g.Assert(res.StatusCode).Eql(410)
 		})
+
+		g.It("Should pageinate over entities with continuation token", func() {
+			payload := strings.NewReader(bananasFromTo(1, 100, false))
+			res, err := http.Post(dsUrl+"/entities", "application/json", payload)
+			g.Assert(err).IsNil()
+			g.Assert(res).IsNotZero()
+			g.Assert(res.StatusCode).Eql(200)
+
+			// read first page of 10 entities back
+			res, err = http.Get(dsUrl + "/entities?limit=10")
+			g.Assert(err).IsNil()
+			g.Assert(res).IsNotZero()
+			g.Assert(res.StatusCode).Eql(200)
+			bodyBytes, _ := ioutil.ReadAll(res.Body)
+			_ = res.Body.Close()
+			var entities []*server.Entity
+			err = json.Unmarshal(bodyBytes, &entities)
+			var m []map[string]interface{}
+			json.Unmarshal(bodyBytes, &m)
+			g.Assert(err).IsNil()
+			g.Assert(len(entities)).Eql(12, "expected 10 entities plus @context and @continuation")
+			g.Assert(entities[1].ID).Eql("ns3:1")
+			token := m[11]["token"].(string)
+
+			// read next page
+			res, err = http.Get(dsUrl + "/entities?limit=90&from=" + url.QueryEscape(token))
+			g.Assert(err).IsNil()
+			g.Assert(res).IsNotZero()
+			g.Assert(res.StatusCode).Eql(200)
+			bodyBytes, _ = ioutil.ReadAll(res.Body)
+			_ = res.Body.Close()
+			err = json.Unmarshal(bodyBytes, &entities)
+			json.Unmarshal(bodyBytes, &m)
+			g.Assert(err).IsNil()
+			g.Assert(len(entities)).Eql(92, "expected 90 entities plus @context and @continuation")
+			g.Assert(entities[1].ID).Eql("ns3:11")
+			token = m[91]["token"].(string)
+
+			// read next page after all consumed
+			res, err = http.Get(dsUrl + "/entities?limit=10&from=" + url.QueryEscape(token))
+			g.Assert(err).IsNil()
+			g.Assert(res).IsNotZero()
+			g.Assert(res.StatusCode).Eql(200)
+			bodyBytes, _ = ioutil.ReadAll(res.Body)
+			_ = res.Body.Close()
+			err = json.Unmarshal(bodyBytes, &entities)
+			json.Unmarshal(bodyBytes, &m)
+			g.Assert(err).IsNil()
+			g.Assert(len(entities)).Eql(2, "expected 0 entities plus @context and @continuation")
+			g.Assert(entities[1].ID).Eql("@continuation")
+		})
+
 	})
 }
 
