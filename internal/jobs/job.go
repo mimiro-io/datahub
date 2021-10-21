@@ -25,6 +25,7 @@ import (
 
 type job struct {
 	id       string
+	title    string
 	pipeline Pipeline
 	schedule string
 	topic    string
@@ -34,6 +35,7 @@ type job struct {
 
 type jobResult struct {
 	Id        string    `json:"id"`
+	Title     string    `json:"title"`
 	Start     time.Time `json:"start"`
 	End       time.Time `json:"end"`
 	LastError string    `json:"lastError"`
@@ -59,8 +61,9 @@ func (job *job) Run() {
 					duration = d
 				}
 			}
-			job.runner.logger.Infow(fmt.Sprintf("Job %v is running, queuing current run request for retry in %v", job.id, duration),
+			job.runner.logger.Infow(fmt.Sprintf("Job %v (%s) is running, queuing current run request for retry in %v", job.id, job.title, duration),
 				"job.jobId", job.id,
+				"job.jobTitle", job.title,
 				"job.state", "Running")
 			jobrunner.In(duration, job) // reschedule the full sync again in 5 seconds
 			return
@@ -80,8 +83,9 @@ func (job *job) Run() {
 		jobType = "fullsync"
 	}
 
-	job.runner.logger.Infow(fmt.Sprintf("Starting %v %s with id '%s'", jobType, msg, job.id),
+	job.runner.logger.Infow(fmt.Sprintf("Starting %v %s with id '%s' (%s)", jobType, msg, job.id, job.title),
 		"job.jobId", job.id,
+		"job.jobTitle", job.title,
 		"job.state", "Starting",
 		"job.jobType", jobType)
 
@@ -94,8 +98,9 @@ func (job *job) Run() {
 
 	sourceType := job.pipeline.spec().source.GetConfig()["Type"]
 	sinkType := job.pipeline.spec().sink.GetConfig()["Type"]
-	job.runner.logger.Infow(fmt.Sprintf(" > Running task '%s': %s -> %s", job.id, sourceType, sinkType),
+	job.runner.logger.Infow(fmt.Sprintf(" > Running task '%s' (%s): %s -> %s", job.id, job.title, sourceType, sinkType),
 		"job.jobId", job.id,
+		"job.jobTitle", job.title,
 		"job.state", "Running",
 		"job.jobType", jobType)
 	err := job.pipeline.sync(job, ticket.runState.ctx)
@@ -103,14 +108,16 @@ func (job *job) Run() {
 	if err != nil {
 		if err.Error() == "got job interrupt" { // if a job gets killed, this will trigger
 			_ = job.runner.statsdClient.Count("jobs.cancelled", timed.Nanoseconds(), tags, 1)
-			job.runner.logger.Infow(fmt.Sprintf("Job '%s' was terminated", job.id),
+			job.runner.logger.Infow(fmt.Sprintf("Job '%s' (%s) was terminated", job.id, job.title),
 				"job.jobId", job.id,
+				"job.jobTitle", job.title,
 				"job.state", "Terminated",
 				"job.jobType", jobType)
 		} else {
 			_ = job.runner.statsdClient.Count("jobs.error", timed.Nanoseconds(), tags, 1)
-			job.runner.logger.Warnw(fmt.Sprintf("Failed running task for job '%s': %s", job.id, err.Error()),
+			job.runner.logger.Warnw(fmt.Sprintf("Failed running task for job '%s' (%s): %s", job.id, job.title, err.Error()),
 				"job.jobId", job.id,
+				"job.jobTitle", job.title,
 				"job.state", "Failed",
 				"job.jobType", jobType,
 				"job.executionErrorMessage", err.Error())
@@ -119,14 +126,16 @@ func (job *job) Run() {
 		_ = job.runner.statsdClient.Count("jobs.success", timed.Nanoseconds(), tags, 1)
 	}
 
-	job.runner.logger.Infow(fmt.Sprintf("Finished %s with id '%s' - duration was %s", msg, job.id, timed),
+	job.runner.logger.Infow(fmt.Sprintf("Finished %s with id '%s' (%s) - duration was %s", msg, job.id, job.title, timed),
 		"job.jobId", job.id,
+		"job.jobTitle", job.title,
 		"job.state", "Finished",
 		"job.jobType", jobType)
 
 	// we store the last run info
 	lastRun := &jobResult{
 		Id:        job.id,
+		Title:     job.title,
 		Start:     ticket.runState.started,
 		End:       time.Now(),
 		LastError: "",

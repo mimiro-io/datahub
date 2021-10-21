@@ -97,7 +97,7 @@ func (runner *Runner) addJob(job *job) error {
 }
 
 func (runner *Runner) startJob(j *job) {
-	runner.logger.Infof("Starting job with id '%s' to run once", j.id)
+	runner.logger.Infof("Starting job with id '%s'(%s) to run once", j.id, j.title)
 	jobrunner.Now(j)
 }
 
@@ -107,10 +107,10 @@ func (runner *Runner) startJob(j *job) {
 // of scheduledJobs will be updated with the cron.EntryID. Jobs added here should be validated properly.
 // TODO: add protection against adding an already processing job
 func (runner *Runner) addScheduledJob(job *job) error {
-	runner.logger.Infof("Adding job with id '%s' to schedule '%s'", job.id, job.schedule)
+	runner.logger.Infof("Adding job with id '%s'(%s) to schedule '%s'", job.id, job.title, job.schedule)
 	entryId, err := runner.schedule(job.schedule, job)
 	if err != nil {
-		runner.logger.Errorf("Error scheduling job %v: %w", job.id, err)
+		runner.logger.Errorf("Error scheduling job %v (%s): %w", job.id, job.title, err)
 		return err
 	}
 	runner.scheduledJobs[job.id] = append(runner.scheduledJobs[job.id], entryId)
