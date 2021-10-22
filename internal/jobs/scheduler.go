@@ -252,10 +252,7 @@ func (s *Scheduler) GetScheduleEntries() ScheduleEntries {
 	se := []ScheduleEntry{}
 	for _, e := range jobrunner.Entries() {
 		jobId := lookup[int(e.ID)]
-		jobTitle, err := s.resolveJobTitle(jobId)
-		if err != nil {
-			s.Logger.Warnf("Failed to resolve title for job id '%s'", jobId)
-		}
+		jobTitle := s.resolveJobTitle(jobId)
 		se = append(se, ScheduleEntry{
 			Id:       int(e.ID),
 			JobId:    jobId,
@@ -333,10 +330,7 @@ func (s *Scheduler) GetJobHistory() []*jobResult {
 // PauseJob pauses a job. It will not stop a running job, but it will prevent the
 // job from running on the next schedule.
 func (s *Scheduler) PauseJob(jobid string) error {
-	jobTitle, err := s.resolveJobTitle(jobid)
-	if err != nil {
-		s.Logger.Warnf("Failed to resolve title for job id '%s'", jobid)
-	}
+	jobTitle := s.resolveJobTitle(jobid)
 	s.Logger.Infof("Pausing job with id %s (%s)", jobid, jobTitle)
 	return s.changeStatus(jobid, true)
 }
@@ -344,10 +338,7 @@ func (s *Scheduler) PauseJob(jobid string) error {
 // UnpauseJob resumes a paused job. It will not run a job, however it will add it to
 // the scheduler so that it can be ran on next schedule.
 func (s *Scheduler) UnpauseJob(jobid string) error {
-	jobTitle, err := s.resolveJobTitle(jobid)
-	if err != nil {
-		s.Logger.Warnf("Failed to resolve title for job id '%s'", jobid)
-	}
+	jobTitle := s.resolveJobTitle(jobid)
 	s.Logger.Infof("Un-pausing job with id %s (%s)", jobid, jobTitle)
 	return s.changeStatus(jobid, false)
 }
@@ -355,24 +346,18 @@ func (s *Scheduler) UnpauseJob(jobid string) error {
 // KillJob will stop a job stat is currently running. If the job is not running, it will do
 // nothing. If the job that is running is RunOnce, then it will be deleted afterwards.
 func (s *Scheduler) KillJob(jobid string) {
-	jobTitle, err := s.resolveJobTitle(jobid)
-	if err != nil {
-		s.Logger.Warnf("Failed to resolve title for job id '%s'", jobid)
-	}
+	jobTitle := s.resolveJobTitle(jobid)
 	s.Logger.Infof("Attempting to stop job with id %s (%s)", jobid, jobTitle)
 	s.Runner.killJob(jobid)
 }
 
 // ResetJob will reset the job since token. This allows the job to be rerun from the beginning
 func (s *Scheduler) ResetJob(jobid string, since string) error {
-	jobTitle, err := s.resolveJobTitle(jobid)
-	if err != nil {
-		s.Logger.Warnf("Failed to resolve title for job id '%s'", jobid)
-	}
+	jobTitle := s.resolveJobTitle(jobid)
 	s.Logger.Infof("Resetting since token for job with id '%s' (%s)", jobid, jobTitle)
 
 	syncJobState := &SyncJobState{}
-	err = s.Store.GetObject(server.JOB_DATA_INDEX, jobid, syncJobState)
+	err := s.Store.GetObject(server.JOB_DATA_INDEX, jobid, syncJobState)
 	if err != nil {
 		return err
 	}
@@ -393,13 +378,9 @@ func (s *Scheduler) ResetJob(jobid string, since string) error {
 // RunJob runs an existing job, if not already running. It does so by adding a temp job to the scheduler, without saving it.
 // The temp job is added with the RunOnce flag set to true
 func (s *Scheduler) RunJob(jobid string, jobType string) (string, error) {
-	jobTitle, err := s.resolveJobTitle(jobid)
-	if err != nil {
-		s.Logger.Warnf("Failed to resolve title for job id '%s'", jobid)
-	}
-	s.Logger.Infof("Running job with id '%s' (%s)", jobid, jobTitle)
-
 	jobConfig, err := s.LoadJob(jobid)
+	s.Logger.Infof("Running job with id '%s' (%s)", jobid, jobConfig.Title)
+
 	if jobConfig == nil || jobConfig.Id == "" { // not found
 		return "", errors.New("could not load job with id " + jobid)
 	}
@@ -604,10 +585,11 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 
 }
 
-func (s *Scheduler) resolveJobTitle(jobId string) (string, error) {
+func (s *Scheduler) resolveJobTitle(jobId string) string {
 	jobConfig, err := s.LoadJob(jobId)
 	if err != nil {
-		return "", err
+		s.Logger.Warnf("Failed to resolve title for job id '%s'", jobId)
+		return ""
 	}
-	return jobConfig.Title, nil
+	return jobConfig.Title
 }
