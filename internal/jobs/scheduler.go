@@ -285,13 +285,9 @@ func (s *Scheduler) GetRunningJobs() []JobStatus {
 	jobs := make([]JobStatus, 0)
 
 	for k, v := range runningJobs {
-		jobTitle, err := s.resolveJobTitle(k)
-		if err != nil {
-			s.Logger.Warnf("Failed to resolve title for job id '%s'", k)
-		}
 		jobs = append(jobs, JobStatus{
 			JobId:    k,
-			JobTitle: jobTitle,
+			JobTitle: v.title,
 			Started:  v.started,
 		})
 	}
@@ -306,13 +302,9 @@ func (s *Scheduler) GetRunningJob(jobid string) *JobStatus {
 	if runningJob == nil {
 		return nil
 	}
-	jobTitle, err := s.resolveJobTitle(jobid)
-	if err != nil {
-		s.Logger.Warnf("Failed to resolve title for job id '%s'", jobid)
-	}
 	return &JobStatus{
 		JobId:    jobid,
-		JobTitle: jobTitle,
+		JobTitle: runningJob.title,
 		Started:  runningJob.started,
 	}
 

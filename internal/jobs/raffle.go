@@ -37,6 +37,7 @@ type runState struct {
 	isFull  bool
 	isEvent bool
 	id      string
+	title   string
 	ctx     context.Context
 	cancel  context.CancelFunc
 }
@@ -78,6 +79,7 @@ func (r *raffle) borrowTicket(job *job) *ticket {
 				isEvent: job.isEvent,
 				isFull:  true,
 				id:      job.id,
+				title:   job.title,
 				ctx:     ctx,
 				cancel:  cancel,
 			}
@@ -94,6 +96,7 @@ func (r *raffle) borrowTicket(job *job) *ticket {
 				isEvent: job.isEvent,
 				isFull:  false,
 				id:      job.id,
+				title:   job.title,
 				ctx:     ctx,
 				cancel:  cancel,
 			}
