@@ -1,5 +1,13 @@
 # Change Log
 
+## 15/10/2021
+
+* new feature: extended job attributes (#83 )
+* new configuration option: value log size (#82 )
+* bugfix: continuation tokens of /entities endpoint (#86 )
+
+https://github.com/mimiro-io/datahub/releases/tag/v-0.6.155-stable
+
 ## 21/09/2021
 
 * On-start garbage collection (#16)
