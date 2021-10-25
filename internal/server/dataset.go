@@ -425,12 +425,16 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 						return newitems, err
 					}
 
+					var deleted uint16
+					if e.IsDeleted {
+						deleted = 1
+					}
 					binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
 					binary.BigEndian.PutUint64(outgoingBuffer[2:], rid)
 					binary.BigEndian.PutUint64(outgoingBuffer[10:], uint64(txnTime))
 					binary.BigEndian.PutUint64(outgoingBuffer[18:], predid)
 					binary.BigEndian.PutUint64(outgoingBuffer[26:], relatedid)
-					binary.BigEndian.PutUint16(outgoingBuffer[34:], 0) // deleted.
+					binary.BigEndian.PutUint16(outgoingBuffer[34:], deleted) // deleted.
 					binary.BigEndian.PutUint32(outgoingBuffer[36:], ds.InternalID)
 					err = txn.Set(outgoingBuffer, []byte(""))
 					if err != nil {
@@ -442,7 +446,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 					binary.BigEndian.PutUint64(incomingBuffer[10:], rid)
 					binary.BigEndian.PutUint64(incomingBuffer[18:], uint64(txnTime))
 					binary.BigEndian.PutUint64(incomingBuffer[26:], predid)
-					binary.BigEndian.PutUint16(incomingBuffer[34:], 0) // deleted.
+					binary.BigEndian.PutUint16(incomingBuffer[34:], deleted) // deleted.
 					binary.BigEndian.PutUint32(incomingBuffer[36:], ds.InternalID)
 					err = txn.Set(incomingBuffer, []byte(""))
 					if err != nil {

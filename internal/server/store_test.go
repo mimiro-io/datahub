@@ -29,8 +29,9 @@ import (
 	"github.com/franela/goblin"
 
 	"github.com/DataDog/datadog-go/statsd"
-	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx/fxtest"
+
+	"github.com/mimiro-io/datahub/internal/conf"
 
 	"go.uber.org/zap"
 )
@@ -283,6 +284,38 @@ func TestStoreRelations(test *testing.T) {
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1, "Expected still to find person-2 as reverse friend")
 			g.Assert(result[0][2].(*Entity).ID).Eql(peopleNamespacePrefix + ":person-2")
+		})
+
+		g.It("Should store references of new deleted entities as deleted", func() {
+			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
+			friendsDS, _ := dsm.CreateDataset("friends")
+
+			p1 := NewEntityFromMap(map[string]interface{}{
+				"id":    peopleNamespacePrefix + ":person-1",
+				"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Lisa"},
+				"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-3"}})
+			p1.IsDeleted = true
+			_ = friendsDS.StoreEntities([]*Entity{
+				p1,
+				NewEntityFromMap(map[string]interface{}{
+					"id":    peopleNamespacePrefix + ":person-2",
+					"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Homer"},
+					"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-1"}}),
+			})
+			// check that we can not query outgoing from deleted entity
+			result, err := store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			g.Assert(err).IsNil()
+			g.Assert(len(result)).Eql(0)
+
+			// check that we can query incoming. this relation is owned by Homer
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", true, nil)
+			g.Assert(err).IsNil()
+			g.Assert(len(result)).Eql(1)
+			g.Assert(result[0][1]).Eql(peopleNamespacePrefix + ":Friend")
+			g.Assert(result[0][2].(*Entity).ID).Eql(peopleNamespacePrefix + ":person-2")
+
 		})
 
 		g.It("Should build query results", func() {
