@@ -68,6 +68,7 @@ func TestScheduler(t *testing.T) {
 		g.It("Should return a job's history", func() {
 			sj, err := scheduler.Parse([]byte((`{
 			"id" : "sync-samplesource-to-datasetsink",
+			"title" : "sync-samplesource-to-datasetsink",
 			"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
 			"paused": true,
 			"source" : {
@@ -128,6 +129,7 @@ func TestScheduler(t *testing.T) {
 			//install a job that runs 50*100 ms (6 sec, exceeding goblins 5s timeout)
 			sj, err := scheduler.Parse([]byte((`{
 			"id" : "sync-slowsource-to-null",
+			"title" : "sync-slowsource-to-null",
 			"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2h"}],
 			"paused": false,
 			"source" : {
@@ -176,6 +178,7 @@ func TestScheduler(t *testing.T) {
 		g.It("Should pause a job when asked to", func() {
 			sj, err := scheduler.Parse([]byte((` {
 			"id" : "sync-customer-from-adventure-works-to-datahub",
+			"title" : "sync-customer-from-adventure-works-to-datahub",
 			"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
 			"source" : {
 				"Type" : "HttpDatasetSource",
@@ -202,6 +205,7 @@ func TestScheduler(t *testing.T) {
 		g.It("Should unpause a job when asked to", func() {
 			sj, err := scheduler.Parse([]byte((` {
 			"id" : "sync-customer-from-adventure-works-to-datahub",
+			"title" : "sync-customer-from-adventure-works-to-datahub",
 			"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
 			"paused": true,
 			"source" : {
@@ -228,6 +232,7 @@ func TestScheduler(t *testing.T) {
 		g.It("Should immediately run a job when asked to", func() {
 			sj, err := scheduler.Parse([]byte((` {
 			"id" : "sync-samplesource-to-datasetsink",
+			"title" : "sync-samplesource-to-datasetsink",
 			"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
 			"paused": true,
 			"source" : {
@@ -272,6 +277,7 @@ func TestScheduler(t *testing.T) {
 		g.It("Should delete a job when asked to", func() {
 			sj, err := scheduler.Parse([]byte((` {
 			"id" : "sync-samplesource-to-datasetsink",
+			"title" : "sync-samplesource-to-datasetsink",
 			"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
 			"source" : {
 				"Type" : "SampleSource",
@@ -307,6 +313,7 @@ func TestScheduler(t *testing.T) {
 		g.It("Should accept jobs with both incremental and fullsync schedule", func() {
 			sj, err := scheduler.Parse([]byte((` {
 			"id" : "sync-customer-from-adventure-works-to-datahub",
+			"title" : "sync-customer-from-adventure-works-to-datahub",
 			"triggers": [
                 {"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"},
                 {"triggerType": "cron", "jobType": "fullsync", "schedule": "@every 2h"}
@@ -328,6 +335,7 @@ func TestScheduler(t *testing.T) {
 		g.It("Should persist and reload job configuration after a restart", func() {
 			sj, err := scheduler.Parse([]byte((` {
 			"id" : "sync-samplesource-to-datasetsink",
+			"title" : "sync-samplesource-to-datasetsink",
 			"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
 			"source" : {
 				"Type" : "SampleSource",
@@ -373,6 +381,7 @@ func TestScheduler(t *testing.T) {
 			g.It("Should ignore RunJob (return an error message), if job is running", func() {
 				config := &JobConfiguration{
 					Id:     "j1",
+					Title:  "j1",
 					Sink:   map[string]interface{}{"Type": "DevNullSink"},
 					Source: map[string]interface{}{"Type": "SlowSource", "Sleep": "300ms"},
 					Triggers: []JobTrigger{
@@ -404,7 +413,7 @@ func TestScheduler(t *testing.T) {
 				runJobId, err := scheduler.RunJob(j.id, JobTypeIncremental)
 				g.Assert(runJobId).IsZero()
 				g.Assert(err).IsNotNil()
-				g.Assert(err.Error()).Eql("job with id 'j1' already running")
+				g.Assert(err.Error()).Eql("job with id 'j1' (j1) already running")
 
 				//Also try to shortcut "running" check in scheduler.RunJob. tickets still should prevent concurrent run
 				g.Assert(len(scheduler.GetRunningJobs())).Eql(1, "there is one (scheduled) job running")
@@ -418,6 +427,7 @@ func TestScheduler(t *testing.T) {
 			g.It("Should skip a scheduled run, while a RunJob is active", func() {
 				config := &JobConfiguration{
 					Id:     "j1",
+					Title:  "j1",
 					Sink:   map[string]interface{}{"Type": "DevNullSink"},
 					Source: map[string]interface{}{"Type": "SlowSource", "Sleep": "100ms"},
 					Triggers: []JobTrigger{
@@ -470,6 +480,7 @@ func TestScheduler(t *testing.T) {
 			g.It("Should update the syncState and history of an incremental job after RunJob", func() {
 				config := &JobConfiguration{
 					Id:     "j1",
+					Title:  "j1",
 					Sink:   map[string]interface{}{"Type": "DevNullSink"},
 					Source: map[string]interface{}{"Type": "SampleSource"},
 					Triggers: []JobTrigger{
@@ -505,6 +516,7 @@ func TestScheduler(t *testing.T) {
 			g.It("Should let a fullsync  RunJob fail, while a scheduled run is active (user can try again soon)", func() {
 				config := &JobConfiguration{
 					Id:     "j1",
+					Title:  "j1",
 					Sink:   map[string]interface{}{"Type": "DevNullSink"},
 					Source: map[string]interface{}{"Type": "SlowSource", "Sleep": "300ms"},
 					Triggers: []JobTrigger{
@@ -538,7 +550,7 @@ func TestScheduler(t *testing.T) {
 				runJobId, err := scheduler.RunJob(j.id, JobTypeFull)
 				g.Assert(runJobId).IsZero()
 				g.Assert(err).IsNotNil()
-				g.Assert(err.Error()).Eql("job with id 'j1' already running")
+				g.Assert(err.Error()).Eql("job with id 'j1' (j1) already running")
 
 				//Also try to shortcut "running" check in scheduler.RunJob. tickets still should prevent concurrent run
 				g.Assert(len(scheduler.GetRunningJobs())).Eql(1, "there is one (scheduled) job running")
@@ -551,6 +563,7 @@ func TestScheduler(t *testing.T) {
 				_ = os.Setenv("JOB_FULLSYNC_RETRY_INTERVAL", "100ms")
 				config := &JobConfiguration{
 					Id:     "j1",
+					Title:  "j1",
 					Sink:   map[string]interface{}{"Type": "DevNullSink"},
 					Source: map[string]interface{}{"Type": "SlowSource", "Sleep": "200ms"},
 					Triggers: []JobTrigger{

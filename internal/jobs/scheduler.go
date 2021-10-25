@@ -63,16 +63,16 @@ type JobTrigger struct {
 // JobConfiguration is the external interfacing object to configure a job. It is also the one that gets persisted
 // in the store.
 type JobConfiguration struct {
-	Id                string                 `json:"id"`
-	Title             string                 `json:"title"`
-	Description       string                 `json:"description"`
-	Tags              []string               `json:"tags"`
-	Source            map[string]interface{} `json:"source"`
-	Sink              map[string]interface{} `json:"sink"`
-	Transform         map[string]interface{} `json:"transform"`
-	Triggers          []JobTrigger           `json:"triggers"`
-	Paused            bool                   `json:"paused"`
-	BatchSize         int                    `json:"batchSize"`
+	Id          string                 `json:"id"`
+	Title       string                 `json:"title"`
+	Description string                 `json:"description"`
+	Tags        []string               `json:"tags"`
+	Source      map[string]interface{} `json:"source"`
+	Sink        map[string]interface{} `json:"sink"`
+	Transform   map[string]interface{} `json:"transform"`
+	Triggers    []JobTrigger           `json:"triggers"`
+	Paused      bool                   `json:"paused"`
+	BatchSize   int                    `json:"batchSize"`
 }
 
 type ScheduleEntries struct {
@@ -80,10 +80,11 @@ type ScheduleEntries struct {
 }
 
 type ScheduleEntry struct {
-	Id    int       `json:"id"`
-	JobId string    `json:"jobId"`
-	Next  time.Time `json:"next"`
-	Prev  time.Time `json:"prev"`
+	Id       int       `json:"id"`
+	JobId    string    `json:"jobId"`
+	JobTitle string    `json:"jobTitle"`
+	Next     time.Time `json:"next"`
+	Prev     time.Time `json:"prev"`
 }
 
 // NewScheduler returns a new Scheduler. When started, it will load all existing JobConfiguration's from the store,
@@ -103,7 +104,7 @@ func NewScheduler(lc fx.Lifecycle, env *conf.Env, store *server.Store, dsm *serv
 			for _, j := range scheduler.loadConfigurations() {
 				err := scheduler.AddJob(j)
 				if err != nil {
-					scheduler.Logger.Warnf("Error loading job with id %s, err: %v", j.Id, err)
+					scheduler.Logger.Warnf("Error loading job with id %s (%s), err: %v", j.Id, j.Title, err)
 				}
 			}
 
@@ -174,6 +175,7 @@ func (s *Scheduler) toTriggeredJobs(jobConfig *JobConfiguration) ([]*job, error)
 		case TriggerTypeOnChange:
 			result = append(result, &job{
 				id:       jobConfig.Id,
+				title:    jobConfig.Title,
 				pipeline: pipeline,
 				topic:    t.MonitoredDataset,
 				isEvent:  true,
@@ -182,6 +184,7 @@ func (s *Scheduler) toTriggeredJobs(jobConfig *JobConfiguration) ([]*job, error)
 		case TriggerTypeCron:
 			result = append(result, &job{
 				id:       jobConfig.Id,
+				title:    jobConfig.Title,
 				pipeline: pipeline,
 				schedule: t.Schedule,
 				runner:   s.Runner,
@@ -248,11 +251,14 @@ func (s *Scheduler) GetScheduleEntries() ScheduleEntries {
 
 	se := []ScheduleEntry{}
 	for _, e := range jobrunner.Entries() {
+		jobId := lookup[int(e.ID)]
+		jobTitle := s.resolveJobTitle(jobId)
 		se = append(se, ScheduleEntry{
-			Id:    int(e.ID),
-			JobId: lookup[int(e.ID)],
-			Next:  e.Next,
-			Prev:  e.Prev,
+			Id:       int(e.ID),
+			JobId:    jobId,
+			JobTitle: jobTitle,
+			Next:     e.Next,
+			Prev:     e.Prev,
 		})
 	}
 
@@ -264,8 +270,9 @@ func (s *Scheduler) GetScheduleEntries() ScheduleEntries {
 }
 
 type JobStatus struct {
-	JobId   string    `json:"jobId"`
-	Started time.Time `json:"started"`
+	JobId    string    `json:"jobId"`
+	JobTitle string    `json:"jobTitle"`
+	Started  time.Time `json:"started"`
 }
 
 // GetRunningJobs gets the status for all running jobs. It can be used to see
@@ -276,8 +283,9 @@ func (s *Scheduler) GetRunningJobs() []JobStatus {
 
 	for k, v := range runningJobs {
 		jobs = append(jobs, JobStatus{
-			JobId:   k,
-			Started: v.started,
+			JobId:    k,
+			JobTitle: v.title,
+			Started:  v.started,
 		})
 	}
 	return jobs
@@ -292,8 +300,9 @@ func (s *Scheduler) GetRunningJob(jobid string) *JobStatus {
 		return nil
 	}
 	return &JobStatus{
-		JobId:   jobid,
-		Started: runningJob.started,
+		JobId:    jobid,
+		JobTitle: runningJob.title,
+		Started:  runningJob.started,
 	}
 
 }
@@ -321,27 +330,31 @@ func (s *Scheduler) GetJobHistory() []*jobResult {
 // PauseJob pauses a job. It will not stop a running job, but it will prevent the
 // job from running on the next schedule.
 func (s *Scheduler) PauseJob(jobid string) error {
-	s.Logger.Infof("Pausing job with id %s", jobid)
+	jobTitle := s.resolveJobTitle(jobid)
+	s.Logger.Infof("Pausing job with id %s (%s)", jobid, jobTitle)
 	return s.changeStatus(jobid, true)
 }
 
 // UnpauseJob resumes a paused job. It will not run a job, however it will add it to
 // the scheduler so that it can be ran on next schedule.
 func (s *Scheduler) UnpauseJob(jobid string) error {
-	s.Logger.Infof("Un-pausing job with id %s", jobid)
+	jobTitle := s.resolveJobTitle(jobid)
+	s.Logger.Infof("Un-pausing job with id %s (%s)", jobid, jobTitle)
 	return s.changeStatus(jobid, false)
 }
 
 // KillJob will stop a job stat is currently running. If the job is not running, it will do
 // nothing. If the job that is running is RunOnce, then it will be deleted afterwards.
 func (s *Scheduler) KillJob(jobid string) {
-	s.Logger.Infof("Attempting to stop job with id %s", jobid)
+	jobTitle := s.resolveJobTitle(jobid)
+	s.Logger.Infof("Attempting to stop job with id %s (%s)", jobid, jobTitle)
 	s.Runner.killJob(jobid)
 }
 
 // ResetJob will reset the job since token. This allows the job to be rerun from the beginning
 func (s *Scheduler) ResetJob(jobid string, since string) error {
-	s.Logger.Infof("Resetting since token for job with id '%s'", jobid)
+	jobTitle := s.resolveJobTitle(jobid)
+	s.Logger.Infof("Resetting since token for job with id '%s' (%s)", jobid, jobTitle)
 
 	syncJobState := &SyncJobState{}
 	err := s.Store.GetObject(server.JOB_DATA_INDEX, jobid, syncJobState)
@@ -365,9 +378,9 @@ func (s *Scheduler) ResetJob(jobid string, since string) error {
 // RunJob runs an existing job, if not already running. It does so by adding a temp job to the scheduler, without saving it.
 // The temp job is added with the RunOnce flag set to true
 func (s *Scheduler) RunJob(jobid string, jobType string) (string, error) {
-	s.Logger.Infof("Running job with id '%s'", jobid)
-
 	jobConfig, err := s.LoadJob(jobid)
+	s.Logger.Infof("Running job with id '%s' (%s)", jobid, jobConfig.Title)
+
 	if jobConfig == nil || jobConfig.Id == "" { // not found
 		return "", errors.New("could not load job with id " + jobid)
 	}
@@ -382,6 +395,7 @@ func (s *Scheduler) RunJob(jobid string, jobType string) (string, error) {
 
 	job := &job{
 		id:       jobConfig.Id,
+		title:    jobConfig.Title,
 		pipeline: pipeline,
 		runner:   s.Runner,
 	}
@@ -389,7 +403,7 @@ func (s *Scheduler) RunJob(jobid string, jobType string) (string, error) {
 	// is the job running?
 	running := s.Runner.raffle.runningJob(jobConfig.Id)
 	if running != nil {
-		return "", errors.New(fmt.Sprintf("job with id '%s' already running", jobid))
+		return "", errors.New(fmt.Sprintf("job with id '%s' (%s) already running", jobid, jobConfig.Title))
 	}
 
 	// start the job run
@@ -569,4 +583,13 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 	}
 	return nil, errors.New("missing source config")
 
+}
+
+func (s *Scheduler) resolveJobTitle(jobId string) string {
+	jobConfig, err := s.LoadJob(jobId)
+	if err != nil {
+		s.Logger.Warnf("Failed to resolve title for job id '%s'", jobId)
+		return ""
+	}
+	return jobConfig.Title
 }
