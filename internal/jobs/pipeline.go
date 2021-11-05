@@ -65,7 +65,7 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 	//exception is when the sink is http(we want to process entities instead of changes)
 	//or source is multisource (we need to grab watermarks at beginning of fullsync)
 	if pipeline.sink.GetConfig()["Type"] == "HttpDatasetSink" ||
-	 pipeline.source.GetConfig()["Type"] == "MultiSource" {
+		pipeline.source.GetConfig()["Type"] == "MultiSource" {
 		if pipeline.source.GetConfig()["Type"] == "MultiSource" {
 			//return errors.New("MultiSource can only produce changes and must therefore not be used with HttpDatasetSink")
 		}
@@ -154,7 +154,7 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 
 	//Do not store syncState when the target is an http sink.
 	//Since we use entities for httpsinks, the continuation tokens are base64 strings and not compatible with incremental tokens
-    //
+	//
 	//Exception is when used with MultiSource... MultiSource only operates on changes. also in fullsync mode.
 	//   Difference there between fullsync and incremental is whether dependencies are processed
 	if pipeline.sink.GetConfig()["Type"] != "HttpDatasetSink" || pipeline.source.GetConfig()["Type"] == "MultiSource" {
@@ -258,7 +258,7 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 						for i := 0; i < parallelisms; i++ {
 							res := workResults[i]
 							if res.err != nil {
-								return err
+								return res.err
 							}
 							entities = append(entities, res.entities...)
 						}
