@@ -1101,7 +1101,7 @@ func TestPipeline(t *testing.T) {
 			pipeline := &IncrementalPipeline{PipelineSpec{
 				batchSize: 5,
 				source: &source.MultiSource{DatasetName: "src", Store: store, DatasetManager: dsm, Dependencies: []source.Dependency{
-					{Dataset: "dep", Joins: []source.Join{{Dataset: "src", Predicate: ns+":predicate", Inverse: false}}},
+					{Dataset: "dep", Joins: []source.Join{{Dataset: "src", Predicate: ns + ":predicate", Inverse: false}}},
 				}},
 				sink: &httpDatasetSink{Endpoint: "http://localhost:7777/datasets/fulltest/fullsync", Store: store},
 			}}
@@ -1119,12 +1119,12 @@ func TestPipeline(t *testing.T) {
 				"after job there should be a token")
 
 			//reset recorder
-			for k,_:=range mockService.RecordedEntities {
-				delete(mockService.RecordedEntities,k)
+			for k, _ := range mockService.RecordedEntities {
+				delete(mockService.RecordedEntities, k)
 			}
 			//add dependency link
 			e := server.NewEntity(ns+":5", 0)
-			e.References[ns+":predicate"]=ns+":1"
+			e.References[ns+":predicate"] = ns + ":1"
 			_ = depDs.StoreEntities([]*server.Entity{e})
 
 			job.Run()
@@ -1141,8 +1141,8 @@ func TestPipeline(t *testing.T) {
 				"dependency watermarks should be forwarded by 1")
 
 			//reset recorder
-			for k,_:=range mockService.RecordedEntities {
-				delete(mockService.RecordedEntities,k)
+			for k, _ := range mockService.RecordedEntities {
+				delete(mockService.RecordedEntities, k)
 			}
 
 			// run one more time without changes to source data, make sure nothing is done
@@ -1157,6 +1157,71 @@ func TestPipeline(t *testing.T) {
 			token = syncJobState.ContinuationToken
 			g.Assert(token).Eql("{\"MainToken\":\"2\",\"DependencyTokens\":{\"dep\":{\"Token\":\"4\"}}}",
 				"dependency watermarks should be unchanged")
+		})
+
+		g.It("Should fail run and return error when error in transform js", func() {
+			// populate dataset with some entities
+			ds, _ := dsm.CreateDataset("Products")
+
+			entities := make([]*server.Entity, 1)
+			entity := server.NewEntity("http://data.mimiro.io/people/homer", 0)
+			entity.Properties["name"] = "homer"
+			entities[0] = entity
+
+			err := ds.StoreEntities(entities)
+			g.Assert(err).IsNil("entities are stored")
+
+			// transform js
+			js := `
+			function transform_entities(entities) {
+				for (e of entities) {
+					var something = null;
+					var fail = something[0][2];
+				}
+				return entities;
+			}
+			`
+			jscriptEnc := base64.StdEncoding.EncodeToString([]byte(js))
+
+			// define job
+			jobJson := `
+		{
+			"id" : "sync-datasetsource-to-datasetsink-with-js",
+			"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
+			"source" : {
+				"Type" : "DatasetSource",
+				"Name" : "Products"
+			},
+			"transform" : {
+				"Type" : "JavascriptTransform",
+				"Code" : "` + jscriptEnc + `"
+			},
+			"sink" : {
+				"Type" : "DevNullSink"
+			}
+		}`
+			jobConfig, _ := scheduler.Parse([]byte(jobJson))
+			pipeline, err := scheduler.toPipeline(jobConfig, JobTypeIncremental)
+			g.Assert(err).IsNil("pipeline is parsed")
+
+			job := &job{
+				id:       jobConfig.Id,
+				pipeline: pipeline,
+				schedule: jobConfig.Triggers[0].Schedule,
+				runner:   runner,
+			}
+
+			job.Run()
+
+			syncJobState := &SyncJobState{}
+			err = store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+			g.Assert(err).IsNil()
+			g.Assert(syncJobState.LastRunCompletedOk).IsFalse()
+
+			jobResult := &jobResult{}
+			err = store.GetObject(server.JOB_RESULT_INDEX, job.id, jobResult)
+			g.Assert(err).IsNil()
+			g.Assert(jobResult.LastError == "").IsFalse()
 		})
 	})
 }
