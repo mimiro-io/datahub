@@ -1140,6 +1140,27 @@ function transform_entities(entities) {
 }
 ```
 
+#### AsEntity
+
+`AsEntity(value)` can be use to convert entity-shaped properties (sub-entities) into Entity instances, which in turn enables the use of other transform helper functions.
+
+Example usage:
+```
+function transform_entities(entities) {
+    var ns = GetNamespacePrefix(...);
+    for (e of entities) {
+       var address = GetProperty(e, ns, "address");
+       // address is an entity-shaped json value, so we can apply AsEntity
+       var addressEntity = AsEntity(address);
+
+       // GetProperty and other helpers work on addressEntity
+       var street = GetProperty(addressEntity, ns, "street");
+    }
+    return entities;
+}
+```
+
+
 #### NewTransaction
 
 `NewTransaction()` is used to create a new transaction object. A transaction can then be executed using the ExecuteTransaction function. Note that this function simply returns an empty transaction data structure. It does not open a transaction.
