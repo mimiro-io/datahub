@@ -20,17 +20,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/DataDog/datadog-go/statsd"
 	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/DataDog/datadog-go/statsd"
+
 	"github.com/dop251/goja"
 	"github.com/gojektech/heimdall/v6/httpclient"
+	"go.uber.org/zap"
+
 	"github.com/mimiro-io/datahub/internal/security"
 	"github.com/mimiro-io/datahub/internal/server"
-	"go.uber.org/zap"
 )
 
 type Transform interface {
@@ -197,6 +199,7 @@ func newJavascriptTransform(log *zap.SugaredLogger, code64 string, store *server
 	transform.Runtime.Set("Timing", transform.Timing)
 	transform.Runtime.Set("NewTransaction", transform.NewTransaction)
 	transform.Runtime.Set("ExecuteTransaction", transform.ExecuteTransaction)
+	transform.Runtime.Set("AsEntity", transform.AsEntity)
 
 	_, err = transform.Runtime.RunString(string(code))
 	if err != nil {
@@ -230,6 +233,24 @@ func (javascriptTransform *JavascriptTransform) getParallelism() int {
 func (javascriptTransform *JavascriptTransform) Clone() (*JavascriptTransform, error) {
 	code := base64.StdEncoding.EncodeToString(javascriptTransform.Code)
 	return newJavascriptTransform(javascriptTransform.Logger, code, javascriptTransform.Store)
+}
+
+func (javascriptTransform *JavascriptTransform) AsEntity(val interface{}) (res *server.Entity) {
+	if e, ok := val.(*server.Entity); ok {
+		res = e
+		return
+	}
+	if m, ok := val.(map[string]interface{}); ok {
+		defer func() {
+			if (recover() != nil) {
+				res = nil
+			}
+		}()
+		res = server.NewEntityFromMap(m)
+		return
+	}
+	res = nil
+	return
 }
 
 func (javascriptTransform *JavascriptTransform) NewTransaction() *server.Transaction {
