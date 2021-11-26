@@ -641,6 +641,92 @@ func TestPipeline(t *testing.T) {
 			g.Assert(len(result.Entities)).Eql(1)
 			g.Assert(result.Entities[0].Properties["ns3:companyname"]).Eql("Mimiro")
 		})
+		g.It("Should run a transform with subentities in internal jobs", func() {
+			testNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/test/")
+
+			// populate dataset with some entities
+			ds, _ := dsm.CreateDataset("People")
+			_, _ = dsm.CreateDataset("NewPeople")
+
+			address := server.NewEntity(testNamespacePrefix+":home", 0)
+			address.Properties[testNamespacePrefix+":street"] = "homestreet"
+
+			entities := make([]*server.Entity, 2)
+
+			entities[0] = server.NewEntity(testNamespacePrefix+":homer", 0)
+			entities[0].Properties[testNamespacePrefix+":name"] = "homer"
+			entities[0].Properties[testNamespacePrefix+":address"] = address
+
+			entities[1] = server.NewEntity(testNamespacePrefix+":barney", 0)
+			entities[1].Properties[testNamespacePrefix+":name"] = "barney"
+			entities[1].Properties[testNamespacePrefix+":address"] = map[string]interface{}{
+				"id": testNamespacePrefix+":barn",
+				"props": map[string]interface{}{ testNamespacePrefix+":street": "barnstreet" },
+				"refs": map[string]interface{}{},
+			}
+
+			g.Assert(ds.StoreEntities(entities)).IsNil()
+
+
+			jsFun := `function transform_entities(entities) {
+		    var test_ns = GetNamespacePrefix("http://data.mimiro.io/test/");
+			var result = [];
+		    for (e of entities) {
+                var address = GetProperty(e, test_ns, "address");
+                //sub-entities must be converted to Entity instances before GetProperty and other helpers work on them
+                var addressEntity = AsEntity(address)
+                var street = GetProperty(addressEntity, test_ns, "street");
+                var r = NewEntity();
+				SetId(r, GetId(e));
+	            SetProperty(r, test_ns,"street",street);
+	            SetProperty(r, test_ns,"address",AsEntity(address));
+	            SetProperty(r, test_ns,"no_address",AsEntity(street));
+                result.push(r);
+		    }
+
+		    return result;
+		}`
+			// define job
+			jobJson := fmt.Sprintf(`{
+			"id" : "sync-datasetsource-to-datasetsink-with-js-and-query",
+			"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
+			"source" : {
+				"Type" : "DatasetSource",
+				"Name" : "People"
+			},
+			"transform" : {
+				"Type" : "JavascriptTransform",
+				"Code" : "%v"
+			},
+			"sink" : {
+				"Type" : "DatasetSink",
+                "Name" : "NewPeople"
+			}}`, base64.StdEncoding.EncodeToString([]byte(jsFun)))
+
+			jobConfig, _ := scheduler.Parse([]byte(jobJson))
+			pipeline, err := scheduler.toPipeline(jobConfig, JobTypeIncremental)
+			g.Assert(err).IsNil()
+
+			job := &job{
+				id:       jobConfig.Id,
+				pipeline: pipeline,
+				schedule: jobConfig.Triggers[0].Schedule,
+				runner:   runner,
+			}
+
+			job.Run()
+
+			// check number of entities in target dataset
+			peopleDataset := dsm.GetDataset("NewPeople")
+			result, err := peopleDataset.GetEntities("", 50)
+			g.Assert(err).IsNil()
+			g.Assert(len(result.Entities)).Eql(2)
+			g.Assert(result.Entities[0].Properties["ns3:street"]).Eql("homestreet")
+			g.Assert(result.Entities[0].Properties["ns3:no_address"]).IsNil()
+			g.Assert(result.Entities[0].Properties["ns3:address"]).IsNotNil()
+			g.Assert(result.Entities[1].Properties["ns3:street"]).Eql("barnstreet")
+		})
+
 		g.It("Should run external transforms in internal jobs", func() {
 			ds, _ := dsm.CreateDataset("Products")
 			_, _ = dsm.CreateDataset("NewProducts")
