@@ -11,10 +11,8 @@ require (
 	github.com/bamzi/jobrunner v1.0.0
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/dgraph-io/badger/v3 v3.2011.1
-	github.com/dlclark/regexp2 v1.4.0 // indirect
-	github.com/dop251/goja v0.0.0-20201022115936-e21ccf39bfce
+	github.com/dop251/goja v0.0.0
 	github.com/franela/goblin v0.0.0-20210113153425-413781f5e6c8
-	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/goburrow/cache v0.1.1
 	github.com/gojektech/heimdall/v6 v6.1.0
 	github.com/golang-jwt/jwt v3.2.2+incompatible
@@ -29,3 +27,5 @@ require (
 	go.uber.org/zap v1.17.0
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 )
+
+replace github.com/dop251/goja => github.com/mimiro-io/goja v1.0.0-beta
