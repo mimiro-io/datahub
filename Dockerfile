@@ -23,7 +23,7 @@ COPY internal ./internal
 COPY app.go .env-test ./
 
 # Build the Go app
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-extldflags=-static" -tags jemalloc,allocator -a -installsuffix cgo -o server cmd/datahub/main.go
+RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-extldflags=-static" -tags jemalloc,allocator -a -installsuffix cgo -o server cmd/datahub/main.go
 
 # Run unit tests
 RUN go test ./... -v
