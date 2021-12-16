@@ -65,6 +65,7 @@ func (job *job) Run() {
 				"job.jobId", job.id,
 				"job.jobTitle", job.title,
 				"job.state", "Running")
+			_ = job.runner.statsdClient.Count("jobs.backpressure", 1, []string{"application:datahub"}, 1)
 			jobrunner.In(duration, job) // reschedule the full sync again in 5 seconds
 			return
 		}

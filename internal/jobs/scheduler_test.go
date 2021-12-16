@@ -24,6 +24,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -580,7 +581,7 @@ func TestScheduler(t *testing.T) {
 				//register callback to get notified when job is started and done
 				startWg := sync.WaitGroup{}
 				startWg.Add(1)
-				var started, stopped bool
+				var started bool
 				doneWg := sync.WaitGroup{}
 				doneWg.Add(1)
 				statsdClient.GaugesCallback = func(data map[string]interface{}) {
@@ -588,7 +589,7 @@ func TestScheduler(t *testing.T) {
 						started = true
 						startWg.Done()
 					}
-					if data["name"] == "jobs.tickets.full" && data["value"] == float64(5) && !stopped {
+					if data["name"] == "jobs.tickets.full" && data["value"] == float64(5) && started {
 						doneWg.Done()
 					}
 				}
@@ -629,6 +630,60 @@ func TestScheduler(t *testing.T) {
 				g.Assert(state.started == originalStartTime).IsFalse("should not be same runstate as RunJob")
 
 				_ = os.Unsetenv("JOB_FULLSYNC_RETRY_INTERVAL")
+			})
+
+			g.It("Should only queue up one scheduled run during ongoing jobrun", func() {
+				// count number of queued up jobs via statsD
+				var backPressureCnt int32 = 0
+				statsdClient.CountCallback = func(data map[string]interface{}) {
+					if data["name"] == "jobs.backpressure" {
+						atomic.AddInt32(&backPressureCnt, 1)
+					}
+				}
+
+				// get a doneWg signal when the first jobrun is finished
+				doneWg := sync.WaitGroup{}
+				doneWg.Add(1)
+				var started bool
+				statsdClient.GaugesCallback = func(data map[string]interface{}) {
+					if data["name"] == "jobs.tickets.full" && data["value"] == float64(4) {
+						//gauge goes down, a "start"
+						started = true
+					}
+					if data["name"] == "jobs.tickets.full" && data["value"] == float64(5) && started {
+						//gauge goes up again, a "done"
+						doneWg.Done()
+					}
+				}
+
+				_ = os.Setenv("JOB_FULLSYNC_RETRY_INTERVAL", "100ms")
+				config := &JobConfiguration{
+					Id:     "j1",
+					Title:  "j1",
+					Sink:   map[string]interface{}{"Type": "DevNullSink"},
+					Source: map[string]interface{}{"Type": "SlowSource", "Sleep": "200ms"},
+					Triggers: []JobTrigger{
+						{TriggerType: TriggerTypeCron, JobType: JobTypeFull, Schedule: "@every 100ms"},
+					}}
+
+				// add the job to run it
+				scheduler.AddJob(config)
+
+				// get handle to same job config
+				js, _ := scheduler.toTriggeredJobs(config)
+				j := js[0]
+
+				// add a 3 more scheduled runs (TestSched triggers after 100ms, well within slowSource duration)
+				jobrunner.MainCron.Schedule(&TestSched{}, jobrunner.New(j))
+				jobrunner.MainCron.Schedule(&TestSched{}, jobrunner.New(j))
+				jobrunner.MainCron.Schedule(&TestSched{}, jobrunner.New(j))
+
+				// wait for first jobRun to finish
+				doneWg.Wait()
+
+				// make sure only 1 additional run was queued up
+				g.Assert(backPressureCnt).Eql(1,
+					"while the job was running, max one additional run should have queued up")
 			})
 		})
 
@@ -953,12 +1008,14 @@ type StatsDRecorder struct {
 	Gauges         map[string]float64
 	Counts         map[string]int64
 	GaugesCallback func(map[string]interface{})
+	CountCallback  func(map[string]interface{})
 }
 
 func (r *StatsDRecorder) Reset() {
 	r.Gauges = make(map[string]float64)
 	r.Counts = make(map[string]int64)
 	r.GaugesCallback = nil
+	r.CountCallback = nil
 }
 
 func (r *StatsDRecorder) Gauge(name string, value float64, tags []string, rate float64) error {
@@ -975,6 +1032,15 @@ func (r *StatsDRecorder) Gauge(name string, value float64, tags []string, rate f
 }
 
 func (r *StatsDRecorder) Count(name string, value int64, tags []string, rate float64) error {
+	//r.Counts[name] = value
+	if r.CountCallback != nil {
+		r.CountCallback(map[string]interface{}{
+			"name":  name,
+			"value": value,
+			"tags":  tags,
+			"rate":  rate,
+		})
+	}
 	return nil
 }
 
