@@ -645,18 +645,23 @@ func TestScheduler(t *testing.T) {
 				doneWg := sync.WaitGroup{}
 				doneWg.Add(1)
 				var started bool
+				var done bool
 				statsdClient.GaugesCallback = func(data map[string]interface{}) {
 					if data["name"] == "jobs.tickets.full" && data["value"] == float64(4) {
 						//gauge goes down, a "start"
 						started = true
 					}
-					if data["name"] == "jobs.tickets.full" && data["value"] == float64(5) && started {
+					if data["name"] == "jobs.tickets.full" && data["value"] == float64(5) && started && !done {
 						//gauge goes up again, a "done"
 						doneWg.Done()
+						done = true
 					}
 				}
 
-				_ = os.Setenv("JOB_FULLSYNC_RETRY_INTERVAL", "100ms")
+				//set retry interval larger than job duration, so that subsequent retries do not mess with our backpressure counts.
+				//we want to only measure the number queued jobs in parellel (not in series)
+				//also set it larger than runtime of complete testsuite to avoid that it kicks in while other tests run
+				_ = os.Setenv("JOB_FULLSYNC_RETRY_INTERVAL", "5m")
 				config := &JobConfiguration{
 					Id:     "j1",
 					Title:  "j1",
@@ -673,16 +678,16 @@ func TestScheduler(t *testing.T) {
 				js, _ := scheduler.toTriggeredJobs(config)
 				j := js[0]
 
-				// add a 3 more scheduled runs (TestSched triggers after 100ms, well within slowSource duration)
-				jobrunner.MainCron.Schedule(&TestSched{}, jobrunner.New(j))
-				jobrunner.MainCron.Schedule(&TestSched{}, jobrunner.New(j))
-				jobrunner.MainCron.Schedule(&TestSched{}, jobrunner.New(j))
+				// add a 30 more scheduled runs (TestSched triggers after 100ms, well within slowSource duration)
+				for i := 0; i < 30; i++ {
+					jobrunner.MainCron.Schedule(&TestSched{}, jobrunner.New(j))
+				}
 
 				// wait for first jobRun to finish
 				doneWg.Wait()
 
 				// make sure only 1 additional run was queued up
-				g.Assert(backPressureCnt).Eql(1,
+				g.Assert(int(backPressureCnt)).Eql(1,
 					"while the job was running, max one additional run should have queued up")
 			})
 		})
