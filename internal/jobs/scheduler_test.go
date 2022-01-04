@@ -24,6 +24,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -580,7 +581,7 @@ func TestScheduler(t *testing.T) {
 				//register callback to get notified when job is started and done
 				startWg := sync.WaitGroup{}
 				startWg.Add(1)
-				var started, stopped bool
+				var started bool
 				doneWg := sync.WaitGroup{}
 				doneWg.Add(1)
 				statsdClient.GaugesCallback = func(data map[string]interface{}) {
@@ -588,7 +589,7 @@ func TestScheduler(t *testing.T) {
 						started = true
 						startWg.Done()
 					}
-					if data["name"] == "jobs.tickets.full" && data["value"] == float64(5) && !stopped {
+					if data["name"] == "jobs.tickets.full" && data["value"] == float64(5) && started {
 						doneWg.Done()
 					}
 				}
@@ -629,6 +630,65 @@ func TestScheduler(t *testing.T) {
 				g.Assert(state.started == originalStartTime).IsFalse("should not be same runstate as RunJob")
 
 				_ = os.Unsetenv("JOB_FULLSYNC_RETRY_INTERVAL")
+			})
+
+			g.It("Should only queue up one scheduled run during ongoing jobrun", func() {
+				// count number of queued up jobs via statsD
+				var backPressureCnt int32 = 0
+				statsdClient.CountCallback = func(data map[string]interface{}) {
+					if data["name"] == "jobs.backpressure" {
+						atomic.AddInt32(&backPressureCnt, 1)
+					}
+				}
+
+				// get a doneWg signal when the first jobrun is finished
+				doneWg := sync.WaitGroup{}
+				doneWg.Add(1)
+				var started bool
+				var done bool
+				statsdClient.GaugesCallback = func(data map[string]interface{}) {
+					if data["name"] == "jobs.tickets.full" && data["value"] == float64(4) {
+						//gauge goes down, a "start"
+						started = true
+					}
+					if data["name"] == "jobs.tickets.full" && data["value"] == float64(5) && started && !done {
+						//gauge goes up again, a "done"
+						doneWg.Done()
+						done = true
+					}
+				}
+
+				//set retry interval larger than job duration, so that subsequent retries do not mess with our backpressure counts.
+				//we want to only measure the number queued jobs in parellel (not in series)
+				//also set it larger than runtime of complete testsuite to avoid that it kicks in while other tests run
+				_ = os.Setenv("JOB_FULLSYNC_RETRY_INTERVAL", "5m")
+				config := &JobConfiguration{
+					Id:     "j1",
+					Title:  "j1",
+					Sink:   map[string]interface{}{"Type": "DevNullSink"},
+					Source: map[string]interface{}{"Type": "SlowSource", "Sleep": "200ms"},
+					Triggers: []JobTrigger{
+						{TriggerType: TriggerTypeCron, JobType: JobTypeFull, Schedule: "@every 100ms"},
+					}}
+
+				// add the job to run it
+				scheduler.AddJob(config)
+
+				// get handle to same job config
+				js, _ := scheduler.toTriggeredJobs(config)
+				j := js[0]
+
+				// add a 30 more scheduled runs (TestSched triggers after 100ms, well within slowSource duration)
+				for i := 0; i < 30; i++ {
+					jobrunner.MainCron.Schedule(&TestSched{}, jobrunner.New(j))
+				}
+
+				// wait for first jobRun to finish
+				doneWg.Wait()
+
+				// make sure only 1 additional run was queued up
+				g.Assert(int(backPressureCnt)).Eql(1,
+					"while the job was running, max one additional run should have queued up")
 			})
 		})
 
@@ -953,12 +1013,14 @@ type StatsDRecorder struct {
 	Gauges         map[string]float64
 	Counts         map[string]int64
 	GaugesCallback func(map[string]interface{})
+	CountCallback  func(map[string]interface{})
 }
 
 func (r *StatsDRecorder) Reset() {
 	r.Gauges = make(map[string]float64)
 	r.Counts = make(map[string]int64)
 	r.GaugesCallback = nil
+	r.CountCallback = nil
 }
 
 func (r *StatsDRecorder) Gauge(name string, value float64, tags []string, rate float64) error {
@@ -975,6 +1037,15 @@ func (r *StatsDRecorder) Gauge(name string, value float64, tags []string, rate f
 }
 
 func (r *StatsDRecorder) Count(name string, value int64, tags []string, rate float64) error {
+	//r.Counts[name] = value
+	if r.CountCallback != nil {
+		r.CountCallback(map[string]interface{}{
+			"name":  name,
+			"value": value,
+			"tags":  tags,
+			"rate":  rate,
+		})
+	}
 	return nil
 }
 

@@ -16,10 +16,11 @@ package jobs
 
 import (
 	"fmt"
+	"github.com/bamzi/jobrunner"
 	"os"
+	"sync"
 	"time"
 
-	"github.com/bamzi/jobrunner"
 	"github.com/mimiro-io/datahub/internal/server"
 )
 
@@ -65,7 +66,9 @@ func (job *job) Run() {
 				"job.jobId", job.id,
 				"job.jobTitle", job.title,
 				"job.state", "Running")
-			jobrunner.In(duration, job) // reschedule the full sync again in 5 seconds
+			if queueRetry(duration, job) { // reschedule the full sync again in 5 seconds
+				_ = job.runner.statsdClient.Count("jobs.backpressure", 1, []string{"application:datahub"}, 1)
+			}
 			return
 		}
 		// could not obtain ticket. This indicates a job with the same jobId is running already.
@@ -145,4 +148,22 @@ func (job *job) Run() {
 	}
 	// its not really a problem to ignore this error
 	_ = job.runner.store.StoreObject(server.JOB_RESULT_INDEX, job.id, lastRun)
+}
+
+var retryJobIds sync.Map
+
+func queueRetry(duration time.Duration, j *job) bool {
+	if _, alreadyQueued := retryJobIds.LoadOrStore(j.id, true); alreadyQueued {
+		j.runner.logger.Infow(fmt.Sprintf("could not queue, job already queued for retry: %v - %v", j.id, j.title),
+			"job.jobId", j.id,
+			"job.jobTitle", j.title,
+			"job.jobState", "Running")
+		return false
+	}
+	go func() {
+		time.Sleep(duration)
+		retryJobIds.Delete(j.id)
+		jobrunner.New(j).Run()
+	}()
+	return true
 }
