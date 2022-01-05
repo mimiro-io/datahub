@@ -1,5 +1,19 @@
 # Change Log
 
+## 03/01/2022
+
+* feature: upgrade badger to v3 ( #100 )
+
+https://github.com/mimiro-io/datahub/releases/tag/v-0.6.177-stable
+
+## 06/12/2021
+
+* feature: support titles in jobs. ( #88 )
+* bugfix: Job get stuck in loop when js transform fails ( #92 )
+
+https://github.com/mimiro-io/datahub/releases/tag/v-0.6.171-stable
+
+
 ## 15/10/2021
 
 * new feature: extended job attributes (#83 )
@@ -41,5 +55,5 @@ described in https://dgraph.io/blog/post/releasing-badger-v2/#ready-to-migrate c
 
 ## 22/03/2021
 
-Initial open source release at version 0.5.X. 
+Initial open source release at version 0.5.X.
 
