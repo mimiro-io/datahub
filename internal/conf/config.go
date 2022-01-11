@@ -20,8 +20,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mimiro-io/datahub/internal/conf/secrets"
-
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -49,7 +47,7 @@ func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 	logger := GetLogger(profile, zapcore.InfoLevel) // add a default logger while loading the env
 	logger.Infof("Loading logging profile: %s", profile)
 
-	err := parseEnv(basePath, profile, logger, loadFromHome)
+	err := parseEnv(basePath, logger, loadFromHome)
 	if err != nil {
 		return nil, err
 	}
@@ -63,6 +61,7 @@ func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 		BackupSchedule: viper.GetString("BACKUP_SCHEDULE"),
 		BackupRsync:    viper.GetBool("BACKUP_USE_RSYNC"),
 		AgentHost:      viper.GetString("DD_AGENT_HOST"),
+		SecretsManager: viper.GetString("SECRETS_MANAGER"),
 		Auth: &AuthConfig{
 			WellKnown:  viper.GetString("TOKEN_WELL_KNOWN"),
 			Audience:   viper.GetString("TOKEN_AUDIENCE"),
@@ -83,7 +82,7 @@ func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 	}, nil
 }
 
-func parseEnv(basePath *string, profile string, logger *zap.SugaredLogger, loadFromHome bool) error {
+func parseEnv(basePath *string, logger *zap.SugaredLogger, loadFromHome bool) error {
 	path := "."
 	configFile := ".env"
 	if basePath != nil && *basePath != "" {
@@ -150,17 +149,5 @@ func parseEnv(basePath *string, profile string, logger *zap.SugaredLogger, loadF
 		logger.Infof("Reading config file %s", viper.GetViper().ConfigFileUsed())
 	}
 
-	secretsManager := viper.GetString("SECRETS_MANAGER")
-
-	// attempt at loading values from ssm
-	ssm, err := secrets.NewManager(secretsManager, profile, logger)
-	if err != nil {
-		logger.Infof("Could not load ssm parameters from %s - %v", "/application/datahub", err.Error())
-		return err
-	}
-	for k, v := range *ssm.Params() {
-		logger.Infof("Adding SSM %s", strings.ToUpper(k))
-		viper.Set(strings.ToUpper(k), v)
-	}
 	return nil
 }

@@ -14,7 +14,12 @@
 
 package secrets
 
-import "go.uber.org/zap"
+import (
+	"github.com/mimiro-io/datahub/internal/conf"
+	"github.com/spf13/viper"
+	"go.uber.org/zap"
+	"strings"
+)
 
 type SecretStore interface {
 	HasKey(key string) bool
@@ -37,17 +42,30 @@ func (s *NoopStore) Params() *map[string]interface{} {
 	return &params
 }
 
-func NewManager(managerType string, profile string, logger *zap.SugaredLogger) (SecretStore, error) {
-	if managerType == "ssm" {
+func NewManager(env *conf.Env, logger *zap.SugaredLogger) (SecretStore, error) {
+	secretsManager := env.SecretsManager
+	var store SecretStore
+	if secretsManager == "ssm" {
 		// attempt at loading values from ssm
 		logger.Info("Using AWS SSM secrets manager")
-		return NewSsm(&SsmManagerConfig{
-			Env:    profile,
+		sm, err := NewSsm(&SsmManagerConfig{
+			Env:    env.Env,
 			Key:    "/application/datahub/",
 			Logger: logger,
 		})
+		if err != nil {
+			return nil, err
+		}
+		store = sm
 	} else {
 		logger.Info("Using NOOP secrets manager")
-		return &NoopStore{}, nil
+		store = &NoopStore{}
 	}
+
+	for k, v := range *store.Params() {
+		logger.Infof("Adding SSM %s", strings.ToUpper(k))
+		viper.Set(strings.ToUpper(k), v)
+	}
+
+	return store, nil
 }

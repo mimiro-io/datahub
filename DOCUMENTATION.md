@@ -1298,7 +1298,9 @@ The valid options are "noop" (turn it off), and "ssm" (AWS Secrets Manager). It 
 #### Contacting datalayers
 
 Datalayers are themselves secured services, and the Datahub needs access to them.
-The datalayers currently only support JWT access.
+The datalayers currently support different security mechanisms through the use of login providers.
+
+The default built in provider supports jwt/auth0 through a set of env variables:
 
 ```DL_JWT_CLIENT_ID=```
 
@@ -1331,7 +1333,43 @@ The payload that is generated is compatible with both Auth0 and Mimiro:
 }
 ```
 
-The token will be generated on first attempt, and will be cached for 24hours.
+The first time you load the Datahub, these settings will be added to the list of login providers, and you can work with it through the /providers
+endpoint. The default provider will be named "jwttokenprovider", and as long as you keep the env variables listed above, it will be recreated
+if deleted.
+
+However, you can add more providers. Currently 2 types of providers are supported, namely basic username/password and auth0 compatible jwt tokens
+with id and secret.
+
+### Working with security providers
+
+There is an endpoint to work with these, please see the api spec file for details.
+
+Adding a new provider with basic security looks like this:
+
+POST /provider/logins:
+```json
+{
+    "name":"login1",
+    "type":"basic",
+    "user: {
+        "type": "text",
+        "value": "server1"
+    },
+    "password": {
+        "type": "env",
+        "value": "SERVER1_SECRET_PASSWORD"
+    }
+}
+
+```
+
+2 different providers are currently supported, "basic", "bearer". Basic means username+password, "bearer" means an auth0 compatible bearer token id and secret.
+
+To prevent leaking of credentials, a ValueReader type has been added, which type supports "test", "env" and "ssm", to read as text, from environment and from AWS SSM respectively.
+
+The name of the provider can then be added to a job through its "TokenProvider" field.
+
+When the provider is used the first time, the values are loaded from their store. Any change in values of the type "env" and "ssm" requires the Datahub to be restarted.
 
 #### Backup
 

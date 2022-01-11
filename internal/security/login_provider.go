@@ -19,7 +19,9 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/mimiro-io/datahub/internal/conf"
+	"github.com/mimiro-io/datahub/internal/conf/secrets"
 	"github.com/mimiro-io/datahub/internal/server"
+	"github.com/spf13/viper"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"net/http"
@@ -38,9 +40,10 @@ type ProviderManager struct {
 	env   *conf.Env
 	store *server.Store
 	log   *zap.SugaredLogger
+	sm    secrets.SecretStore
 }
 
-func NewProviderManager(lc fx.Lifecycle, env *conf.Env, store *server.Store, log *zap.SugaredLogger) *ProviderManager {
+func NewProviderManager(lc fx.Lifecycle, env *conf.Env, store *server.Store, log *zap.SugaredLogger, sm secrets.SecretStore) *ProviderManager {
 	pm := &ProviderManager{
 		env:   env,
 		store: store,
@@ -64,23 +67,23 @@ func (pm *ProviderManager) addComp() error {
 		provider := ProviderConfig{
 			Name: "jwttokenprovider",
 			Type: "bearer",
-			ClientId: &ValueProvider{
+			ClientId: &ValueReader{
 				Type:  "env",
 				Value: "DL_JWT_CLIENT_ID",
 			},
-			ClientSecret: &ValueProvider{
+			ClientSecret: &ValueReader{
 				Type:  "env",
 				Value: "DL_JWT_CLIENT_SECRET",
 			},
-			Audience: &ValueProvider{
+			Audience: &ValueReader{
 				Type:  "env",
 				Value: "DL_JWT_AUDIENCE",
 			},
-			GrantType: &ValueProvider{
+			GrantType: &ValueReader{
 				Type:  "env",
 				Value: "DL_JWT_GRANT_TYPE",
 			},
-			Endpoint: &ValueProvider{
+			Endpoint: &ValueReader{
 				Type:  "env",
 				Value: "DL_JWT_ENDPOINT",
 			},
@@ -90,14 +93,19 @@ func (pm *ProviderManager) addComp() error {
 	return nil
 }
 
-func (pm *ProviderManager) LoadValue(vp *ValueProvider) string {
+func (pm *ProviderManager) LoadValue(vp *ValueReader) string {
 	switch vp.Type {
 	case "text":
 		return vp.Value
 	case "env":
-		return os.Getenv(vp.Value)
+		v := os.Getenv(vp.Value)
+		if v == "" {
+			return viper.GetString(vp.Value)
+		}
 	case "ssm":
-
+		if v, ok := pm.sm.Value(vp.Value); ok {
+			return v
+		}
 	}
 
 	return ""
@@ -149,33 +157,20 @@ func (pm *ProviderManager) FindByName(name string) (*ProviderConfig, error) {
 }
 
 type ProviderConfig struct {
-	Name         string         `json:"name"`
-	Type         string         `json:"type"`
-	User         *ValueProvider `json:"user,omitempty"`
-	Password     *ValueProvider `json:"password,omitempty"`
-	ClientId     *ValueProvider `json:"key,omitempty"`
-	ClientSecret *ValueProvider `json:"secret,omitempty"`
-	Audience     *ValueProvider `json:"audience,omitempty"`
-	GrantType    *ValueProvider `json:"grantType,omitempty"`
-	Endpoint     *ValueProvider `json:"endpoint,omitempty"`
+	Name         string       `json:"name"`
+	Type         string       `json:"type"`
+	User         *ValueReader `json:"user,omitempty"`
+	Password     *ValueReader `json:"password,omitempty"`
+	ClientId     *ValueReader `json:"key,omitempty"`
+	ClientSecret *ValueReader `json:"secret,omitempty"`
+	Audience     *ValueReader `json:"audience,omitempty"`
+	GrantType    *ValueReader `json:"grantType,omitempty"`
+	Endpoint     *ValueReader `json:"endpoint,omitempty"`
 }
 
-type ValueProvider struct {
+type ValueReader struct {
 	Type  string `json:"type"`
 	Value string `json:"value"`
-}
-
-func (vp *ValueProvider) loadValue() string {
-	switch vp.Type {
-	case "text":
-		return vp.Value
-	case "env":
-		return os.Getenv(vp.Value)
-	case "ssm":
-
-	}
-
-	return ""
 }
 
 type BasicProvider struct {

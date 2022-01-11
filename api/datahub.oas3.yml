@@ -23,6 +23,8 @@ tags:
     description: Generic server information
   - name: namespaces
     description: Namespace operations
+  - name: providers
+    description: Datalayer security providers
 
 paths:
   /:
@@ -686,6 +688,142 @@ paths:
           description: Not found
         '500':
           description: Internal server error
+  /provider/logins:
+    get:
+      summary: List all providers
+      description: Returns a list of all configured providers
+      tags:
+        - providers
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: A list of login providers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginProviders'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+    post:
+      summary: Add new provider
+      description: Creates a new login provider
+      tags:
+        - providers
+      security:
+        - BearerAuth: []
+      requestBody:
+        description: The Content object to create
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginProvider'
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+  /provider/login/{providerName}:
+    get:
+      summary: Get provider by name
+      description: Gets a single login provider by it's name
+      tags:
+        - providers
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: providerName
+          schema:
+            type: string
+          required: true
+          description:
+            The name of the Login provider to get
+      responses:
+        '200':
+          description: A login provider
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginProvider'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '500':
+          description: Internal server error
+    post:
+      summary: Update provider
+      description: Updates a single named login provider
+      tags:
+        - providers
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: providerName
+          schema:
+            type: string
+          required: true
+          description:
+            The name of the Login provider to update
+      requestBody:
+        description: The Content object to update. The name in the body is ignored for the one in the path.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginProvider'
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+    delete:
+      summary: Delete provider
+      description: Deletes a single named login provider
+      tags:
+        - providers
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: providerName
+          schema:
+            type: string
+          required: true
+          description:
+            The name of the Login provider to delete
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+
+
 components:
   securitySchemes:
     BearerAuth:
@@ -721,6 +859,71 @@ components:
 
     QueryResponse:
       type: object
+
+    LoginProviders:
+      type: array
+      items:
+        $ref: '#/components/schemas/LoginProvider'
+
+
+    LoginProvider:
+      properties:
+        name:
+          type: string
+          description: Unique identifying name for this provider
+        type:
+          type: string
+          enum:
+            - bearer
+            - basic
+          description: Must be either bearer (jwt) or basic (username+password)
+        user:
+          type: object
+          $ref: '#/components/schemas/Value'
+          description: If type is "basic" then this is the username and must be present
+        password:
+          type: object
+          $ref: '#/components/schemas/Value'
+          description: If type is "basic" then this is the password and must be present
+        key:
+          type: object
+          $ref: '#/components/schemas/Value'
+          description: If type is "bearer" then this is the id of the client
+        secret:
+          type: object
+          $ref: '#/components/schemas/Value'
+          description: If type is "bearer" then this is the secret of the client
+        audience:
+          type: object
+          $ref: '#/components/schemas/Value'
+          description: If type is "bearer" then this is the audience the token is requested for.
+        grantType:
+          type: object
+          $ref: '#/components/schemas/Value'
+          description: |
+            If type is "bearer" then this is the type of the token asked for, this is client_credential for
+            m2m tokens, app_credential for user application tokens.
+        endpoint:
+          type: object
+          $ref: '#/components/schemas/Value'
+          description: If type is "bearer" then this is the endpoint to request a token at.
+
+    Value:
+      properties:
+        type:
+          type: string
+          enum:
+            - env
+            - text
+            - ssm
+          description: |
+            The type is either text, env, or ssm. When set to "text" the value is used as is,
+            if set to "env", the value is attempted read from an environment variable with the
+            same name. If set to "ssm", AWS Secrets Manager attempts to read the value from the
+            location "/application/datahub/VALUE".
+        value:
+          type: string
+          description: Depending on the value of the type field above is either read as is or loaded from its location upon access
 
     Contents:
       type: array

@@ -5,6 +5,7 @@ import (
 	"github.com/DataDog/datadog-go/statsd"
 	"github.com/franela/goblin"
 	"github.com/mimiro-io/datahub/internal/conf"
+	"github.com/mimiro-io/datahub/internal/conf/secrets"
 	"github.com/mimiro-io/datahub/internal/server"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
@@ -37,9 +38,10 @@ func TestCrud(t *testing.T) {
 			lc := fxtest.NewLifecycle(t)
 			sc := &statsd.NoOpClient{}
 			store = server.NewStore(lc, e, sc)
+			sm := &secrets.NoopStore{}
 			lc.RequireStart()
 			os.Stderr = oldErr
-			pm = NewProviderManager(lc, e, store, zap.NewNop().Sugar())
+			pm = NewProviderManager(lc, e, store, zap.NewNop().Sugar(), sm)
 		})
 		g.AfterEach(func() {
 			_ = store.Close()
@@ -66,7 +68,7 @@ func TestCrud(t *testing.T) {
 			err := pm.AddProvider(p)
 			g.Assert(err).IsNil()
 
-			p.Endpoint = &ValueProvider{
+			p.Endpoint = &ValueReader{
 				Type:  "text",
 				Value: "http://localhost/hello",
 			}
@@ -117,23 +119,23 @@ func createConfig(name string) ProviderConfig {
 	return ProviderConfig{
 		Name: name,
 		Type: "bearer",
-		ClientId: &ValueProvider{
+		ClientId: &ValueReader{
 			Type:  "text",
 			Value: "id1",
 		},
-		ClientSecret: &ValueProvider{
+		ClientSecret: &ValueReader{
 			Type:  "text",
 			Value: "some-secret",
 		},
-		Audience: &ValueProvider{
+		Audience: &ValueReader{
 			Type:  "text",
 			Value: "mimiro",
 		},
-		GrantType: &ValueProvider{
+		GrantType: &ValueReader{
 			Type:  "text",
 			Value: "test_grant",
 		},
-		Endpoint: &ValueProvider{
+		Endpoint: &ValueReader{
 			Type:  "text",
 			Value: "http://localhost",
 		},

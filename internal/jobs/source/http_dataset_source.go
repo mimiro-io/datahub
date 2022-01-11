@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -19,10 +18,10 @@ import (
 
 type HttpDatasetSource struct {
 	Endpoint       string
-	Authentication string                 // "none, basic, token"
-	User           string                 // for use in basic auth
-	Password       string                 // for use in basic auth
-	TokenProvider  security.TokenProvider // for use in token auth
+	Authentication string            // "none, basic, token"
+	User           string            // for use in basic auth
+	Password       string            // for use in basic auth
+	TokenProvider  security.Provider // for use in token auth
 	Store          *server.Store
 	Logger         *zap.SugaredLogger
 }
@@ -74,20 +73,8 @@ func (httpDatasetSource *HttpDatasetSource) ReadEntities(since DatasetContinuati
 	}
 
 	// security
-	// security
-	if httpDatasetSource.TokenProvider != "" {
-		// attempt to parse the token provider
-		if provider, ok := runner.tokenProviders.Get(strings.ToLower(httpDatasetSource.TokenProvider)); ok {
-			provider.Authorize(req)
-		}
-	}
-
 	if httpDatasetSource.TokenProvider != nil {
-		bearer, err := httpDatasetSource.TokenProvider.Token()
-		if err != nil {
-			httpDatasetSource.Logger.Warnf("Token provider returned error: %w", err)
-		}
-		req.Header.Add("Authorization", bearer)
+		httpDatasetSource.TokenProvider.Authorize(req)
 	}
 
 	// do get

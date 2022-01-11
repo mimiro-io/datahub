@@ -32,23 +32,23 @@ func TestDlJwt(t *testing.T) {
 			provider := ProviderConfig{
 				Name: "jwt",
 				Type: "bearer",
-				ClientId: &ValueProvider{
+				ClientId: &ValueReader{
 					Type:  "text",
 					Value: "id1",
 				},
-				ClientSecret: &ValueProvider{
+				ClientSecret: &ValueReader{
 					Type:  "text",
 					Value: "some-secret",
 				},
-				Audience: &ValueProvider{
+				Audience: &ValueReader{
 					Type:  "text",
 					Value: "mimiro",
 				},
-				GrantType: &ValueProvider{
+				GrantType: &ValueReader{
 					Type:  "text",
 					Value: "test_grant",
 				},
-				Endpoint: &ValueProvider{
+				Endpoint: &ValueReader{
 					Type:  "text",
 					Value: "http://localhost",
 				},
