@@ -1365,7 +1365,7 @@ POST /provider/logins:
 
 2 different providers are currently supported, "basic", "bearer". Basic means username+password, "bearer" means an auth0 compatible bearer token id and secret.
 
-To prevent leaking of credentials, a ValueReader type has been added, which type supports "test", "env" and "ssm", to read as text, from environment and from AWS SSM respectively.
+To prevent leaking of credentials, a ValueReader type has been added, which type supports "text", "env" and "ssm", to read as text, from environment and from AWS SSM respectively.
 
 The name of the provider can then be added to a job through its "TokenProvider" field.
 
