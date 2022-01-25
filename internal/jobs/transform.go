@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/DataDog/datadog-go/statsd"
+	"github.com/gofrs/uuid"
 
 	"github.com/dop251/goja"
 	"github.com/gojektech/heimdall/v6/httpclient"
@@ -200,6 +201,7 @@ func newJavascriptTransform(log *zap.SugaredLogger, code64 string, store *server
 	transform.Runtime.Set("NewTransaction", transform.NewTransaction)
 	transform.Runtime.Set("ExecuteTransaction", transform.ExecuteTransaction)
 	transform.Runtime.Set("AsEntity", transform.AsEntity)
+	transform.Runtime.Set("UUID", transform.UUID)
 
 	_, err = transform.Runtime.RunString(string(code))
 	if err != nil {
@@ -242,7 +244,7 @@ func (javascriptTransform *JavascriptTransform) AsEntity(val interface{}) (res *
 	}
 	if m, ok := val.(map[string]interface{}); ok {
 		defer func() {
-			if (recover() != nil) {
+			if recover() != nil {
 				res = nil
 			}
 		}()
@@ -293,6 +295,11 @@ func (javascriptTransform *JavascriptTransform) NewEntity() *server.Entity {
 	entity.Properties = map[string]interface{}{}
 	entity.InternalID = 0
 	return entity
+}
+
+func (javascriptTransform *JavascriptTransform) UUID() string {
+	uid, _ := uuid.NewV4()
+	return fmt.Sprintf("%s", uid)
 }
 
 func (javascriptTransform *JavascriptTransform) GetNamespacePrefix(urlExpansion string) string {
