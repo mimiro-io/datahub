@@ -11,6 +11,7 @@ require (
 	github.com/dop251/goja v0.0.0-20201022115936-e21ccf39bfce
 	github.com/franela/goblin v0.0.0-20210113153425-413781f5e6c8
 	github.com/goburrow/cache v0.1.1
+	github.com/gofrs/uuid v4.2.0+incompatible
 	github.com/gojektech/heimdall/v6 v6.1.0
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/google/uuid v1.1.4
