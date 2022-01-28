@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/mimiro-io/datahub/internal/conf"
 	"net/http"
 	"time"
 
@@ -26,8 +25,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// DlJwtConfig contains the auth0 configuration
-type DlJwtConfig struct {
+// JwtBearerProvider contains the auth0 configuration
+type JwtBearerProvider struct {
 	ClientId     string `json:"client_id"`
 	ClientSecret string `json:"client_secret"`
 	Audience     string `json:"audience"`
@@ -49,18 +48,27 @@ type auth0Response struct {
 	TokenType   string `json:"token_type"`
 }
 
-// NewDlJwtConfig creates a new DlJwtConfig struct, populated with the values from Viper.
-func NewDlJwtConfig(logger *zap.SugaredLogger, conf *conf.Env) *DlJwtConfig {
-	config := &DlJwtConfig{
-		ClientId:     conf.DlJwtConfig.ClientId,
-		ClientSecret: conf.DlJwtConfig.ClientSecret,
-		Audience:     conf.DlJwtConfig.Audience,
-		GrantType:    conf.DlJwtConfig.GrantType,
-		endpoint:     conf.DlJwtConfig.Endpoint,
+// NewDlJwtConfig creates a new JwtBearerProvider struct, populated with the values from Viper.
+func NewDlJwtConfig(logger *zap.SugaredLogger, conf ProviderConfig, pm *ProviderManager) *JwtBearerProvider {
+	config := &JwtBearerProvider{
+		ClientId:     pm.LoadValue(conf.ClientId),
+		ClientSecret: pm.LoadValue(conf.ClientSecret),
+		Audience:     pm.LoadValue(conf.Audience),
+		GrantType:    pm.LoadValue(conf.GrantType),
+		endpoint:     pm.LoadValue(conf.Endpoint),
 		logger:       logger.Named("jwt"),
 	}
 
 	return config
+}
+
+func (auth0 *JwtBearerProvider) Authorize(req *http.Request) {
+	if bearer, err := auth0.token(); err != nil {
+		auth0.logger.Warn(err)
+	} else {
+		req.Header.Add("Authorization", bearer)
+	}
+
 }
 
 // Token returns a valid token, or an error caused when getting one
@@ -71,7 +79,7 @@ func NewDlJwtConfig(logger *zap.SugaredLogger, conf *conf.Env) *DlJwtConfig {
 // If the cache is invalid, there is also no protection against cache stampedes,
 // so if many calls are calling at the same time, they will hit Auth0 where the can
 // be rate limited.
-func (auth0 *DlJwtConfig) Token() (string, error) {
+func (auth0 *JwtBearerProvider) token() (string, error) {
 	token, err := auth0.generateOrGetToken()
 	if err != nil {
 		auth0.logger.Warnf("Error getting token: %w", err.Error())
@@ -80,7 +88,7 @@ func (auth0 *DlJwtConfig) Token() (string, error) {
 	return fmt.Sprintf("Bearer %s", token), nil
 }
 
-func (auth0 *DlJwtConfig) generateOrGetToken() (string, error) {
+func (auth0 *JwtBearerProvider) generateOrGetToken() (string, error) {
 	now := time.Now()
 	if auth0.cache == nil || now.After(auth0.cache.until) {
 		// first run
@@ -97,7 +105,7 @@ func (auth0 *DlJwtConfig) generateOrGetToken() (string, error) {
 	return auth0.cache.token, nil
 }
 
-func (auth0 *DlJwtConfig) callRemote() (*auth0Response, error) {
+func (auth0 *JwtBearerProvider) callRemote() (*auth0Response, error) {
 	timeout := 1000 * time.Millisecond
 	client := httpclient.NewClient(httpclient.WithHTTPTimeout(timeout))
 

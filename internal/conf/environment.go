@@ -29,6 +29,7 @@ type Env struct {
 	BackupSchedule       string
 	BackupRsync          bool
 	AgentHost            string
+	SecretsManager       string
 	Auth                 *AuthConfig
 	DlJwtConfig          *DatalayerJwtConfig
 	GcOnStartup          bool

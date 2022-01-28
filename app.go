@@ -17,6 +17,7 @@ package datahub
 import (
 	"context"
 	"github.com/mimiro-io/datahub/internal/conf"
+	"github.com/mimiro-io/datahub/internal/conf/secrets"
 	"github.com/mimiro-io/datahub/internal/content"
 	"github.com/mimiro-io/datahub/internal/jobs"
 	"github.com/mimiro-io/datahub/internal/security"
@@ -33,11 +34,13 @@ func wire() *fx.App {
 		),
 		fx.Provide(
 			conf.NewEnv,
+			secrets.NewManager,
 			conf.NewMetricsClient,
 			conf.NewLogger,
 			server.NewBus,
 			server.NewStore,
 			server.NewDsManager,
+			security.NewProviderManager,
 			security.NewTokenProviders,
 			jobs.NewRunnerConfig,
 			jobs.NewRunner,
@@ -57,6 +60,7 @@ func wire() *fx.App {
 			web.NewJobOperationHandler,
 			web.NewJobsHandler,
 			web.NewNamespaceHandler,
+			web.NewProviderHandler,
 			server.NewBackupManager,
 			server.NewGarbageCollector,
 		),

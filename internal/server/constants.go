@@ -37,6 +37,7 @@ const (
 	JOB_CONFIGS_INDEX     CollectionIndex = 14
 	CONTENT_INDEX         CollectionIndex = 15
 	STORE_NEXT_DATASET_ID CollectionIndex = 16
+	LOGIN_PROVIDER_INDEX  CollectionIndex = 17
 )
 
 var (
@@ -44,6 +45,7 @@ var (
 	JOB_CONFIGS_INDEX_BYTES     = uint16ToBytes(JOB_CONFIGS_INDEX)
 	CONTENT_INDEX_BYTES         = uint16ToBytes(CONTENT_INDEX)
 	STORE_NEXT_DATASET_ID_BYTES = uint16ToBytes(STORE_NEXT_DATASET_ID)
+	LOGIN_PROVIDER_INDEX_BYTES  = uint16ToBytes(LOGIN_PROVIDER_INDEX)
 )
 
 func uint16ToBytes(i CollectionIndex) []byte {

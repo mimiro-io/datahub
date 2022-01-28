@@ -29,7 +29,6 @@ import (
 
 	"github.com/gojektech/heimdall/v6/httpclient"
 	"github.com/google/uuid"
-	"github.com/mimiro-io/datahub/internal/security"
 	"github.com/mimiro-io/datahub/internal/server"
 )
 
@@ -197,14 +196,8 @@ func (httpDatasetSink *httpDatasetSink) endFullSync(runner *Runner) error {
 
 	if httpDatasetSink.TokenProvider != "" {
 		// attempt to parse the token provider
-		provider, ok := runner.tokenProviders.Providers[strings.ToLower(httpDatasetSink.TokenProvider)]
-		if ok {
-			tokenProvider := provider.(security.TokenProvider)
-			bearer, err := tokenProvider.Token()
-			if err != nil {
-				runner.logger.Warnf("Token provider returned error: %w", err)
-			}
-			req.Header.Add("Authorization", bearer)
+		if provider, ok := runner.tokenProviders.Get(strings.ToLower(httpDatasetSink.TokenProvider)); ok {
+			provider.Authorize(req)
 		}
 	}
 
@@ -266,14 +259,8 @@ func (httpDatasetSink *httpDatasetSink) processEntities(runner *Runner, entities
 	// security
 	if httpDatasetSink.TokenProvider != "" {
 		// attempt to parse the token provider
-		provider, ok := runner.tokenProviders.Providers[strings.ToLower(httpDatasetSink.TokenProvider)]
-		if ok {
-			tokenProvider := provider.(security.TokenProvider)
-			bearer, err := tokenProvider.Token()
-			if err != nil {
-				runner.logger.Warnf("Token provider returned error: %w", err)
-			}
-			req.Header.Add("Authorization", bearer)
+		if provider, ok := runner.tokenProviders.Get(strings.ToLower(httpDatasetSink.TokenProvider)); ok {
+			provider.Authorize(req)
 		}
 	}
 

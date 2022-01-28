@@ -15,29 +15,67 @@
 package security
 
 import (
-	"github.com/mimiro-io/datahub/internal/conf"
+	"context"
+	"go.uber.org/fx"
 	"go.uber.org/zap"
+	"strings"
 )
 
-type TokenProvider interface {
-	Token() (string, error)
+type TokenProviders struct {
+	Providers *map[string]Provider
+	log       *zap.SugaredLogger
+	pm        *ProviderManager
 }
 
-type TokenProviders struct {
-	Providers map[string]interface{}
+func (providers *TokenProviders) Get(providerName string) (Provider, bool) {
+	pmap := *providers.Providers
+	if p, ok := pmap[providerName]; ok {
+		return p, true
+	} else {
+		return nil, false
+	}
 }
 
 // NewTokenProviders provides a map of token providers, keyed on the
 // name of the token provider struct as lower_case.
-func NewTokenProviders(logger *zap.SugaredLogger, conf *conf.Env) *TokenProviders {
+func NewTokenProviders(lc fx.Lifecycle, logger *zap.SugaredLogger, providerManager *ProviderManager) *TokenProviders {
 	log := logger.Named("security")
-	var providers = make(map[string]interface{}, 0)
-	config := NewDlJwtConfig(log, conf)
-	providers["auth0tokenprovider"] = config
-	providers["jwttokenprovider"] = config
+	var providers = make(map[string]Provider)
+	//config := NewDlJwtConfig(log, conf)
+	//providers["auth0tokenprovider"] = config
+	//providers["jwttokenprovider"] = config
 
-	return &TokenProviders{
-		Providers: providers,
+	tp := &TokenProviders{
+		log: log,
+		pm:  providerManager,
 	}
 
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			if providerList, err := providerManager.ListProviders(); err != nil {
+				log.Warn(err)
+			} else {
+				for _, provider := range providerList {
+					providers[strings.ToLower(provider.Name)] = tp.toProvider(provider)
+				}
+			}
+			tp.Providers = &providers
+			return nil
+		},
+	})
+
+	return tp
+
+}
+
+func (providers *TokenProviders) toProvider(provider ProviderConfig) Provider {
+	providers.log.Infof("Adding login provider '%s'", provider.Name)
+	if strings.ToLower(provider.Type) == "bearer" {
+		return NewDlJwtConfig(providers.log, provider, providers.pm)
+	} else {
+		return BasicProvider{
+			User:     providers.pm.LoadValue(provider.User),
+			Password: providers.pm.LoadValue(provider.Password),
+		}
+	}
 }
