@@ -52,8 +52,7 @@ func NewProviderManager(lc fx.Lifecycle, env *conf.Env, store *server.Store, log
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			//return pm.addComp()
-			return nil
+			return pm.addComp()
 		},
 	})
 
