@@ -101,6 +101,8 @@ func (pm *ProviderManager) LoadValue(vp *ValueReader) string {
 		v := os.Getenv(vp.Value)
 		if v == "" {
 			return viper.GetString(vp.Value)
+		} else {
+			return v
 		}
 	case "ssm":
 		if v, ok := pm.sm.Value(vp.Value); ok {
