@@ -52,12 +52,12 @@ func NewTokenProviders(lc fx.Lifecycle, logger *zap.SugaredLogger, providerManag
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			if _, err := providerManager.ListProviders(); err != nil {
+			if providerList, err := providerManager.ListProviders(); err != nil {
 				log.Warn(err)
 			} else {
-				//for _, provider := range providerList {
-				//providers[strings.ToLower(provider.Name)] = tp.toProvider(provider)
-				//}
+				for _, provider := range providerList {
+					providers[strings.ToLower(provider.Name)] = tp.toProvider(provider)
+				}
 			}
 			tp.Providers = &providers
 			return nil
