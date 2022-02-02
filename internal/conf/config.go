@@ -79,6 +79,11 @@ func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 		FullsyncLeaseTimeout: viper.GetDuration("FULLSYNC_LEASE_TIMEOUT"),
 		BlockCacheSize:       viper.GetInt64("BLOCK_CACHE_SIZE"),
 		ValueLogFileSize:     viper.GetInt64("VALUE_LOG_FILE_SIZE"),
+		AdminUserName: 		 viper.GetString("ADMIN_USERNAME"),
+		AdminPassword:		 viper.GetString("ADMIN_PASSWORD"),
+		EnableNodeSecurity:  viper.GetBool("ENABLE_NODE_SECURITY"),
+		NodeId: 			 viper.GetString("NODE_ID"),
+		SecurityStorageLocation: viper.GetString("SECURITY_STORAGE_LOCATION"),
 	}, nil
 }
 

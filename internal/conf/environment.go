@@ -36,6 +36,11 @@ type Env struct {
 	FullsyncLeaseTimeout time.Duration
 	BlockCacheSize       int64
 	ValueLogFileSize     int64
+	AdminUserName 		 string
+	AdminPassword 		 string
+	EnableNodeSecurity   bool
+	NodeId string
+	SecurityStorageLocation string
 }
 
 type AuthConfig struct {

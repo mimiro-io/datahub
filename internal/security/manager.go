@@ -4,9 +4,11 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"github.com/golang-jwt/jwt"
+	"github.com/mimiro-io/datahub/internal/conf"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -44,6 +46,7 @@ func NewKeyPair(privateKey *rsa.PrivateKey, publicKey *rsa.PublicKey, active boo
 type ClientInfo struct {
 	ClientId string
 	PublicKey []byte
+	Deleted bool
 }
 
 // ClientIdClaim used by a client to assert it is who they say they are.
@@ -89,18 +92,21 @@ type ServiceCore struct {
 	// client id keyed list of access controls
 	AccessControls map[string][]AccessControl
 
-	// client id keyed list of claims
-	Claims map[string][]string
+	// client id keyed list of roles
+	Roles map[string][]string
 }
 
-func NewServiceCore(nodeId string, adminClientKey string, adminClientSecret string, baseLocation string) *ServiceCore {
+func NewServiceCore(env *conf.Env) *ServiceCore {
 	serviceCore := &ServiceCore{}
-	serviceCore.Location = baseLocation
-	serviceCore.AdminClientKey = adminClientKey
-	serviceCore.AdminClientSecret = adminClientSecret
-	nodeInfo := NewNodeInfo(nodeId, nil)
+	serviceCore.Location = env.SecurityStorageLocation
+	serviceCore.AdminClientKey = env.AdminUserName
+	serviceCore.AdminClientSecret = env.AdminPassword
+	nodeInfo := NewNodeInfo(env.NodeId, nil)
 	serviceCore.NodeInfo = nodeInfo
 	serviceCore.Clients = make(map[string]*ClientInfo)
+
+	serviceCore.Init()
+
 	return serviceCore
 }
 
@@ -244,6 +250,9 @@ func (serviceCore *ServiceCore) CreateJWTForTokenRequest(audience string) (strin
 func (serviceCore *ServiceCore) RegisterClient(clientInfo *ClientInfo) {
 	// save to disk
 	serviceCore.Clients[clientInfo.ClientId] = clientInfo
+
+	jsonData, _ := json.Marshal(serviceCore.Clients)
+	_ = ioutil.WriteFile(serviceCore.Location + string(os.PathSeparator) + "clients.json", jsonData, 0644)
 }
 
 func (serviceCore *ServiceCore) RemoveClient(clientId string) {
@@ -253,11 +262,11 @@ func (serviceCore *ServiceCore) RemoveClient(clientId string) {
 func (serviceCore *ServiceCore) SetClientAccessControls() {
 }
 
-type CustomClaims struct {
+/* type CustomClaims struct {
 	ClientId string
 	Roles []string
 	jwt.StandardClaims
-}
+} */
 
 func (serviceCore *ServiceCore) GetActiveKeyPair() *KeyPair {
 	return serviceCore.NodeInfo.KeyPairs[0]
@@ -266,22 +275,22 @@ func (serviceCore *ServiceCore) GetActiveKeyPair() *KeyPair {
 func (serviceCore *ServiceCore) MakeAdminJWT(clientKey string, clientSecret string) (string, error) {
 
 	if clientKey != serviceCore.AdminClientKey || clientSecret != serviceCore.AdminClientSecret {
-		return "", nil
+		return "", errors.New("incorrect key or secret")
 	}
 
 	keypair := serviceCore.GetActiveKeyPair()
 	roles := make([]string, 0)
 	roles = append(roles, "admin")
 
-	claims := CustomClaims{
-		"admin",
-		roles,
+	claims := CustomClaims{}
+	claims.Roles = roles
+	claims.StandardClaims =
 		jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(time.Minute * 15).Unix(),
 			Issuer:    "node:" + serviceCore.NodeInfo.NodeId,
 			Audience:  "node:" + serviceCore.NodeInfo.NodeId,
-		},
-	}
+			Subject: clientKey,
+		}
 
 	token, err := jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(keypair.PrivateKey)
 	if err != nil {
@@ -321,16 +330,15 @@ func (serviceCore *ServiceCore) ValidateClientJWTMakeJWTAccessToken(clientJWT st
 	roles = append(roles, "client")
 
 	// add in roles in config
-
-	claims := CustomClaims{
-		clientId,
-		roles,
+	claims := CustomClaims{}
+	claims.Roles = roles
+	claims.StandardClaims =
 		jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(time.Minute * 15).Unix(),
 			Issuer:    "node:" + serviceCore.NodeInfo.NodeId,
 			Audience:  "node:" + serviceCore.NodeInfo.NodeId,
-		},
-	}
+			Subject: clientId,
+		}
 
 	keypair := serviceCore.GetActiveKeyPair()
 	accessToken, err := jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(keypair.PrivateKey)
@@ -341,12 +349,11 @@ func (serviceCore *ServiceCore) ValidateClientJWTMakeJWTAccessToken(clientJWT st
 	return accessToken, nil
 }
 
-func (serviceCore *ServiceCore) GetJWKS() {
-	// add scope of sec_service_client to allow subsequent checks of resource access
+func (serviceCore *ServiceCore) CheckUserActionResource(action string, actor string, resource string) {
+	// get acls for user
+
 }
 
-func (serviceCore *ServiceCore) CheckClientResourceActionRequest() {
-}
 
 // IsReadAccessGranted checks all datasets to see if the acls presented grants read access
 func IsReadAccessGranted(dataset string, datasetACLs map[string]AccessControl) bool {

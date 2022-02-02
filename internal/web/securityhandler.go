@@ -1,21 +1,18 @@
 package web
 
 import (
+	"context"
 	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"github.com/golang-jwt/jwt"
 	"github.com/labstack/echo/v4"
 	"github.com/mimiro-io/datahub/internal/security"
+	"go.uber.org/fx"
+	"go.uber.org/zap"
 	"io/ioutil"
 	"net/http"
 )
-
-func NewWebService() *echo.Echo {
-	e := echo.New()
-	e.HideBanner = true
-	return e
-}
 
 func extractToken(c echo.Context) (string, error) {
 	auth := c.Request().Header.Get("Authorization")
@@ -85,47 +82,33 @@ func MakeJWTMiddleware(publicKey *rsa.PublicKey, expectedAudience string, expect
 	}
 }
 
-func RegisterHandlers(echo *echo.Echo, serviceCore *security.ServiceCore) {
-	handler := NewServiceHandler(serviceCore)
+func NewSecurityHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, core *security.ServiceCore) {
+	log := logger.Named("web")
+	handler := &SecurityHandler{}
+	handler.serviceCore = core
+	handler.logger = log
 
-	echo.POST("/security/token", handler.tokenRequestHandler)
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			// query
+			e.POST("/security/token", handler.tokenRequestHandler)
+			e.POST("/security/clients", handler.clientRegistrationRequestHandler, mw.authorizer(log, datahubWrite))
 
-	// requires middleware for JWT is valid and checking admin role
-	jwtMiddleware := MakeJWTMiddleware(serviceCore.GetActiveKeyPair().PublicKey, "node:" + serviceCore.NodeInfo.NodeId, "node:" + serviceCore.NodeInfo.NodeId)
+			/* jwtMiddleware := MakeJWTMiddleware(core.GetActiveKeyPair().PublicKey, "node:" + core.NodeInfo.NodeId, "node:" + core.NodeInfo.NodeId)
 
-	echo.POST("/security/clients", handler.registerClientRequestHandler, jwtMiddleware, MakeRoleCheckMiddleware("admin"))
-	echo.POST("/security/clientclaims", handler.setClientClaimsRequestHandler, jwtMiddleware, MakeRoleCheckMiddleware("admin"))
-	echo.POST("/security/clientacl", handler.setClientClaimsRequestHandler, jwtMiddleware, MakeRoleCheckMiddleware("admin"))
+			e.POST("/security/clients", handler.registerClientRequestHandler, jwtMiddleware, MakeRoleCheckMiddleware("admin"))
+			e.POST("/security/clientclaims", handler.setClientClaimsRequestHandler, jwtMiddleware, MakeRoleCheckMiddleware("admin"))
+			e.POST("/security/clientacl", handler.setClientClaimsRequestHandler, jwtMiddleware, MakeRoleCheckMiddleware("admin"))
+			*/
 
-	// requires middleware for JWT is valid and checking client role
-	// echo.POST("/security/isallowed", handler.checkClientResourceActionRequestHandler, jwtMiddleware, MakeRoleCheckMiddleware("client", "admin"))
-	// echo.POST("/security/isinrole", handler.checkClientResourceActionRequestHandler, jwtMiddleware, MakeRoleCheckMiddleware("client", "admin"))
-
-	// create signed token request
-	// echo.GET("/security/signedtokenrequest", handler.createSignedTokenRequest, jwtMiddleware, MakeRoleCheckMiddleware("admin"))
-
-	// get the jwks
-	echo.GET("/.well-known/jwks", handler.tokenRequestHandler)
+			return nil
+		},
+	})
 }
 
-type ServiceHandler struct {
+type SecurityHandler struct {
 	serviceCore *security.ServiceCore
-}
-
-func NewServiceHandler(serviceCore *security.ServiceCore) *ServiceHandler {
-	serviceHandler := &ServiceHandler{}
-	serviceHandler.serviceCore = serviceCore
-	return serviceHandler
-}
-
-type TokenRequest struct {
-	RequestType    string // either key or pke
-	ClientKey      string
-	ClientSecret   string
-
-	Message        string
-	Signature      string
-	Algorithm      string
+	logger *zap.SugaredLogger
 }
 
 // TokenResponse is a OAuth2 JWT Token Response
@@ -134,23 +117,8 @@ type TokenResponse struct {
 	TokenType string `json:"token_type"`
 }
 
-type SignedClientRequest struct {
-	Token string
-}
-
-func (handler *ServiceHandler) createSignedTokenRequest(c echo.Context) error {
-	// fix me: fetch param for the audience
-	token, err := handler.serviceCore.CreateJWTForTokenRequest("node1")
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "error creating token " + err.Error())
-	}
-	response := &SignedClientRequest{}
-	response.Token = token
-	return c.JSON(http.StatusOK, response)
-}
-
 // oidc - oauth2 compliant token request handler
-func (handler *ServiceHandler) tokenRequestHandler(c echo.Context) error {
+func (handler *SecurityHandler) tokenRequestHandler(c echo.Context) error {
 	// url form encoded params
 	var grantType string
 	// var audience string
@@ -159,7 +127,17 @@ func (handler *ServiceHandler) tokenRequestHandler(c echo.Context) error {
 	clientAssertionType := c.FormValue("client_assertion_type")
 
 	if grantType == "client_credentials" && clientAssertionType == "urn:ietf:params:oauth:grant-type:jwt-bearer" {
-		// assertion = c.FormValue("client_assertion")
+		assertion := c.FormValue("client_assertion")
+		token, err:= handler.serviceCore.ValidateClientJWTMakeJWTAccessToken(assertion)
+
+		if err != nil {
+			// replace with not authorised
+			return err
+		}
+		response := &TokenResponse{}
+		response.AccessToken = token
+		response.TokenType = "Bearer"
+		return c.JSON(http.StatusOK, response)
 
 	} else if grantType == "client_credentials" {
 		clientId := c.FormValue("client_id")
@@ -167,6 +145,7 @@ func (handler *ServiceHandler) tokenRequestHandler(c echo.Context) error {
 
 		token, err := handler.serviceCore.MakeAdminJWT(clientId, clientSecret)
 		if err != nil {
+			// replace with not authorised
 			return err
 		}
 		response := &TokenResponse{}
@@ -178,15 +157,7 @@ func (handler *ServiceHandler) tokenRequestHandler(c echo.Context) error {
 	return nil
 }
 
-func (handler *ServiceHandler) jwksRequestHandler(c echo.Context) error {
-	return nil
-}
-
-func (handler *ServiceHandler) checkClientResourceActionRequestHandler(c echo.Context) error {
-	return nil
-}
-
-func (handler *ServiceHandler) registerClientRequestHandler(c echo.Context) error {
+func (handler *SecurityHandler) clientRegistrationRequestHandler(c echo.Context) error {
 	body, err := ioutil.ReadAll(c.Request().Body)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing body")
@@ -202,11 +173,11 @@ func (handler *ServiceHandler) registerClientRequestHandler(c echo.Context) erro
 	return c.NoContent(http.StatusOK)
 }
 
-func (handler *ServiceHandler) setClientClaimsRequestHandler(c echo.Context) error {
+func (handler *SecurityHandler) setClientClaimsRequestHandler(c echo.Context) error {
 	return nil
 }
 
-func (handler *ServiceHandler) setClientAccessControlsRequestHandler(c echo.Context) error {
+func (handler *SecurityHandler) setClientAccessControlsRequestHandler(c echo.Context) error {
 	return nil
 }
 
