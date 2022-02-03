@@ -6,7 +6,7 @@ Semantic Graph databases are the ideal basis for an integration platform, they a
 
 Data integration is often done by writing ad-hoc code to talk to different APIs, and long running batch ETL jobs. The data hub standardises on a simple, generic protocol for exposing and updating remote systems with support for both batch, incremental and streaming modes.
 
-Combining the semantic graph database with simple synchronisation protocol delivers a generic and powerful capability for collecting, connecting and delivering data from and to many sources.
+Combining the semantic graph database with simple synchronisation protocol delivers a generic and powerful capability for collecting, connecting and delivering data from and to many sources - it is the ultimate data liberation technology.
 
 Once the data is in the graph database it can be connected via queries and transformed to produce new unified data structures. These data can then be used as the basis for ML and AI, or sent to external third parties via APIs or data exports.
 
