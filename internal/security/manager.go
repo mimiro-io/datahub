@@ -8,16 +8,18 @@ import (
 	"encoding/pem"
 	"errors"
 	"github.com/golang-jwt/jwt"
+	"github.com/google/uuid"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"io/ioutil"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
 // NodeInfo is a data structure that represents a node in the security topology
 type NodeInfo struct {
-	NodeId string
+	NodeId   string
 	KeyPairs []*KeyPair
 }
 
@@ -30,9 +32,9 @@ func NewNodeInfo(nodeId string, keyPairs []*KeyPair) *NodeInfo {
 
 type KeyPair struct {
 	PrivateKey *rsa.PrivateKey
-	PublicKey *rsa.PublicKey
-	Active bool
-	Expires uint64
+	PublicKey  *rsa.PublicKey
+	Active     bool
+	Expires    uint64
 }
 
 func NewKeyPair(privateKey *rsa.PrivateKey, publicKey *rsa.PublicKey, active bool) *KeyPair {
@@ -44,15 +46,15 @@ func NewKeyPair(privateKey *rsa.PrivateKey, publicKey *rsa.PublicKey, active boo
 }
 
 type ClientInfo struct {
-	ClientId string
+	ClientId  string
 	PublicKey []byte
-	Deleted bool
+	Deleted   bool
 }
 
 // ClientIdClaim used by a client to assert it is who they say they are.
 type ClientIdClaim struct {
-	clientId  string
-	timestamp string
+	clientId       string
+	timestamp      string
 	Message        []byte // encrypted message
 	MessageHashSum int    // signed
 	Signature      []byte
@@ -87,13 +89,13 @@ type ServiceCore struct {
 	NodeInfo *NodeInfo
 
 	// client id keyed client info
-	Clients map[string]*ClientInfo
+	clients sync.Map
 
 	// client id keyed list of access controls
-	AccessControls map[string][]AccessControl
+	accessControls sync.Map
 
 	// client id keyed list of roles
-	Roles map[string][]string
+	roles sync.Map
 }
 
 func NewServiceCore(env *conf.Env) *ServiceCore {
@@ -103,7 +105,7 @@ func NewServiceCore(env *conf.Env) *ServiceCore {
 	serviceCore.AdminClientSecret = env.AdminPassword
 	nodeInfo := NewNodeInfo(env.NodeId, nil)
 	serviceCore.NodeInfo = nodeInfo
-	serviceCore.Clients = make(map[string]*ClientInfo)
+	// serviceCore.clients = sync.Map{} // make(map[string]*ClientInfo)
 
 	serviceCore.Init()
 
@@ -122,7 +124,7 @@ func ExportRsaPrivateKeyAsPem(key *rsa.PrivateKey) (string, error) {
 	}
 	pemBytes := pem.EncodeToMemory(
 		&pem.Block{
-			Type: "PRIVATE KEY",
+			Type:  "PRIVATE KEY",
 			Bytes: bytes,
 		},
 	)
@@ -132,7 +134,7 @@ func ExportRsaPrivateKeyAsPem(key *rsa.PrivateKey) (string, error) {
 func ParseRsaPrivateKeyFromPem(pemValue []byte) (*rsa.PrivateKey, error) {
 	privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(pemValue)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	return privateKey, nil
 }
@@ -186,20 +188,28 @@ func (serviceCore *ServiceCore) Init() error {
 	if err == nil {
 		// load data for private key
 		content, err := ioutil.ReadFile(serviceCore.Location + string(os.PathSeparator) + fileinfo.Name())
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 
 		privateKey, err := ParseRsaPrivateKeyFromPem(content)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 
 		// public key
 		content, err = ioutil.ReadFile(serviceCore.Location + string(os.PathSeparator) + "node_key.pub")
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 
 		publicKey, err := ParseRsaPublicKeyFromPem(content)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 
 		keyPair := NewKeyPair(privateKey, publicKey, true)
-		serviceCore.NodeInfo.KeyPairs = make([]*KeyPair,0)
+		serviceCore.NodeInfo.KeyPairs = make([]*KeyPair, 0)
 		serviceCore.NodeInfo.KeyPairs = append(serviceCore.NodeInfo.KeyPairs, keyPair)
 	} else {
 		// generate files
@@ -214,59 +224,108 @@ func (serviceCore *ServiceCore) Init() error {
 		}
 
 		// write keys to files
-		err = ioutil.WriteFile(serviceCore.Location + string(os.PathSeparator) + "node_key", []byte(privateKeyPem), 0600)
+		err = ioutil.WriteFile(serviceCore.Location+string(os.PathSeparator)+"node_key", []byte(privateKeyPem), 0600)
 		if err != nil {
 			return err
 		}
-		err = ioutil.WriteFile(serviceCore.Location + string(os.PathSeparator) + "node_key.pub", []byte(publicKeyPem), 0600)
+		err = ioutil.WriteFile(serviceCore.Location+string(os.PathSeparator)+"node_key.pub", []byte(publicKeyPem), 0600)
 		if err != nil {
 			return err
 		}
 
 		keyPair := NewKeyPair(privateKey, publicKey, true)
-		serviceCore.NodeInfo.KeyPairs = make([]*KeyPair,0)
+		serviceCore.NodeInfo.KeyPairs = make([]*KeyPair, 0)
 		serviceCore.NodeInfo.KeyPairs = append(serviceCore.NodeInfo.KeyPairs, keyPair)
 	}
 	return nil
 }
 
-// CreateJWTForTokenRequest returns a JWT token that can be used to get an access token to a remote endpoint
-func (serviceCore *ServiceCore) CreateJWTForTokenRequest(audience string) (string, error) {
-	// get the active keypair
-	keyPair := serviceCore.GetActiveKeyPair()
+func CreateJWTForTokenRequest(subject string, privateKey *rsa.PrivateKey) (string, error) {
+	uniqueId := uuid.New()
 
 	claims := jwt.StandardClaims{
-		ExpiresAt: time.Now().Add(time.Minute * 5).Unix(),
-		Issuer:    serviceCore.NodeInfo.NodeId,
-		Audience:  audience,
-		Id: "a guid",
-		Subject: serviceCore.NodeInfo.NodeId,
+		ExpiresAt: time.Now().Add(time.Minute * 1).Unix(),
+		Id:        uniqueId.String(),
+		Subject:   subject,
 	}
 
-	token, err := jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(keyPair.PrivateKey)
-	return token, err
+	token, err := jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(privateKey)
+	if err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
+// CreateJWTForTokenRequest returns a JWT token that can be used to get an access token to a remote endpoint
+func (serviceCore *ServiceCore) CreateJWTForTokenRequest(audience string) (string, error) {
+	keyPair := serviceCore.GetActiveKeyPair()
+	return CreateJWTForTokenRequest(serviceCore.NodeInfo.NodeId, keyPair.PrivateKey)
 }
 
 func (serviceCore *ServiceCore) RegisterClient(clientInfo *ClientInfo) {
-	// save to disk
-	serviceCore.Clients[clientInfo.ClientId] = clientInfo
+	var mut sync.Mutex
+	mut.Lock()
+	defer mut.Unlock()
 
-	jsonData, _ := json.Marshal(serviceCore.Clients)
-	_ = ioutil.WriteFile(serviceCore.Location + string(os.PathSeparator) + "clients.json", jsonData, 0644)
+	if clientInfo.Deleted {
+		serviceCore.clients.Delete(clientInfo.ClientId)
+		serviceCore.DeleteClientAccessControls(clientInfo.ClientId)
+	} else {
+		serviceCore.clients.Store(clientInfo.ClientId, clientInfo)
+	}
+
+	jsonData, _ := json.Marshal(serviceCore.GetClients())
+	_ = ioutil.WriteFile(serviceCore.Location+string(os.PathSeparator)+"clients.json", jsonData, 0644)
 }
 
-func (serviceCore *ServiceCore) RemoveClient(clientId string) {
-	delete(serviceCore.Clients, clientId)
+func (serviceCore *ServiceCore) GetClients() map[string]*ClientInfo {
+	m := make(map[string]*ClientInfo)
+	serviceCore.clients.Range(func(k interface{}, v interface{}) bool {
+		m[k.(string)] = v.(*ClientInfo)
+		return true
+	})
+	return m
 }
 
-func (serviceCore *ServiceCore) SetClientAccessControls() {
+func (serviceCore *ServiceCore) DeleteClientAccessControls(clientId string) {
+	var mut sync.Mutex
+	mut.Lock()
+	defer mut.Unlock()
+
+	serviceCore.accessControls.Delete(clientId)
+
+	jsonData, _ := json.Marshal(serviceCore.GetClients())
+	_ = ioutil.WriteFile(serviceCore.Location+string(os.PathSeparator)+"acls.json", jsonData, 0644)
 }
 
-/* type CustomClaims struct {
-	ClientId string
-	Roles []string
-	jwt.StandardClaims
-} */
+func (serviceCore *ServiceCore) SetClientAccessControls(clientId string, acls []*AccessControl) {
+	var mut sync.Mutex
+	mut.Lock()
+	defer mut.Unlock()
+
+	serviceCore.accessControls.Store(clientId, acls)
+
+	jsonData, _ := json.Marshal(serviceCore.GetAllAccessControls())
+	_ = ioutil.WriteFile(serviceCore.Location+string(os.PathSeparator)+"acls.json", jsonData, 0644)
+}
+
+func (serviceCore *ServiceCore) GetAccessControls(clientId string) []*AccessControl {
+	acls, ok := serviceCore.accessControls.Load(clientId)
+	if ok {
+		return acls.([]*AccessControl)
+	} else {
+		return nil
+	}
+}
+
+func (serviceCore *ServiceCore) GetAllAccessControls() map[string][]*AccessControl {
+	m := make(map[string][]*AccessControl)
+	serviceCore.accessControls.Range(func(k interface{}, v interface{}) bool {
+		m[k.(string)] = v.([]*AccessControl)
+		return true
+	})
+	return m
+}
 
 func (serviceCore *ServiceCore) GetActiveKeyPair() *KeyPair {
 	return serviceCore.NodeInfo.KeyPairs[0]
@@ -289,7 +348,7 @@ func (serviceCore *ServiceCore) MakeAdminJWT(clientKey string, clientSecret stri
 			ExpiresAt: time.Now().Add(time.Minute * 15).Unix(),
 			Issuer:    "node:" + serviceCore.NodeInfo.NodeId,
 			Audience:  "node:" + serviceCore.NodeInfo.NodeId,
-			Subject: clientKey,
+			Subject:   clientKey,
 		}
 
 	token, err := jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(keypair.PrivateKey)
@@ -302,18 +361,18 @@ func (serviceCore *ServiceCore) MakeAdminJWT(clientKey string, clientSecret stri
 
 func (serviceCore *ServiceCore) ValidateClientJWTMakeJWTAccessToken(clientJWT string) (string, error) {
 	// parse without key to get subject
-	token, err := jwt.ParseWithClaims(clientJWT, &jwt.StandardClaims{} , func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(clientJWT, &jwt.StandardClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(""), nil
 	})
 
 	clientClaims := token.Claims.(*jwt.StandardClaims)
 	var clientId = clientClaims.Subject
 
-	client := serviceCore.Clients[clientId]
-	clientPublicKey, err := ParseRsaPublicKeyFromPem(client.PublicKey)
+	client, _ := serviceCore.clients.Load(clientId)
+	clientPublicKey, err := ParseRsaPublicKeyFromPem(client.(*ClientInfo).PublicKey)
 
 	// parse again with key
-	token, err = jwt.ParseWithClaims(clientJWT, &jwt.StandardClaims{} , func(token *jwt.Token) (interface{}, error) {
+	token, err = jwt.ParseWithClaims(clientJWT, &jwt.StandardClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return clientPublicKey, nil
 	})
 
@@ -337,7 +396,7 @@ func (serviceCore *ServiceCore) ValidateClientJWTMakeJWTAccessToken(clientJWT st
 			ExpiresAt: time.Now().Add(time.Minute * 15).Unix(),
 			Issuer:    "node:" + serviceCore.NodeInfo.NodeId,
 			Audience:  "node:" + serviceCore.NodeInfo.NodeId,
-			Subject: clientId,
+			Subject:   clientId,
 		}
 
 	keypair := serviceCore.GetActiveKeyPair()
@@ -353,7 +412,6 @@ func (serviceCore *ServiceCore) CheckUserActionResource(action string, actor str
 	// get acls for user
 
 }
-
 
 // IsReadAccessGranted checks all datasets to see if the acls presented grants read access
 func IsReadAccessGranted(dataset string, datasetACLs map[string]AccessControl) bool {
@@ -382,4 +440,3 @@ func IsReadAccessGranted(dataset string, datasetACLs map[string]AccessControl) b
 
 	return false
 }
-
