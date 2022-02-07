@@ -71,7 +71,6 @@ func TestPipelineHistory(t *testing.T) {
 			_ = os.RemoveAll(storeLocation)
 		})
 		g.It("Should preserve state of composed change products also if sources change with time", func() {
-			g.Timeout(1 * time.Hour)
 			/*
 				Here we simulate changes in two datasets over time, and verify how these changes affect the results
 				of transforms which use Query to join both datasets.
@@ -159,7 +158,7 @@ func TestPipelineHistory(t *testing.T) {
 		})
 		g.It("Should compose existing changes correctly in transform with Query", func() {
 			/*
-				  This is almost the same order of changes as above, except for that we only run the
+				  This is the same order of changes as above, except for that we only run the
 					transform job once at the end.
 			*/
 			ns, employees, people, companies := setupDatasets(store, dsm)
@@ -185,6 +184,76 @@ func TestPipelineHistory(t *testing.T) {
 			g.Assert(homer("homer_4")).IsNil()
 			/////////// 7th change: mimiro  final change
 			g.Assert(mimiro("Mimiro_4")).IsNil()
+			job.Run()
+
+			// print out state
+			result, _ := people.GetChanges(0, math.MaxInt)
+			t.Logf("\npeople change count: %v", len(result.Entities))
+			for _, e := range result.Entities {
+				t.Logf("people: %+v", e.Properties)
+			}
+			result, _ = companies.GetChanges(0, math.MaxInt)
+			t.Logf("\ncompanies change count: %v", len(result.Entities))
+			for _, e := range result.Entities {
+				t.Logf("companies: %+v", e.Properties)
+			}
+			result, _ = employees.GetChanges(0, math.MaxInt)
+			t.Log("\nexpected employees change count: 8 (baseline plus 7 changes)")
+			t.Logf("\nemployees change count: %v", len(result.Entities))
+
+			for _, e := range result.Entities {
+				t.Logf("employees: %+v", e.Properties)
+			}
+
+			g.Assert(len(result.Entities)).Eql(8)
+			check(g, result, 0, "homer_1", "Mimiro_1")
+			check(g, result, 1, "homer_2", "Mimiro_1")
+			check(g, result, 2, "homer_2", "Mimiro_2")
+			check(g, result, 3, "homer_3", "Mimiro_2")
+			check(g, result, 4, "homer_1", "Mimiro_2")
+			check(g, result, 5, "homer_1", "Mimiro_3")
+			check(g, result, 6, "homer_4", "Mimiro_3")
+			check(g, result, 7, "homer_4", "Mimiro_4")
+		})
+		g.It("Should not change the sink if run many times on unchanges sources", func() {
+			/*
+				  This is the same order of changes as above, except for that we run the
+					transform job 10 times at the end.
+			*/
+			ns, employees, people, companies := setupDatasets(store, dsm)
+			job := setupJob(scheduler, g, runner)
+			homer, mimiro := entityUpdaters(people, ns, companies)
+
+			// store first version of "homer"
+			// and first version of "mimiro"
+			g.Assert(homer("homer_1")).IsNil()
+			g.Assert(mimiro("Mimiro_1")).IsNil()
+
+			///////////// first change: homer new name /////////////////
+			g.Assert(homer("homer_2")).IsNil()
+			//////////// 2nd change: Mimiro new name //////////////////
+			g.Assert(mimiro("Mimiro_2")).IsNil()
+			/////////// 3rd change: homer new name again
+			g.Assert(homer("homer_3")).IsNil()
+			/////////// 4th change: homer back to old name
+			g.Assert(homer("homer_1")).IsNil()
+			/////////// 5th change: Mimiro new name
+			g.Assert(mimiro("Mimiro_3")).IsNil()
+			/////////// 6th change: homer  final change
+			g.Assert(homer("homer_4")).IsNil()
+			/////////// 7th change: mimiro  final change
+			g.Assert(mimiro("Mimiro_4")).IsNil()
+
+			// run same pipeline 10 times without changing sources
+			job.Run()
+			job.Run()
+			job.Run()
+			job.Run()
+			job.Run()
+			job.Run()
+			job.Run()
+			job.Run()
+			job.Run()
 			job.Run()
 
 			// print out state
