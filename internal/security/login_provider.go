@@ -52,8 +52,7 @@ func NewProviderManager(lc fx.Lifecycle, env *conf.Env, store *server.Store, log
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			_ = pm.addComp()
-			return nil
+			return pm.addComp()
 		},
 	})
 
@@ -101,6 +100,8 @@ func (pm *ProviderManager) LoadValue(vp *ValueReader) string {
 		v := os.Getenv(vp.Value)
 		if v == "" {
 			return viper.GetString(vp.Value)
+		} else {
+			return v
 		}
 	case "ssm":
 		if v, ok := pm.sm.Value(vp.Value); ok {
