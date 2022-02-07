@@ -55,7 +55,7 @@ func TestNodeSecurity(t *testing.T) {
 			cancel()
 			g.Assert(err).IsNil()
 			err = os.RemoveAll(location)
-			// err = os.RemoveAll(securityLocation)
+			err = os.RemoveAll(securityLocation)
 			g.Assert(err).IsNil()
 			_ = os.Unsetenv("STORE_LOCATION")
 			_ = os.Unsetenv("PROFILE")
