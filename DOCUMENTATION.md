@@ -401,10 +401,13 @@ The dataset source reads entities from a dataset in the data hub.
     "source": {
         "Type": "DatasetSource",
         "Name": "name of the dataset to read from",
-        "BatchSize" : "optional int value of how many to read at a time"
+        "BatchSize" : "optional int value of how many to read at a time",
+        "LatestOnly": "true or false, indicating whether to emit all changes or only the latest change of each entity"
     }
 }
 ```
+The `LatestOnly` flag can be set to limit the number of entities emitted to only the latest version of each entity.
+The default is that all changes of each entity are emitted, so that the whole dataset can be transformed and/or copied without loss of history.
 
 #### Multi Source
 
@@ -421,6 +424,7 @@ MultiSource can in incremental jobs emit entities that have not been changed the
     "source": {
         "Type": "MultiSource",
         "Name": "name of the main dataset",
+        "LatestOnly": "true or false, indicating whether to emit all changes or only the latest change of each entity"
         "Dependencies": [
             {
                 "dataset": "name of a dependency dataset",
@@ -1487,5 +1491,3 @@ A payload with the following data is sent to the OPA service with the request:
 ```
 
 Note that the backing implementation of the OPA ruleset is outside of the scope of this documentation, and is in practice up to the OPA service maintainer in your organization. However the functions and their return values are not optional, and must confirm.
-
-
