@@ -282,6 +282,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 	var rid uint64
 
 	idCache := make(map[string]uint64)
+	localLatests := make(map[uint64][]byte)
 
 	rtxn := ds.store.database.NewTransaction(false)
 	defer rtxn.Discard()
@@ -314,10 +315,11 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 		binary.BigEndian.PutUint64(entityIdBuffer[2:], rid)
 		binary.BigEndian.PutUint32(entityIdBuffer[10:], ds.InternalID)
 		binary.BigEndian.PutUint64(entityIdBuffer[14:], uint64(txnTime))
-		binary.BigEndian.PutUint16(entityIdBuffer[22:], uint16(jsonLength))
+		binary.BigEndian.PutUint16(entityIdBuffer[22:], uint16(jsonLength*int(time.Now().UnixNano())))
 
 		// assume different from a previous version
 		isDifferent := true
+		isDifferentLocally := true
 
 		datasetEntitiesLatestVersionKey := make([]byte, 14)
 		binary.BigEndian.PutUint16(datasetEntitiesLatestVersionKey, DATASET_LATEST_ENTITIES)
@@ -356,15 +358,30 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 					reflect.DeepEqual(prevEntity.Properties, e.Properties) {
 					isDifferent = false
 				}
+			}
+			if localLatests[rid] != nil {
+				prevLocalJson := localLatests[rid]
+				prevLocalEntity := &Entity{}
+				err = json.Unmarshal(prevLocalJson, prevLocalEntity)
+				if len(prevLocalJson) == jsonLength &&
+					reflect.DeepEqual(prevLocalEntity.References, e.References) &&
+					reflect.DeepEqual(prevLocalEntity.Properties, e.Properties) {
+					isDifferentLocally = false
+				}
 			} else {
+				isDifferentLocally = false
+			}
+
+			if prevEntity == nil {
 				newitems++
 			}
 		}
 
 		// not new and not different
-		if !isnew && !isDifferent {
+		if !isnew && !isDifferent && !isDifferentLocally {
 			continue
 		}
+		localLatests[rid] = jsonData
 
 		// store entity and the log entry
 		_ = ds.store.statsdClient.Count("ds.added.bytes", int64(jsonLength), tags, 1)
@@ -731,7 +748,7 @@ func (ds *Dataset) GetChangesWatermark() (uint64, error) {
 	})
 
 	// need to add one to point to next change in searches.
-	return waterMark+1, err
+	return waterMark + 1, err
 }
 
 /*
