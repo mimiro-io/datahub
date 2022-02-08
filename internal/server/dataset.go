@@ -287,7 +287,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 	rtxn := ds.store.database.NewTransaction(false)
 	defer rtxn.Discard()
 
-	for _, e := range entities {
+	for batchSeqNum, e := range entities {
 
 		// entityIdBuffer buffer for lookup in main index
 		// index_id;rid;dataset;time => blob
@@ -315,7 +315,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 		binary.BigEndian.PutUint64(entityIdBuffer[2:], rid)
 		binary.BigEndian.PutUint32(entityIdBuffer[10:], ds.InternalID)
 		binary.BigEndian.PutUint64(entityIdBuffer[14:], uint64(txnTime))
-		binary.BigEndian.PutUint16(entityIdBuffer[22:], uint16(jsonLength*int(time.Now().UnixNano())))
+		binary.BigEndian.PutUint16(entityIdBuffer[22:], uint16(batchSeqNum))
 
 		// assume different from a previous version
 		isDifferent := true

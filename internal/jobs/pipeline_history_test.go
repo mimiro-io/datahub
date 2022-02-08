@@ -315,7 +315,9 @@ func setupCheckers(g *goblin.G, t *testing.T, employees *server.Dataset, people 
 	}
 	printState := func() {
 		// comment out or remove shortcut return to activate printing
-		return
+		if 1 == 1 {
+			return
+		}
 		// print out state
 		result, _ := people.GetChanges(0, math.MaxInt)
 		//t.Logf("\npeople change count: %v", len(result.Entities))
