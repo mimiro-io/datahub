@@ -12,6 +12,7 @@ type DatasetSource struct {
 	Store          *server.Store
 	DatasetManager *server.DsManager
 	isFullSync     bool
+	LatestOnly     bool
 }
 
 func (datasetSource *DatasetSource) StartFullSync() {
@@ -45,9 +46,10 @@ func (datasetSource *DatasetSource) ReadEntities(since DatasetContinuation, batc
 			return err
 		}
 	} else {
-		continuation, err := dataset.ProcessChanges(since.AsIncrToken(), batchSize, func(entity *server.Entity) {
-			entities = append(entities, entity)
-		})
+		continuation, err := dataset.ProcessChanges(since.AsIncrToken(), batchSize, datasetSource.LatestOnly,
+			func(entity *server.Entity) {
+				entities = append(entities, entity)
+			})
 		if err != nil {
 			return err
 		}

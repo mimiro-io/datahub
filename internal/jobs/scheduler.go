@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -542,10 +543,17 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 				}
 				return src, nil
 			} else if sourceTypeName == "DatasetSource" {
+				var err error
 				src := &source.DatasetSource{}
 				src.Store = s.Store
 				src.DatasetManager = s.DatasetManager
 				src.DatasetName = (sourceConfig["Name"]).(string)
+				if sourceConfig["LatestOnly"] != nil {
+					src.LatestOnly, err = strconv.ParseBool((sourceConfig["LatestOnly"]).(string))
+				}
+				if err != nil {
+					return nil, err
+				}
 				return src, nil
 			} else if sourceTypeName == "MultiSource" {
 				src := &source.MultiSource{}
@@ -553,6 +561,13 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 				src.DatasetManager = s.DatasetManager
 				src.DatasetName = (sourceConfig["Name"]).(string)
 				err := src.ParseDependencies(sourceConfig["Dependencies"])
+				if err != nil {
+					return nil, err
+				}
+				src.LatestOnly, err = strconv.ParseBool((sourceConfig["LatestOnly"]).(string))
+				if sourceConfig["LatestOnly"] != nil {
+					src.LatestOnly, err = strconv.ParseBool((sourceConfig["LatestOnly"]).(string))
+				}
 				if err != nil {
 					return nil, err
 				}

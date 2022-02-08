@@ -31,6 +31,7 @@ type MultiSource struct {
 	isFullSync     bool
 	waterMarks     map[string]uint64
 	changesCache   map[string]changeURIData
+	LatestOnly     bool
 }
 
 type MultiDatasetContinuation struct {
@@ -168,7 +169,7 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 			if depSince.AsIncrToken() > 0 {
 				since = depSince.AsIncrToken() - 1
 			}
-			changes, err := depDataset.GetChanges(since, 1)
+			changes, err := depDataset.GetChanges(since, 1, multiSource.LatestOnly)
 			if err != nil {
 				return err
 			}
@@ -233,9 +234,10 @@ func (multiSource *MultiSource) findChangeURIs(depDataset *server.Dataset, depSi
 	}
 
 	uris := make([]string, 0)
-	continuation, err := depDataset.ProcessChanges(depSince.AsIncrToken(), batchSize, func(entity *server.Entity) {
-		uris = append(uris, entity.ID)
-	})
+	continuation, err := depDataset.ProcessChanges(depSince.AsIncrToken(), batchSize, multiSource.LatestOnly,
+		func(entity *server.Entity) {
+			uris = append(uris, entity.ID)
+		})
 	multiSource.changesCache[depDataset.ID] = changeURIData{uris, continuation}
 
 	return uris, continuation, err
@@ -253,9 +255,10 @@ func (multiSource *MultiSource) getDatasetFor(dep Dependency) (*server.Dataset, 
 func (multiSource *MultiSource) incrementalRead(since DatasetContinuation, batchSize int,
 	processEntities func([]*server.Entity, DatasetContinuation) error, dataset *server.Dataset) error {
 	entities := make([]*server.Entity, 0)
-	continuation, err := dataset.ProcessChanges(since.AsIncrToken(), batchSize, func(entity *server.Entity) {
-		entities = append(entities, entity)
-	})
+	continuation, err := dataset.ProcessChanges(since.AsIncrToken(), batchSize, multiSource.LatestOnly,
+		func(entity *server.Entity) {
+			entities = append(entities, entity)
+		})
 	if err != nil {
 		return err
 	}
