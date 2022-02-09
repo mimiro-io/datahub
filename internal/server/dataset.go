@@ -359,10 +359,12 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 					isDifferent = false
 				}
 			}
-			if localLatests[rid] != nil {
-				prevLocalJson := localLatests[rid]
+			if prevLocalJson, found := localLatests[rid]; found {
 				prevLocalEntity := &Entity{}
 				err = json.Unmarshal(prevLocalJson, prevLocalEntity)
+				if err != nil {
+					return newitems, err
+				}
 				if len(prevLocalJson) == jsonLength &&
 					reflect.DeepEqual(prevLocalEntity.References, e.References) &&
 					reflect.DeepEqual(prevLocalEntity.Properties, e.Properties) {
