@@ -155,7 +155,7 @@ func TestPipelineHistory(t *testing.T) {
 			}
 			printState()
 			checkEntities("homer_2", "Mimiro_1", "")
-			assertChangeCount(1) //"2 changes in source, time 5 job runs"
+			assertChangeCount(1) //only one version of homer is expected to be emitted, therefore only one resulting change version
 			checkChange(0, "homer_2", "Mimiro_1", "")
 		})
 		g.It("Should produce consistent output for 2 changes in different batches", func() {
@@ -210,7 +210,7 @@ func TestPipelineHistory(t *testing.T) {
 			print()
 			checkEntities("homer_3", "Mimiro_2", "")
 			checkChange(0, "homer_3", "Mimiro_2", "")
-			assertChangeCount(1) //"3 changes in source, time 5 job runs"
+			assertChangeCount(1) //since only one "Latest" version of homer is emitted, we expect only one result
 
 		})
 		g.It("Should preserve state of composed change products also if sources change with time", func() {
