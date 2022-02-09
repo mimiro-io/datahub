@@ -303,14 +303,14 @@ func setupCheckers(g *goblin.G, t *testing.T, employees *server.Dataset, people 
 
 	checkChanges := func(changeIdx int, homerName, mimiroName, homerFriend string) {
 		friendVal := fv(homerFriend, ns)
-		changes, _ := employees.GetChanges(0, math.MaxInt)
+		changes, _ := employees.GetChanges(0, math.MaxInt, false)
 		g.Assert(changes.Entities[changeIdx].IsDeleted).IsFalse()
 		g.Assert(changes.Entities[changeIdx].Properties["name"]).Eql(homerName)
 		g.Assert(changes.Entities[changeIdx].Properties["companyname"]).Eql(mimiroName)
 		g.Assert(changes.Entities[changeIdx].References[ns+":friend"]).Eql(friendVal)
 	}
 	assertChangeCount := func(expectedCount int) {
-		changes, _ := employees.GetChanges(0, math.MaxInt)
+		changes, _ := employees.GetChanges(0, math.MaxInt, false)
 		g.Assert(len(changes.Entities)).Eql(expectedCount)
 	}
 	printState := func() {
@@ -319,17 +319,17 @@ func setupCheckers(g *goblin.G, t *testing.T, employees *server.Dataset, people 
 			return
 		}
 		// print out state
-		result, _ := people.GetChanges(0, math.MaxInt)
+		result, _ := people.GetChanges(0, math.MaxInt, false)
 		//t.Logf("\npeople change count: %v", len(result.Entities))
 		for _, e := range result.Entities {
 			t.Logf("people: %+v; %+v", e.Properties, e.References)
 		}
-		result, _ = companies.GetChanges(0, math.MaxInt)
+		result, _ = companies.GetChanges(0, math.MaxInt, false)
 		//t.Logf("\ncompanies change count: %v", len(result.Entities))
 		for _, e := range result.Entities {
 			t.Logf("companies: %+v", e.Properties)
 		}
-		result, _ = employees.GetChanges(0, math.MaxInt)
+		result, _ = employees.GetChanges(0, math.MaxInt, false)
 		//t.Log("\nexpected employees change count: 8 (baseline plus 7 changes)")
 		//t.Logf("\nemployees change count: %v", len(result.Entities))
 

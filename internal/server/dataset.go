@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
@@ -946,10 +947,9 @@ func (ds *Dataset) ProcessChangesRaw(since uint64, count int, latestOnly bool, p
 		binary.BigEndian.PutUint32(searchBuffer[2:], ds.InternalID)
 		binary.BigEndian.PutUint64(searchBuffer[6:], since)
 
-		processed := 0
+		processed := int64(0)
 		for changesIterator.Seek(searchBuffer); changesIterator.ValidForPrefix(searchBuffer[:6]); changesIterator.Next() {
 			foundChanges = true
-			processed++
 			item := changesIterator.Item()
 			k := item.Key()
 
@@ -959,6 +959,7 @@ func (ds *Dataset) ProcessChangesRaw(since uint64, count int, latestOnly bool, p
 			processFn := func(entityChangeID []byte) error {
 				entityItem, _ := txn.Get(entityChangeID)
 				return entityItem.Value(func(jsonVal []byte) error {
+					atomic.AddInt64(&processed, 1)
 					return processChangedEntity(jsonVal)
 				})
 			}
@@ -971,7 +972,7 @@ func (ds *Dataset) ProcessChangesRaw(since uint64, count int, latestOnly bool, p
 				return err
 			}
 
-			if processed == count {
+			if int(processed) == count {
 				break
 			}
 		}
