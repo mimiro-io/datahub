@@ -580,22 +580,22 @@ func TestStore(test *testing.T) {
 			g.Assert(err).IsNil()
 
 			// get changes
-			changes, err := ds.GetChanges(0, 10)
+			changes, err := ds.GetChanges(0, 10, false)
 			g.Assert(err).IsNil()
 			g.Assert(len(changes.Entities)).Eql(3)
 			g.Assert(changes.NextToken).Eql(uint64(3))
 
-			changes, err = ds.GetChanges(1, 1)
+			changes, err = ds.GetChanges(1, 1, false)
 			g.Assert(err).IsNil()
 			g.Assert(len(changes.Entities)).Eql(1)
 			g.Assert(changes.NextToken).Eql(uint64(2))
 
-			changes, err = ds.GetChanges(2, 1)
+			changes, err = ds.GetChanges(2, 1, false)
 			g.Assert(err).IsNil()
 			g.Assert(len(changes.Entities)).Eql(1)
 			g.Assert(changes.NextToken).Eql(uint64(3))
 
-			changes, _ = ds.GetChanges(3, 10)
+			changes, _ = ds.GetChanges(3, 10, false)
 			g.Assert(len(changes.Entities)).Eql(0)
 			g.Assert(changes.NextToken).Eql(uint64(3))
 		})

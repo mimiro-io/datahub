@@ -660,13 +660,12 @@ func TestPipeline(t *testing.T) {
 			entities[1] = server.NewEntity(testNamespacePrefix+":barney", 0)
 			entities[1].Properties[testNamespacePrefix+":name"] = "barney"
 			entities[1].Properties[testNamespacePrefix+":address"] = map[string]interface{}{
-				"id": testNamespacePrefix+":barn",
-				"props": map[string]interface{}{ testNamespacePrefix+":street": "barnstreet" },
-				"refs": map[string]interface{}{},
+				"id":    testNamespacePrefix + ":barn",
+				"props": map[string]interface{}{testNamespacePrefix + ":street": "barnstreet"},
+				"refs":  map[string]interface{}{},
 			}
 
 			g.Assert(ds.StoreEntities(entities)).IsNil()
-
 
 			jsFun := `function transform_entities(entities) {
 		    var test_ns = GetNamespacePrefix("http://data.mimiro.io/test/");
@@ -1090,7 +1089,7 @@ func TestPipeline(t *testing.T) {
 			_ = srcDs.StoreEntities([]*server.Entity{e1})
 
 			var sourceChanges []*server.Entity
-			_, err := srcDs.ProcessChanges(0, 100, func(entity *server.Entity) {
+			_, err := srcDs.ProcessChanges(0, 100, false, func(entity *server.Entity) {
 				sourceChanges = append(sourceChanges, entity)
 			})
 			g.Assert(err).IsNil()
@@ -1118,7 +1117,7 @@ func TestPipeline(t *testing.T) {
 			_ = srcDs.StoreEntities([]*server.Entity{e1})
 
 			var sourceChanges []*server.Entity
-			_, err := srcDs.ProcessChanges(0, 100, func(entity *server.Entity) {
+			_, err := srcDs.ProcessChanges(0, 100, false, func(entity *server.Entity) {
 				sourceChanges = append(sourceChanges, entity)
 			})
 			g.Assert(err).IsNil()
@@ -1276,7 +1275,8 @@ func TestPipeline(t *testing.T) {
 			"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
 			"source" : {
 				"Type" : "DatasetSource",
-				"Name" : "Products"
+				"Name" : "Products",
+				"LatestOnly": "true"
 			},
 			"transform" : {
 				"Type" : "JavascriptTransform",
@@ -1289,6 +1289,7 @@ func TestPipeline(t *testing.T) {
 			jobConfig, _ := scheduler.Parse([]byte(jobJson))
 			pipeline, err := scheduler.toPipeline(jobConfig, JobTypeIncremental)
 			g.Assert(err).IsNil("pipeline is parsed")
+			g.Assert(pipeline.spec().source.(*source.DatasetSource).LatestOnly).IsTrue()
 
 			job := &job{
 				id:       jobConfig.Id,

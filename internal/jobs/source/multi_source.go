@@ -1,3 +1,17 @@
+// Copyright 2021 MIMIRO AS
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package source
 
 import (
@@ -31,6 +45,7 @@ type MultiSource struct {
 	isFullSync     bool
 	waterMarks     map[string]uint64
 	changesCache   map[string]changeURIData
+	LatestOnly     bool
 }
 
 type MultiDatasetContinuation struct {
@@ -168,7 +183,7 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 			if depSince.AsIncrToken() > 0 {
 				since = depSince.AsIncrToken() - 1
 			}
-			changes, err := depDataset.GetChanges(since, 1)
+			changes, err := depDataset.GetChanges(since, 1, multiSource.LatestOnly)
 			if err != nil {
 				return err
 			}
@@ -233,9 +248,10 @@ func (multiSource *MultiSource) findChangeURIs(depDataset *server.Dataset, depSi
 	}
 
 	uris := make([]string, 0)
-	continuation, err := depDataset.ProcessChanges(depSince.AsIncrToken(), batchSize, func(entity *server.Entity) {
-		uris = append(uris, entity.ID)
-	})
+	continuation, err := depDataset.ProcessChanges(depSince.AsIncrToken(), batchSize, multiSource.LatestOnly,
+		func(entity *server.Entity) {
+			uris = append(uris, entity.ID)
+		})
 	multiSource.changesCache[depDataset.ID] = changeURIData{uris, continuation}
 
 	return uris, continuation, err
@@ -253,9 +269,10 @@ func (multiSource *MultiSource) getDatasetFor(dep Dependency) (*server.Dataset, 
 func (multiSource *MultiSource) incrementalRead(since DatasetContinuation, batchSize int,
 	processEntities func([]*server.Entity, DatasetContinuation) error, dataset *server.Dataset) error {
 	entities := make([]*server.Entity, 0)
-	continuation, err := dataset.ProcessChanges(since.AsIncrToken(), batchSize, func(entity *server.Entity) {
-		entities = append(entities, entity)
-	})
+	continuation, err := dataset.ProcessChanges(since.AsIncrToken(), batchSize, multiSource.LatestOnly,
+		func(entity *server.Entity) {
+			entities = append(entities, entity)
+		})
 	if err != nil {
 		return err
 	}

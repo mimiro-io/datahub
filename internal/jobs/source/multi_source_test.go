@@ -1,3 +1,17 @@
+// Copyright 2021 MIMIRO AS
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package source_test
 
 import (
@@ -64,6 +78,8 @@ func TestMultiSource(t *testing.T) {
 
 		g.It("should emit changes in main dataset", func() {
 			people, peoplePrefix := createTestDataset("people", []string{"Bob", "Alice"}, nil, dsm, g, store)
+			// add one change to each entity -> 4 changes
+			addChanges("people", []string{"Bob", "Alice"}, dsm, store)
 
 			testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
 			var tokens []source.DatasetContinuation
@@ -79,6 +95,53 @@ func TestMultiSource(t *testing.T) {
 			})
 			g.Assert(err).IsNil()
 			testSource.EndFullSync()
+			g.Assert(len(recordedEntities)).Eql(4, "two entities with 2 changes each expected")
+
+			//now, modify alice and verify that we get alice emitted in next read
+			err = people.StoreEntities([]*server.Entity{
+				server.NewEntityFromMap(map[string]interface{}{
+					"id":    peoplePrefix + ":Alice",
+					"props": map[string]interface{}{"name": "Alice-changed"},
+					"refs":  map[string]interface{}{},
+				}),
+			})
+			since := tokens[len(tokens)-1]
+			tokens = []source.DatasetContinuation{}
+			recordedEntities = []server.Entity{}
+			err = testSource.ReadEntities(since, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				tokens = append(tokens, token)
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			g.Assert(len(recordedEntities)).Eql(1)
+			g.Assert(recordedEntities[0].Properties["name"]).Eql("Alice-changed")
+		})
+
+		g.It("should emit only latest changes in main dataset", func() {
+			// prime dataset with 2 entities
+			people, peoplePrefix := createTestDataset("people", []string{"Bob", "Alice"}, nil, dsm, g, store)
+			// add one change to each entity -> 4 changes
+			addChanges("people", []string{"Bob", "Alice"}, dsm, store)
+
+			testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm,
+				LatestOnly: true}
+			var tokens []source.DatasetContinuation
+			var recordedEntities []server.Entity
+			token := &source.MultiDatasetContinuation{}
+			testSource.StartFullSync()
+			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				tokens = append(tokens, token)
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			testSource.EndFullSync()
+			g.Assert(len(recordedEntities)).Eql(2, "There are 4 changes present, we expect only 2 (latest) changes emitted")
 
 			//now, modify alice and verify that we get alice emitted in next read
 			err = people.StoreEntities([]*server.Entity{
@@ -1007,6 +1070,24 @@ func createTestDataset(dsName string, entityNames []string, refMap map[string]ma
 
 	err = dataset.StoreEntities(entities)
 	g.Assert(err).IsNil()
+
+	return dataset, peoplePrefix
+}
+
+func addChanges(dsName string, entityNames []string, dsm *server.DsManager, store *server.Store) (*server.Dataset, string) {
+	dataset := dsm.GetDataset(dsName)
+	peoplePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://" + dsName + "/")
+	var entities []*server.Entity
+
+	for _, entityName := range entityNames {
+		entities = append(entities, server.NewEntityFromMap(map[string]interface{}{
+			"id":    peoplePrefix + ":" + entityName,
+			"props": map[string]interface{}{"name": entityName, "changed": "true"},
+			"refs":  map[string]interface{}{},
+		}))
+	}
+
+	_ = dataset.StoreEntities(entities)
 
 	return dataset, peoplePrefix
 }

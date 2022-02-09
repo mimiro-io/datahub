@@ -170,7 +170,7 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 	}
 
 	var (
-		l    int
+		l int
 	)
 	limit := c.QueryParam("limit")
 	if limit != "" {
@@ -261,7 +261,7 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 	jsonContext, _ := json.Marshal(dataset.GetContext())
 	_, _ = c.Response().Write(jsonContext)
 
-	continuationToken, err := dataset.ProcessChangesRaw(sinceNum, l, func(jsonData []byte) error {
+	continuationToken, err := dataset.ProcessChangesRaw(sinceNum, l, false, func(jsonData []byte) error {
 		_, _ = c.Response().Write([]byte(","))
 		_, _ = c.Response().Write(jsonData)
 		return nil
