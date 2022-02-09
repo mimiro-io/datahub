@@ -549,7 +549,12 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 				src.DatasetManager = s.DatasetManager
 				src.DatasetName = (sourceConfig["Name"]).(string)
 				if sourceConfig["LatestOnly"] != nil {
-					src.LatestOnly, err = strconv.ParseBool((sourceConfig["LatestOnly"]).(string))
+					i := sourceConfig["LatestOnly"]
+					if boolVal, ok := i.(bool); ok {
+						src.LatestOnly = boolVal
+					} else {
+						src.LatestOnly, err = strconv.ParseBool(i.(string))
+					}
 				}
 				if err != nil {
 					return nil, err
@@ -564,9 +569,13 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 				if err != nil {
 					return nil, err
 				}
-				src.LatestOnly, err = strconv.ParseBool((sourceConfig["LatestOnly"]).(string))
 				if sourceConfig["LatestOnly"] != nil {
-					src.LatestOnly, err = strconv.ParseBool((sourceConfig["LatestOnly"]).(string))
+					i := sourceConfig["LatestOnly"]
+					if boolVal, ok := i.(bool); ok {
+						src.LatestOnly = boolVal
+					} else {
+						src.LatestOnly, err = strconv.ParseBool(i.(string))
+					}
 				}
 				if err != nil {
 					return nil, err
