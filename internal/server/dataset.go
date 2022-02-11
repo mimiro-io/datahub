@@ -701,7 +701,9 @@ func (ds *Dataset) updateDataset(newItemCount int64, entities []*Entity) error {
 		if err != nil {
 			return err
 		}
-		var datasets []string // unlimited scope for best performance, we access an internal dataset here so no need for scoping
+		// limit scope to core.Dataset, to avoid unlikely but possible
+		// bleeding in of properties from other datasets (partial merges)
+		datasets := []string{"core.Dataset"}
 		dsEntity, err := ds.store.GetEntity(fmt.Sprintf("%s:%s", dsInfo.DatasetPrefix, ds.ID), datasets)
 		if err != nil {
 			return err
