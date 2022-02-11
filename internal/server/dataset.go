@@ -711,8 +711,12 @@ func (ds *Dataset) updateDataset(newItemCount int64, entities []*Entity) error {
 			var count int64 = 0
 			if ok {
 				// so items is stored as an int64, but comes back as a float64 because of json
-				existing := int64(items.(float64))
-				count = existing + newItemCount
+				if f, isFloat := items.(float64); isFloat {
+					existing := int64(f)
+					count = existing + newItemCount
+				} else {
+					ds.store.logger.Warnf("Meta entity has invalid format. expected items property to be float64: %+v", dsEntity)
+				}
 			} else {
 				count = newItemCount
 			}
