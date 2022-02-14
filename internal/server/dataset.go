@@ -15,6 +15,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	b64 "encoding/base64"
 	"encoding/binary"
@@ -23,6 +24,7 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
@@ -282,11 +284,12 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 	var rid uint64
 
 	idCache := make(map[string]uint64)
+	localLatests := make(map[uint64][]byte)
 
 	rtxn := ds.store.database.NewTransaction(false)
 	defer rtxn.Discard()
 
-	for _, e := range entities {
+	for batchSeqNum, e := range entities {
 
 		// entityIdBuffer buffer for lookup in main index
 		// index_id;rid;dataset;time => blob
@@ -314,10 +317,11 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 		binary.BigEndian.PutUint64(entityIdBuffer[2:], rid)
 		binary.BigEndian.PutUint32(entityIdBuffer[10:], ds.InternalID)
 		binary.BigEndian.PutUint64(entityIdBuffer[14:], uint64(txnTime))
-		binary.BigEndian.PutUint16(entityIdBuffer[22:], uint16(jsonLength))
+		binary.BigEndian.PutUint16(entityIdBuffer[22:], uint16(batchSeqNum))
 
 		// assume different from a previous version
 		isDifferent := true
+		isDifferentLocally := true
 
 		datasetEntitiesLatestVersionKey := make([]byte, 14)
 		binary.BigEndian.PutUint16(datasetEntitiesLatestVersionKey, DATASET_LATEST_ENTITIES)
@@ -356,15 +360,32 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 					reflect.DeepEqual(prevEntity.Properties, e.Properties) {
 					isDifferent = false
 				}
+			}
+			if prevLocalJson, found := localLatests[rid]; found {
+				prevLocalEntity := &Entity{}
+				err = json.Unmarshal(prevLocalJson, prevLocalEntity)
+				if err != nil {
+					return newitems, err
+				}
+				if len(prevLocalJson) == jsonLength &&
+					reflect.DeepEqual(prevLocalEntity.References, e.References) &&
+					reflect.DeepEqual(prevLocalEntity.Properties, e.Properties) {
+					isDifferentLocally = false
+				}
 			} else {
+				isDifferentLocally = false
+			}
+
+			if prevEntity == nil {
 				newitems++
 			}
 		}
 
 		// not new and not different
-		if !isnew && !isDifferent {
+		if !isnew && !isDifferent && !isDifferentLocally {
 			continue
 		}
+		localLatests[rid] = jsonData
 
 		// store entity and the log entry
 		_ = ds.store.statsdClient.Count("ds.added.bytes", int64(jsonLength), tags, 1)
@@ -680,7 +701,9 @@ func (ds *Dataset) updateDataset(newItemCount int64, entities []*Entity) error {
 		if err != nil {
 			return err
 		}
-		var datasets []string // unlimited scope for best performance, we access an internal dataset here so no need for scoping
+		// limit scope to core.Dataset, to avoid unlikely but possible
+		// bleeding in of properties from other datasets (partial merges)
+		datasets := []string{"core.Dataset"}
 		dsEntity, err := ds.store.GetEntity(fmt.Sprintf("%s:%s", dsInfo.DatasetPrefix, ds.ID), datasets)
 		if err != nil {
 			return err
@@ -690,8 +713,12 @@ func (ds *Dataset) updateDataset(newItemCount int64, entities []*Entity) error {
 			var count int64 = 0
 			if ok {
 				// so items is stored as an int64, but comes back as a float64 because of json
-				existing := int64(items.(float64))
-				count = existing + newItemCount
+				if f, isFloat := items.(float64); isFloat {
+					existing := int64(f)
+					count = existing + newItemCount
+				} else {
+					ds.store.logger.Warnf("Meta entity has invalid format. expected items property to be float64: %+v", dsEntity)
+				}
 			} else {
 				count = newItemCount
 			}
@@ -731,7 +758,7 @@ func (ds *Dataset) GetChangesWatermark() (uint64, error) {
 	})
 
 	// need to add one to point to next change in searches.
-	return waterMark+1, err
+	return waterMark + 1, err
 }
 
 /*
@@ -883,12 +910,12 @@ func NewChanges() *Changes {
 	return changes
 }
 
-func (ds *Dataset) GetChanges(since uint64, count int) (*Changes, error) {
+func (ds *Dataset) GetChanges(since uint64, count int, latestOnly bool) (*Changes, error) {
 	changes := NewChanges()
 	changes.Context = ds.GetContext()
 	changes.Entities = make([]*Entity, 0)
 	var err error
-	changes.NextToken, err = ds.ProcessChanges(since, count, func(entity *Entity) {
+	changes.NextToken, err = ds.ProcessChanges(since, count, latestOnly, func(entity *Entity) {
 		changes.Entities = append(changes.Entities, entity)
 	})
 	if err != nil {
@@ -897,8 +924,8 @@ func (ds *Dataset) GetChanges(since uint64, count int) (*Changes, error) {
 	return changes, nil
 }
 
-func (ds *Dataset) ProcessChanges(since uint64, count int, processChangedEntity func(entity *Entity)) (uint64, error) {
-	return ds.ProcessChangesRaw(since, count, func(jsonData []byte) error {
+func (ds *Dataset) ProcessChanges(since uint64, count int, latestOnly bool, processChangedEntity func(entity *Entity)) (uint64, error) {
+	return ds.ProcessChangesRaw(since, count, latestOnly, func(jsonData []byte) error {
 		entity := &Entity{}
 		err := json.Unmarshal(jsonData, entity)
 		if err != nil {
@@ -910,7 +937,7 @@ func (ds *Dataset) ProcessChanges(since uint64, count int, processChangedEntity 
 	})
 }
 
-func (ds *Dataset) ProcessChangesRaw(since uint64, count int, processChangedEntity func(entityJson []byte) error) (uint64, error) {
+func (ds *Dataset) ProcessChangesRaw(since uint64, count int, latestOnly bool, processChangedEntity func(entityJson []byte) error) (uint64, error) {
 
 	lastSeen := since
 	foundChanges := false
@@ -926,28 +953,32 @@ func (ds *Dataset) ProcessChangesRaw(since uint64, count int, processChangedEnti
 		binary.BigEndian.PutUint32(searchBuffer[2:], ds.InternalID)
 		binary.BigEndian.PutUint64(searchBuffer[6:], since)
 
-		processed := 0
+		processed := int64(0)
 		for changesIterator.Seek(searchBuffer); changesIterator.ValidForPrefix(searchBuffer[:6]); changesIterator.Next() {
 			foundChanges = true
-			processed++
 			item := changesIterator.Item()
 			k := item.Key()
 
 			// get current offset
 			lastSeen = binary.BigEndian.Uint64(k[6:])
 
-			err := item.Value(func(val []byte) error {
-				entityItem, _ := txn.Get(val)
+			processFn := func(entityChangeID []byte) error {
+				entityItem, _ := txn.Get(entityChangeID)
 				return entityItem.Value(func(jsonVal []byte) error {
+					atomic.AddInt64(&processed, 1)
 					return processChangedEntity(jsonVal)
 				})
-			})
+			}
+			if latestOnly {
+				processFn = latestOnlyWrapper(k, ds, txn, processFn)
+			}
+			err := item.Value(processFn)
 
 			if err != nil {
 				return err
 			}
 
-			if processed == count {
+			if int(processed) == count {
 				break
 			}
 		}
@@ -964,6 +995,28 @@ func (ds *Dataset) ProcessChangesRaw(since uint64, count int, processChangedEnti
 		return lastSeen + 1, nil
 	} else {
 		return since, nil
+	}
+}
+
+func latestOnlyWrapper(k []byte, ds *Dataset, txn *badger.Txn,
+	next func(entityChangeID []byte) error) func(entityChangeID []byte) error {
+	return func(entityChangeID []byte) error {
+		rid := binary.BigEndian.Uint64(k[14:])
+		datasetEntitiesLatestVersionKey := make([]byte, 14)
+		binary.BigEndian.PutUint16(datasetEntitiesLatestVersionKey, DATASET_LATEST_ENTITIES)
+		binary.BigEndian.PutUint32(datasetEntitiesLatestVersionKey[2:], ds.InternalID)
+		binary.BigEndian.PutUint64(datasetEntitiesLatestVersionKey[6:], rid)
+
+		latestItem, _ := txn.Get(datasetEntitiesLatestVersionKey)
+		if err := latestItem.Value(func(v2 []byte) error {
+			if bytes.Compare(v2, entityChangeID) == 0 {
+				return next(entityChangeID)
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		return nil
 	}
 }
 

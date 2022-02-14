@@ -25,6 +25,8 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+var filePtr = flag.String("config", "", "Optional path to the config file")
+
 // NewEnv bootstraps the environment from the .env files, but also
 // takes care of getting secrets from the secrets store.
 // It will first start a logger to be able to log that it is loading
@@ -33,7 +35,6 @@ import (
 // You can give it a basePath, this is great for testing, but by default
 // this is set to "."
 func NewEnv() (*Env, error) {
-	filePtr := flag.String("config", "", "Optional path to the config file")
 	flag.Parse()
 	return loadEnv(filePtr, true)
 }

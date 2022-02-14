@@ -1280,7 +1280,7 @@ type Transaction struct {
 func (s *Store) ExecuteTransaction(transaction *Transaction) error {
 	datasets := make(map[string]*Dataset)
 
-	for k,_ := range transaction.DatasetEntities {
+	for k, _ := range transaction.DatasetEntities {
 		dataset, ok := s.datasets.Load(k)
 		if !ok {
 			return errors.New("no dataset " + k)
@@ -1316,4 +1316,3 @@ func (s *Store) ExecuteTransaction(transaction *Transaction) error {
 
 	return nil
 }
-
