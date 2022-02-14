@@ -105,7 +105,6 @@ func NewServiceCore(env *conf.Env) *ServiceCore {
 	serviceCore.AdminClientSecret = env.AdminPassword
 	nodeInfo := NewNodeInfo(env.NodeId, nil)
 	serviceCore.NodeInfo = nodeInfo
-	// serviceCore.clients = sync.Map{} // make(map[string]*ClientInfo)
 
 	serviceCore.Init()
 

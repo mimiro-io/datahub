@@ -50,9 +50,9 @@ func TestNodeSecurity(t *testing.T) {
 			os.Stderr = oldErr
 		})
 		g.After(func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 			err := app.Stop(ctx)
-			cancel()
+			defer cancel()
 			g.Assert(err).IsNil()
 			err = os.RemoveAll(location)
 			err = os.RemoveAll(securityLocation)
@@ -421,6 +421,7 @@ func TestNodeSecurity(t *testing.T) {
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
-			}) */
+			})
+		*/
 	})
 }

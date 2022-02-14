@@ -40,6 +40,7 @@ func TestFullSync(t *testing.T) {
 
 	location := "./dataset_fullsync_integration_test"
 	dsUrl := "http://localhost:24998/datasets/bananas"
+	datahubURL := "http://localhost:24998/"
 
 	g.Describe("The dataset endpoint", func() {
 		g.Before(func() {
@@ -59,9 +60,9 @@ func TestFullSync(t *testing.T) {
 			os.Stderr = oldErr
 		})
 		g.After(func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 			err := app.Stop(ctx)
-			cancel()
+			defer cancel()
 			g.Assert(err).IsNil()
 			err = os.RemoveAll(location)
 			g.Assert(err).IsNil()
@@ -69,6 +70,7 @@ func TestFullSync(t *testing.T) {
 			_ = os.Unsetenv("PROFILE")
 			_ = os.Unsetenv("SERVER_PORT")
 			_ = os.Unsetenv("FULLSYNC_LEASE_TIMEOUT")
+
 		})
 
 		g.It("Should create a dataset", func() {
@@ -440,7 +442,6 @@ func TestFullSync(t *testing.T) {
 			g.Assert(len(entities)).Eql(2, "expected 0 entities plus @context and @continuation")
 			g.Assert(entities[1].ID).Eql("@continuation")
 		})
-
 	})
 }
 
