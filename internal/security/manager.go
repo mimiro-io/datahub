@@ -12,7 +12,6 @@ import (
 	"github.com/mimiro-io/datahub/internal/conf"
 	"io/ioutil"
 	"os"
-	"strings"
 	"sync"
 	"time"
 )
@@ -406,37 +405,4 @@ func (serviceCore *ServiceCore) ValidateClientJWTMakeJWTAccessToken(clientJWT st
 	}
 
 	return accessToken, nil
-}
-
-func (serviceCore *ServiceCore) CheckUserActionResource(action string, actor string, resource string) {
-	// get acls for user
-
-}
-
-// IsReadAccessGranted checks all datasets to see if the acls presented grants read access
-func IsReadAccessGranted(dataset string, datasetACLs map[string]AccessControl) bool {
-
-	// check exact match
-	if acl, ok := datasetACLs[dataset]; ok {
-		if acl.Action == "read" || acl.Action == "write" {
-			return true
-		}
-	}
-
-	// check pattern match
-	if strings.Contains(dataset, ".") {
-		offset := strings.LastIndex(dataset, ".")
-		for offset >= 0 {
-			pattern := dataset[:offset]
-			offset = strings.LastIndex(pattern, ".")
-			pattern = pattern + ".*"
-			if acl, ok := datasetACLs[pattern]; ok {
-				if acl.Action == "read" || acl.Action == "write" {
-					return true
-				}
-			}
-		}
-	}
-
-	return false
 }

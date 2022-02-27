@@ -92,7 +92,11 @@ func NewAuthorizer(env *conf.Env, logger *zap.SugaredLogger, core *security.Serv
 	switch env.Auth.Middleware {
 	case "local":
 		log.Infof("Adding node security Authorizer")
-		mws = middlewares.LocalAuthorizer(core)
+		if env.AdminUserName == "" || env.AdminPassword == "" {
+			log.Warnf("Admin password or username not set")
+		} else {
+			mws = middlewares.LocalAuthorizer(core)
+		}
 	case "noop":
 		log.Infof("WARNING: Adding NoOp Authorizer")
 		mws = middlewares.NoOpAuthorizer
@@ -127,7 +131,7 @@ func setupJWT(env *conf.Env, core *security.ServiceCore, skipper func(c echo.Con
 		Wellknown: env.Auth.WellKnown}
 
 	// if node security is enabled
-	if env.EnableNodeSecurity && core != nil {
+	if env.Auth.Middleware == "local" {
 		config.NodePublicKey = core.NodeInfo.KeyPairs[0].PublicKey
 		config.Issuer = "node:" + core.NodeInfo.NodeId
 		config.Audience = "node:" + core.NodeInfo.NodeId
