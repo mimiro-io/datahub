@@ -40,7 +40,6 @@ func TestFullSync(t *testing.T) {
 
 	location := "./dataset_fullsync_integration_test"
 	dsUrl := "http://localhost:24998/datasets/bananas"
-	datahubURL := "http://localhost:24998/"
 
 	g.Describe("The dataset endpoint", func() {
 		g.Before(func() {
@@ -70,7 +69,6 @@ func TestFullSync(t *testing.T) {
 			_ = os.Unsetenv("PROFILE")
 			_ = os.Unsetenv("SERVER_PORT")
 			_ = os.Unsetenv("FULLSYNC_LEASE_TIMEOUT")
-
 		})
 
 		g.It("Should create a dataset", func() {

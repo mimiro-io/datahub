@@ -41,6 +41,8 @@ func TestManager(t *testing.T) {
 			lc.RequireStart()
 			os.Stderr = oldErr
 			pm = NewProviderManager(lc, e, store, zap.NewNop().Sugar(), sm)
+			tp := NewTokenProviders(lc, zap.NewNop().Sugar(), pm, nil)
+			pm.tokenProviders = tp
 		})
 		g.AfterEach(func() {
 			_ = store.Close()

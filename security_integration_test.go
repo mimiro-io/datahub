@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"github.com/mimiro-io/datahub/internal/security"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -368,7 +369,7 @@ func TestNodeSecurity(t *testing.T) {
 			data1.Set("grant_type", "client_credentials")
 			data1.Set("client_assertion_type", "urn:ietf:params:oauth:grant-type:jwt-bearer")
 
-			pem, err := security.CreateJWTForTokenRequest("client1", clientPrivateKey)
+			pem, err := security.CreateJWTForTokenRequest("client1", "node1", clientPrivateKey)
 			data1.Set("client_assertion", pem)
 
 			reqUrl = datahubURL + "security/token"
@@ -396,6 +397,148 @@ func TestNodeSecurity(t *testing.T) {
 			g.Assert(err).IsNil()
 			g.Assert(res).IsNotNil()
 			g.Assert(res.StatusCode).Eql(200)
+		})
+
+		g.It("Should allow access to self via job and node jwt provider", func() {
+			g.Timeout(15 * time.Minute)
+
+			// get jwt for admin
+			data := url.Values{}
+			data.Set("grant_type", "client_credentials")
+			data.Set("client_id", "admin")
+			data.Set("client_secret", "admin")
+
+			reqUrl := datahubURL + "security/token"
+			res, err := http.PostForm(reqUrl, data)
+			g.Assert(err).IsNil()
+			g.Assert(res).IsNotZero()
+			g.Assert(res.StatusCode).Eql(200)
+
+			decoder := json.NewDecoder(res.Body)
+			response := make(map[string]interface{})
+			err = decoder.Decode(&response)
+			token := response["access_token"].(string)
+			g.Assert(token).IsNotNil()
+
+			// check JWT valid for endpoint access (also tests the admin role)
+			reqUrl = datahubURL + "datasets"
+			client := &http.Client{}
+			req, _ := http.NewRequest("GET", reqUrl, nil)
+			req.Header = http.Header{
+				"Content-Type":  []string{"application/json"},
+				"Authorization": []string{"Bearer " + token},
+			}
+
+			res, err = client.Do(req)
+			g.Assert(err).IsNil()
+			g.Assert(res).IsNotNil()
+			g.Assert(res.StatusCode).Eql(200)
+
+			// register this node as a client to itself
+			clientInfo := &security.ClientInfo{}
+			clientInfo.ClientId = "node1"
+
+			// read the node private and public keys for use in this interaction
+			content, err := ioutil.ReadFile(securityLocation + string(os.PathSeparator) + "node_key")
+			// clientPrivateKey, err := security.ParseRsaPrivateKeyFromPem(content)
+
+			content, err = ioutil.ReadFile(securityLocation + string(os.PathSeparator) + "node_key.pub")
+			publicKey, err := security.ParseRsaPublicKeyFromPem(content)
+
+			// clientPrivateKey, publicKey := security.GenerateRsaKeyPair()
+			publicKeyPem, err := security.ExportRsaPublicKeyAsPem(publicKey)
+			clientInfo.PublicKey = []byte(publicKeyPem)
+
+			clientJSON, err := json.Marshal(clientInfo)
+
+			reqUrl = datahubURL + "security/clients"
+			client = &http.Client{}
+			req, _ = http.NewRequest("POST", reqUrl, bytes.NewBuffer(clientJSON))
+			req.Header = http.Header{
+				"Content-Type":  []string{"application/json"},
+				"Authorization": []string{"Bearer " + token},
+			}
+
+			res, err = client.Do(req)
+			g.Assert(err).IsNil()
+			g.Assert(res).IsNotNil()
+			g.Assert(res.StatusCode).Eql(200)
+
+			// register acl for client
+			acls := make([]*security.AccessControl, 0)
+			acl1 := &security.AccessControl{}
+			acl1.Action = "write"
+			acl1.Resource = "/datasets*"
+			acls = append(acls, acl1)
+			aclJSON, err := json.Marshal(acls)
+
+			reqUrl = datahubURL + "security/clients/node1/acl"
+			client = &http.Client{}
+			req, _ = http.NewRequest("POST", reqUrl, bytes.NewBuffer(aclJSON))
+			req.Header = http.Header{
+				"Content-Type":  []string{"application/json"},
+				"Authorization": []string{"Bearer " + token},
+			}
+
+			res, err = client.Do(req)
+			g.Assert(err).IsNil()
+			g.Assert(res).IsNotNil()
+			g.Assert(res.StatusCode).Eql(200)
+
+			// register nodetokenprovider
+			providerConfig := &security.ProviderConfig{}
+			providerConfig.Name = "node1provider"
+			providerConfig.Type = "nodebearer"
+			providerConfig.Endpoint = &security.ValueReader{
+				Type:  "text",
+				Value: datahubURL + "security/token",
+			}
+			providerConfig.Audience = &security.ValueReader{
+				Type:  "text",
+				Value: "node1",
+			}
+
+			providerJSON, err := json.Marshal(providerConfig)
+			reqUrl = datahubURL + "provider/logins"
+			client = &http.Client{}
+			req, _ = http.NewRequest("POST", reqUrl, bytes.NewBuffer(providerJSON))
+			req.Header = http.Header{
+				"Content-Type":  []string{"application/json"},
+				"Authorization": []string{"Bearer " + token},
+			}
+
+			res, err = client.Do(req)
+			g.Assert(err).IsNil()
+			g.Assert(res).IsNotNil()
+			g.Assert(res.StatusCode).Eql(200)
+
+			// upload job to access remote (loopback) dataset
+			jobJson := `{
+			"id" : "sync-from-remote-dataset-with-node-provider",
+			"triggers": [{"triggerType": "cron", "jobType": "fullsync", "schedule": "@every 2s"}],
+			"fullSyncSchedule" : "@every 2s",
+			"source" : {
+				"Type" : "HttpDatasetSource",
+				"Url" : "` + datahubURL + `datasets/core.Dataset/entities",
+				"TokenProvider" : "node1provider"
+			},
+			"sink" : {
+				"Type" : "DevNullSink"
+			}}`
+
+			reqUrl = datahubURL + "jobs"
+			client = &http.Client{}
+			req, _ = http.NewRequest("POST", reqUrl, bytes.NewBuffer([]byte(jobJson)))
+			req.Header = http.Header{
+				"Content-Type":  []string{"application/json"},
+				"Authorization": []string{"Bearer " + token},
+			}
+
+			res, err = client.Do(req)
+			g.Assert(err).IsNil()
+			g.Assert(res).IsNotNil()
+			g.Assert(res.StatusCode).Eql(201)
+
 		})
 
 		/*

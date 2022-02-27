@@ -239,13 +239,14 @@ func (serviceCore *ServiceCore) Init() error {
 	return nil
 }
 
-func CreateJWTForTokenRequest(subject string, privateKey *rsa.PrivateKey) (string, error) {
+func CreateJWTForTokenRequest(subject string, audience string, privateKey *rsa.PrivateKey) (string, error) {
 	uniqueId := uuid.New()
 
 	claims := jwt.StandardClaims{
 		ExpiresAt: time.Now().Add(time.Minute * 1).Unix(),
 		Id:        uniqueId.String(),
 		Subject:   subject,
+		Audience:  audience,
 	}
 
 	token, err := jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(privateKey)
@@ -258,7 +259,7 @@ func CreateJWTForTokenRequest(subject string, privateKey *rsa.PrivateKey) (strin
 // CreateJWTForTokenRequest returns a JWT token that can be used to get an access token to a remote endpoint
 func (serviceCore *ServiceCore) CreateJWTForTokenRequest(audience string) (string, error) {
 	keyPair := serviceCore.GetActiveKeyPair()
-	return CreateJWTForTokenRequest(serviceCore.NodeInfo.NodeId, keyPair.PrivateKey)
+	return CreateJWTForTokenRequest(serviceCore.NodeInfo.NodeId, audience, keyPair.PrivateKey)
 }
 
 func (serviceCore *ServiceCore) RegisterClient(clientInfo *ClientInfo) {

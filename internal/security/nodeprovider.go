@@ -15,97 +15,80 @@
 package security
 
 import (
+	"encoding/json"
+	"fmt"
+	"github.com/golang-jwt/jwt"
 	"go.uber.org/zap"
 	"net/http"
+	"net/url"
+	"time"
 )
 
 // NodeJwtBearerProvider contains the auth0 configuration
 type NodeJwtBearerProvider struct {
 	serviceCore *ServiceCore
 	endpoint    string
+	audience    string
 	logger      *zap.SugaredLogger
 	cache       *cache
 }
 
-func NewNodeJwtBearerConfig(logger *zap.SugaredLogger, conf ProviderConfig, pm *ProviderManager) *JwtBearerProvider {
-	config := &JwtBearerProvider{
-		ClientId:     pm.LoadValue(conf.ClientId),
-		ClientSecret: pm.LoadValue(conf.ClientSecret),
-		Audience:     pm.LoadValue(conf.Audience),
-		GrantType:    pm.LoadValue(conf.GrantType),
-		endpoint:     pm.LoadValue(conf.Endpoint),
-		logger:       logger.Named("jwt"),
+func NewNodeJwtBearerProvider(logger *zap.SugaredLogger, serviceCore *ServiceCore, conf ProviderConfig) *NodeJwtBearerProvider {
+	provider := &NodeJwtBearerProvider{
+		serviceCore: serviceCore,
+		endpoint:    conf.Endpoint.Value,
+		audience:    conf.Audience.Value,
+		logger:      logger.Named("jwt"),
 	}
 
-	return config
+	return provider
 }
 
-func (auth0 *NodeJwtBearerProvider) Authorize(req *http.Request) {
-
+func (nodeTokenProvider *NodeJwtBearerProvider) Authorize(req *http.Request) {
+	token, err := nodeTokenProvider.getToken()
+	if err != nil {
+		nodeTokenProvider.logger.Warn(err)
+	}
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
 }
 
-// Token returns a valid token, or an error caused when getting one
-// Successive calls to this will return cached values, where the cache
-// validity equals the token validity. Experience-wise, this can lead to
-// race conditions when the caller asks for a valid token that is about to
-// run out, and then it runs out before it can be used.
-// If the cache is invalid, there is also no protection against cache stampedes,
-// so if many calls are calling at the same time, they will hit Auth0 where the can
-// be rate limited.
-func (auth0 *NodeJwtBearerProvider) getToken() (string, error) {
-	return "", nil
-}
-
-func (auth0 *NodeJwtBearerProvider) generateOrGetToken() (string, error) {
-	// now := time.Now()
-
-	/*if auth0.cache == nil || now.After(auth0.cache.until) {
-		// first run
-		res, err := auth0.callRemote()
+func (nodeTokenProvider *NodeJwtBearerProvider) getToken() (string, error) {
+	now := time.Now()
+	if nodeTokenProvider.cache == nil || now.After(nodeTokenProvider.cache.until) {
+		token, err := nodeTokenProvider.callRemoteNodeEndpoint()
 		if err != nil {
 			return "", err
 		}
-		auth0.cache = &cache{
-			until: time.Now().Add(time.Duration(res.ExpiresIn) * time.Second),
-			token: res.AccessToken,
+		nodeTokenProvider.cache = &cache{
+			until: time.Unix(0, token.Claims.(*CustomClaims).ExpiresAt),
+			token: token.Raw,
 		}
-	} */
+	}
 
-	// return auth0.cache.token, nil
-	return "", nil
+	return nodeTokenProvider.cache.token, nil
 }
 
-func (auth0 *NodeJwtBearerProvider) callRemote() (*auth0Response, error) {
-	// timeout := 1000 * time.Millisecond
-	// client := httpclient.NewClient(httpclient.WithHTTPTimeout(timeout))
+func (nodeTokenProvider *NodeJwtBearerProvider) callRemoteNodeEndpoint() (*jwt.Token, error) {
+	requestToken, err := nodeTokenProvider.serviceCore.CreateJWTForTokenRequest(nodeTokenProvider.audience)
+	if err != nil {
+		return nil, err
+	}
+	requestFormData := url.Values{}
+	requestFormData.Set("grant_type", "client_credentials")
+	requestFormData.Set("client_assertion_type", "urn:ietf:params:oauth:grant-type:jwt-bearer")
+	requestFormData.Set("client_assertion", requestToken)
 
-	/*requestBody, err := json.Marshal(map[string]string{
-		"client_id":     auth0.ClientId,
-		"client_secret": auth0.ClientSecret,
-		"audience":      auth0.Audience,
-		"grant_type":    auth0.GrantType,
+	requestUrl := nodeTokenProvider.endpoint
+	res, err := http.PostForm(requestUrl, requestFormData)
+
+	decoder := json.NewDecoder(res.Body)
+	response := make(map[string]interface{})
+	err = decoder.Decode(&response)
+	rawToken := response["access_token"].(string)
+
+	token, err := jwt.ParseWithClaims(rawToken, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return nil, nil
 	})
-	if err != nil {
-		return nil, err
-	}
 
-	req, err := http.NewRequest("POST", auth0.endpoint, bytes.NewBuffer(requestBody))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Add("Content-Type", "application/json")
-
-	auth0.logger.Debugf("Calling auth0: %s", auth0.endpoint)
-	res, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	auth0Response := &auth0Response{}
-	err = json.NewDecoder(res.Body).Decode(auth0Response)
-	if err != nil {
-		return nil, err
-	}
-	return auth0Response, nil */
-	return nil, nil
+	return token, nil
 }

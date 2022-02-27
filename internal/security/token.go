@@ -22,9 +22,10 @@ import (
 )
 
 type TokenProviders struct {
-	Providers *map[string]Provider
-	log       *zap.SugaredLogger
-	pm        *ProviderManager
+	Providers   *map[string]Provider
+	log         *zap.SugaredLogger
+	pm          *ProviderManager
+	serviceCore *ServiceCore
 }
 
 func (providers *TokenProviders) Get(providerName string) (Provider, bool) {
@@ -36,18 +37,22 @@ func (providers *TokenProviders) Get(providerName string) (Provider, bool) {
 	}
 }
 
+func (providers *TokenProviders) Add(providerConfig ProviderConfig) {
+	pmap := *providers.Providers
+	pmap[strings.ToLower(providerConfig.Name)] = providers.toProvider(providerConfig)
+}
+
 // NewTokenProviders provides a map of token providers, keyed on the
 // name of the token provider struct as lower_case.
-func NewTokenProviders(lc fx.Lifecycle, logger *zap.SugaredLogger, providerManager *ProviderManager) *TokenProviders {
+func NewTokenProviders(lc fx.Lifecycle, logger *zap.SugaredLogger, providerManager *ProviderManager, serviceCore *ServiceCore) *TokenProviders {
 	log := logger.Named("security")
 	var providers = make(map[string]Provider)
-	//config := NewDlJwtConfig(log, conf)
-	//providers["auth0tokenprovider"] = config
-	//providers["jwttokenprovider"] = config
 
 	tp := &TokenProviders{
-		log: log,
-		pm:  providerManager,
+		log:         log,
+		pm:          providerManager,
+		serviceCore: serviceCore,
+		Providers:   &providers,
 	}
 
 	lc.Append(fx.Hook{
@@ -60,18 +65,20 @@ func NewTokenProviders(lc fx.Lifecycle, logger *zap.SugaredLogger, providerManag
 				}
 			}
 			tp.Providers = &providers
+			providerManager.tokenProviders = tp
 			return nil
 		},
 	})
 
 	return tp
-
 }
 
 func (providers *TokenProviders) toProvider(provider ProviderConfig) Provider {
 	providers.log.Infof("Adding login provider '%s'", provider.Name)
 	if strings.ToLower(provider.Type) == "bearer" {
 		return NewDlJwtConfig(providers.log, provider, providers.pm)
+	} else if strings.ToLower(provider.Type) == "nodebearer" {
+		return NewNodeJwtBearerProvider(providers.log, providers.serviceCore, provider)
 	} else {
 		return BasicProvider{
 			User:     providers.pm.LoadValue(provider.User),
