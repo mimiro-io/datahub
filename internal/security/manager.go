@@ -10,8 +10,10 @@ import (
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
 	"github.com/mimiro-io/datahub/internal/conf"
+	"github.com/mimiro-io/datahub/internal/server"
 	"io/ioutil"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -95,6 +97,9 @@ type ServiceCore struct {
 
 	// client id keyed list of roles
 	roles sync.Map
+
+	// indicates if local authorisation is enabled
+	IsLocalAuthEnabled bool
 }
 
 func NewServiceCore(env *conf.Env) *ServiceCore {
@@ -104,6 +109,7 @@ func NewServiceCore(env *conf.Env) *ServiceCore {
 	serviceCore.AdminClientSecret = env.AdminPassword
 	nodeInfo := NewNodeInfo(env.NodeId, nil)
 	serviceCore.NodeInfo = nodeInfo
+	serviceCore.IsLocalAuthEnabled = env.Auth.Middleware == "local"
 
 	serviceCore.Init()
 
@@ -406,3 +412,45 @@ func (serviceCore *ServiceCore) ValidateClientJWTMakeJWTAccessToken(clientJWT st
 
 	return accessToken, nil
 }
+
+// FilterDatasets given a list of datasets returns the ones that the user has access to
+func (serviceCore *ServiceCore) FilterDatasets(datasets []server.DatasetName, subject string) ([]server.DatasetName, error) {
+	acl := serviceCore.GetAccessControls(subject)
+	result := make([]server.DatasetName, 0)
+
+	for _, dataset := range datasets {
+		for _, ac := range acl {
+			if serviceCore.CheckGranted(ac, "/datasets/"+dataset.Name, "read") {
+				result = append(result, dataset)
+			}
+		}
+	}
+
+	return result, nil
+}
+
+func (serviceCore *ServiceCore) CheckGranted(ac *AccessControl, resource string, action string) bool {
+	if ac.Resource == resource {
+		if action == "read" && (ac.Action == "read" || ac.Action == "write") {
+			return !ac.Deny
+		} else if action == ac.Action {
+			return !ac.Deny
+		}
+	}
+
+	// if the ac has a resource with trailing * this should be treated as a pattern
+	// grants access to any resource that starts with this pattern and correct action
+	if strings.HasSuffix(ac.Resource, "*") {
+		pattern := ac.Resource[:len(ac.Resource)-1]
+		if strings.HasPrefix(resource, pattern) {
+			if action == "read" && (ac.Action == "read" || ac.Action == "write") {
+				return !ac.Deny
+			} else if action == ac.Action {
+				return !ac.Deny
+			}
+		}
+	}
+
+	return false
+}
+

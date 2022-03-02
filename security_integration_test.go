@@ -397,6 +397,11 @@ func TestNodeSecurity(t *testing.T) {
 			g.Assert(err).IsNil()
 			g.Assert(res).IsNotNil()
 			g.Assert(res.StatusCode).Eql(200)
+
+			jsonraw, _ := io.ReadAll(res.Body)
+			result := make([]map[string]interface{}, 0)
+			err = json.Unmarshal(jsonraw, &result)
+			g.Assert(len(result) == 1)
 		})
 
 		g.It("Should allow access to self via job and node jwt provider", func() {

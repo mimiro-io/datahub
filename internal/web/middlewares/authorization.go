@@ -97,7 +97,7 @@ func LocalAuthorizer(core *security.ServiceCore) func(logger *zap.SugaredLogger,
 				}
 
 				for _, ac := range acl {
-					if checkGranted(ac, c.Path(), action) {
+					if core.CheckGranted(ac, c.Path(), action) {
 						return next(c)
 					}
 				}
@@ -106,31 +106,6 @@ func LocalAuthorizer(core *security.ServiceCore) func(logger *zap.SugaredLogger,
 			}
 		}
 	}
-}
-
-func checkGranted(ac *security.AccessControl, resource string, action string) bool {
-	if ac.Resource == resource {
-		if action == "read" && (ac.Action == "read" || ac.Action == "write") {
-			return !ac.Deny
-		} else if action == ac.Action {
-			return !ac.Deny
-		}
-	}
-
-	// if the ac has a resource with trailing * this should be treated as a pattern
-	// grants access to any resource that starts with this pattern and correct action
-	if strings.HasSuffix(ac.Resource, "*") {
-		pattern := ac.Resource[:len(ac.Resource)-1]
-		if strings.HasPrefix(resource, pattern) {
-			if action == "read" && (ac.Action == "read" || ac.Action == "write") {
-				return !ac.Deny
-			} else if action == ac.Action {
-				return !ac.Deny
-			}
-		}
-	}
-
-	return false
 }
 
 func NoOpAuthorizer(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {
