@@ -37,9 +37,14 @@ func (providers *TokenProviders) Get(providerName string) (Provider, bool) {
 	}
 }
 
-func (providers *TokenProviders) Add(providerConfig ProviderConfig) {
+func (providers *TokenProviders) Add(providerConfig ProviderConfig) error {
 	pmap := *providers.Providers
 	pmap[strings.ToLower(providerConfig.Name)] = providers.toProvider(providerConfig)
+	err := providers.pm.AddProvider(providerConfig)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // NewTokenProviders provides a map of token providers, keyed on the
@@ -65,7 +70,6 @@ func NewTokenProviders(lc fx.Lifecycle, logger *zap.SugaredLogger, providerManag
 				}
 			}
 			tp.Providers = &providers
-			providerManager.tokenProviders = tp
 			return nil
 		},
 	})
@@ -85,4 +89,28 @@ func (providers *TokenProviders) toProvider(provider ProviderConfig) Provider {
 			Password: providers.pm.LoadValue(provider.Password),
 		}
 	}
+}
+
+func (providers *TokenProviders) ListProviders() ([]ProviderConfig, error) {
+	return providers.pm.ListProviders()
+}
+
+func (providers *TokenProviders) DeleteProvider(name string) error {
+	if _, ok := providers.Get(name); !ok {
+		return ErrLoginProviderNotFound
+	}
+	delete(*providers.Providers, name)
+	return providers.pm.DeleteProvider(name)
+}
+
+func (providers *TokenProviders) GetProviderConfig(name string) (*ProviderConfig, error) {
+	return providers.pm.FindByName(name)
+}
+
+func (providers *TokenProviders) UpdateProvider(name string, provider ProviderConfig) error {
+	if _, err := providers.GetProviderConfig(name); err != nil {
+		return ErrLoginProviderNotFound
+	}
+	provider.Name = name
+	return providers.Add(provider)
 }

@@ -4,7 +4,6 @@ import (
 	"github.com/DataDog/datadog-go/statsd"
 	"github.com/franela/goblin"
 	"github.com/mimiro-io/datahub/internal/conf"
-	"github.com/mimiro-io/datahub/internal/conf/secrets"
 	"github.com/mimiro-io/datahub/internal/server"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
@@ -37,12 +36,9 @@ func TestManager(t *testing.T) {
 			lc := fxtest.NewLifecycle(t)
 			sc := &statsd.NoOpClient{}
 			store = server.NewStore(lc, e, sc)
-			sm := &secrets.NoopStore{}
 			lc.RequireStart()
 			os.Stderr = oldErr
-			pm = NewProviderManager(lc, e, store, zap.NewNop().Sugar(), sm)
-			tp := NewTokenProviders(lc, zap.NewNop().Sugar(), pm, nil)
-			pm.tokenProviders = tp
+			pm = NewProviderManager(lc, e, store, zap.NewNop().Sugar())
 		})
 		g.AfterEach(func() {
 			_ = store.Close()

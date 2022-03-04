@@ -1,11 +1,9 @@
 package security
 
 import (
-	"errors"
 	"github.com/DataDog/datadog-go/statsd"
 	"github.com/franela/goblin"
 	"github.com/mimiro-io/datahub/internal/conf"
-	"github.com/mimiro-io/datahub/internal/conf/secrets"
 	"github.com/mimiro-io/datahub/internal/server"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
@@ -38,12 +36,9 @@ func TestCrud(t *testing.T) {
 			lc := fxtest.NewLifecycle(t)
 			sc := &statsd.NoOpClient{}
 			store = server.NewStore(lc, e, sc)
-			sm := &secrets.NoopStore{}
 			lc.RequireStart()
 			os.Stderr = oldErr
-			pm = NewProviderManager(lc, e, store, zap.NewNop().Sugar(), sm)
-			tp := NewTokenProviders(lc, zap.NewNop().Sugar(), pm, nil)
-			pm.tokenProviders = tp
+			pm = NewProviderManager(lc, e, store, zap.NewNop().Sugar())
 		})
 		g.AfterEach(func() {
 			_ = store.Close()
@@ -74,7 +69,7 @@ func TestCrud(t *testing.T) {
 				Type:  "text",
 				Value: "http://localhost/hello",
 			}
-			err = pm.UpdateProvider("test-jwt-3", p)
+			err = pm.AddProvider(p)
 			g.Assert(err).IsNil()
 
 			// load it back
@@ -83,8 +78,8 @@ func TestCrud(t *testing.T) {
 			g.Assert(p2).IsNotNil()
 			g.Assert(pm.LoadValue(p2.Endpoint)).Equal("http://localhost/hello")
 
-			err = pm.UpdateProvider("test-jwt-4", p)
-			g.Assert(errors.Is(err, ErrLoginProviderNotFound)).IsTrue()
+			_, err = pm.FindByName("test-jwt-4")
+			g.Assert(err).Eql(ErrLoginProviderNotFound)
 
 		})
 		g.It("should be able to delete a config", func() {
@@ -100,7 +95,7 @@ func TestCrud(t *testing.T) {
 			g.Assert(err).IsNil()
 
 			p3, err := pm.FindByName("test-jwt-5")
-			g.Assert(err).IsNil()
+			g.Assert(err).Eql(ErrLoginProviderNotFound)
 			g.Assert(p3).IsZero()
 		})
 		g.It("should list all configs", func() {
