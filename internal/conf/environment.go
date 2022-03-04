@@ -40,6 +40,7 @@ type Env struct {
 	AdminPassword           string
 	NodeId                  string
 	SecurityStorageLocation string
+	BackupSourceLocation    string
 }
 
 type AuthConfig struct {

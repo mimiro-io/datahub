@@ -84,6 +84,7 @@ func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 		AdminPassword:           viper.GetString("ADMIN_PASSWORD"),
 		NodeId:                  viper.GetString("NODE_ID"),
 		SecurityStorageLocation: viper.GetString("SECURITY_STORAGE_LOCATION"),
+		BackupSourceLocation:    viper.GetString("BACKUP_SOURCE_LOCATION"),
 	}, nil
 }
 
@@ -127,6 +128,7 @@ func parseEnv(basePath *string, logger *zap.SugaredLogger, loadFromHome bool) er
 	viper.SetDefault("AUTHORIZATION_MIDDLEWARE", "noop")
 	viper.SetDefault("OPA_ENDPOINT", "")
 	viper.SetDefault("BACKUP_LOCATION", "")
+	viper.SetDefault("BACKUP_SOURCE_LOCATION", "")
 	viper.SetDefault("BACKUP_SCHEDULE", "*/5 * * * *") // every 5 mins
 	viper.SetDefault("BACKUP_USE_RSYNC", "true")
 	viper.SetDefault("SECRETS_MANAGER", "noop") // turned off by default
