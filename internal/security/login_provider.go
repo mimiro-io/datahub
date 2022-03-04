@@ -37,14 +37,13 @@ type Provider interface {
 }
 
 type ProviderManager struct {
-	env            *conf.Env
-	store          *server.Store
-	log            *zap.SugaredLogger
-	sm             secrets.SecretStore
-	tokenProviders *TokenProviders
+	env   *conf.Env
+	store *server.Store
+	log   *zap.SugaredLogger
+	sm    secrets.SecretStore
 }
 
-func NewProviderManager(lc fx.Lifecycle, env *conf.Env, store *server.Store, log *zap.SugaredLogger, sm secrets.SecretStore) *ProviderManager {
+func NewProviderManager(lc fx.Lifecycle, env *conf.Env, store *server.Store, log *zap.SugaredLogger) *ProviderManager {
 	pm := &ProviderManager{
 		env:   env,
 		store: store,
@@ -131,19 +130,7 @@ func (pm *ProviderManager) AddProvider(providerConfig ProviderConfig) error {
 	if err != nil {
 		return err
 	}
-	pm.tokenProviders.Add(providerConfig)
 	return nil
-}
-
-func (pm *ProviderManager) UpdateProvider(name string, providerConfig ProviderConfig) error {
-	if p, err := pm.FindByName(name); err != nil {
-		return err
-	} else if p == nil {
-		return ErrLoginProviderNotFound
-	}
-
-	providerConfig.Name = name
-	return pm.AddProvider(providerConfig)
 }
 
 func (pm *ProviderManager) DeleteProvider(name string) error {
@@ -156,7 +143,7 @@ func (pm *ProviderManager) FindByName(name string) (*ProviderConfig, error) {
 		return nil, err
 	} else {
 		if config.Name == "" { // does not exist
-			return nil, nil
+			return nil, ErrLoginProviderNotFound
 		}
 		return config, err
 	}

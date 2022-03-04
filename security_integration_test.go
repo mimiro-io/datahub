@@ -40,6 +40,7 @@ func TestNodeSecurity(t *testing.T) {
 			_ = os.Setenv("ENABLE_NODE_SECURITY", "true")
 			_ = os.Setenv("NODE_ID", "node1")
 			_ = os.Setenv("SECURITY_STORAGE_LOCATION", securityLocation)
+			_ = os.Setenv("DL_JWT_CLIENT_ID", "dummy_provider")
 
 			oldOut := os.Stdout
 			oldErr := os.Stderr
