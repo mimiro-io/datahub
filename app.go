@@ -49,6 +49,7 @@ func wire() *fx.App {
 			web.NewAuthorizer,
 			web.NewWebServer,
 			web.NewMiddleware,
+			security.NewServiceCore,
 		),
 		fx.Invoke( // no other functions are using these, so they need to be invoked to kick things off
 			conf.NewMemoryReporter,
@@ -63,6 +64,7 @@ func wire() *fx.App {
 			web.NewProviderHandler,
 			server.NewBackupManager,
 			server.NewGarbageCollector,
+			web.NewSecurityHandler,
 		),
 	)
 }

@@ -28,9 +28,9 @@ import (
 )
 
 type BackupManager struct {
-	backupLocation string
-	storeLocation  string
-	schedule       string
+	backupLocation       string
+	backupSourceLocation string
+	schedule             string
 	useRsync       bool
 	lastID         uint64
 	isRunning      bool
@@ -51,7 +51,11 @@ func NewBackupManager(lc fx.Lifecycle, store *Store, env *conf.Env) (*BackupMana
 	backup := &BackupManager{}
 	backup.backupLocation = env.BackupLocation
 	backup.schedule = env.BackupSchedule
-	backup.storeLocation = env.StoreLocation
+	if env.BackupSourceLocation == "" {
+		backup.backupSourceLocation = env.StoreLocation
+	} else {
+		backup.backupSourceLocation = env.BackupSourceLocation
+	}
 	backup.useRsync = env.BackupRsync
 	backup.store = store
 	backup.logger = env.Logger.Named("backup")
@@ -114,7 +118,7 @@ func (backupManager *BackupManager) DoRsyncBackup() error {
 		return err
 	}
 
-	cmd := exec.Command("rsync", "-avz", "--delete", backupManager.storeLocation, backupManager.backupLocation)
+	cmd := exec.Command("rsync", "-avz", "--delete", backupManager.backupSourceLocation, backupManager.backupLocation)
 	err = cmd.Run()
 	return err
 }

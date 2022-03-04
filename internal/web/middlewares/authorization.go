@@ -15,6 +15,7 @@
 package middlewares
 
 import (
+	"github.com/mimiro-io/datahub/internal/security"
 	"net/http"
 	"strings"
 
@@ -33,16 +34,16 @@ func JwtAuthorizer(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareF
 			}
 			token := c.Get("user").(*jwt.Token)
 
-			claims := token.Claims.(*CustomClaims)
+			claims := token.Claims.(*security.CustomClaims)
 			if claims.Gty == "client-credentials" { // this is a machine or an application token
 				var claimScopes []string
-				if len(claims.scopes()) > 0 {
-					claimScopes = strings.Split(claims.scopes()[0], " ")
+				if len(claims.Scopes()) > 0 {
+					claimScopes = strings.Split(claims.Scopes()[0], " ")
 				}
 				res := intersect.Simple(claimScopes, scopes).([]interface{})
 				if len(res) == 0 { // no intersection
 					logger.Debugw("User attempted login with missing or wrong scope",
-						"subject", token.Claims.(*CustomClaims).Subject,
+						"subject", token.Claims.(*security.CustomClaims).Subject,
 						"scopes", claimScopes,
 						"userScopes", scopes)
 					return echo.NewHTTPError(http.StatusForbidden, "user attempted login with missing or wrong scope")
@@ -62,6 +63,47 @@ func JwtAuthorizer(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareF
 			}
 
 			return next(c)
+		}
+	}
+}
+
+func LocalAuthorizer(core *security.ServiceCore) func(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {
+	return func(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {
+		return func(next echo.HandlerFunc) echo.HandlerFunc {
+			return func(c echo.Context) error {
+				// get user token
+				token := c.Get("user").(*jwt.Token)
+				claims := token.Claims.(*security.CustomClaims)
+				roles := claims.Roles
+
+				for _, role := range roles {
+					if role == "admin" {
+						return next(c)
+					}
+				}
+
+				// get subject
+				subject := claims.Subject
+				acl := core.GetAccessControls(subject)
+				if acl == nil {
+					return echo.NewHTTPError(http.StatusForbidden, "user does not have permission")
+				}
+
+				// get the method
+				method := c.Request().Method
+				action := "read"
+				if method == "DELETE" || method == "POST" {
+					action = "write"
+				}
+
+				for _, ac := range acl {
+					if core.CheckGranted(ac, c.Path(), action) {
+						return next(c)
+					}
+				}
+
+				return echo.NewHTTPError(http.StatusForbidden, "user does not have permission")
+			}
 		}
 	}
 }

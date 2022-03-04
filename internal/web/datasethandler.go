@@ -19,6 +19,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"github.com/golang-jwt/jwt"
+	"github.com/mimiro-io/datahub/internal/security"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -35,14 +37,16 @@ type datasetHandler struct {
 	datasetManager *server.DsManager
 	store          *server.Store
 	eventBus       server.EventBus
+	securityCore   *security.ServiceCore
 }
 
-func NewDatasetHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, dm *server.DsManager, store *server.Store, eb server.EventBus) {
+func NewDatasetHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, dm *server.DsManager, store *server.Store, eb server.EventBus, securityCore *security.ServiceCore) {
 	log := logger.Named("web")
 	handler := &datasetHandler{
 		datasetManager: dm,
 		store:          store,
 		eventBus:       eb,
+		securityCore:   securityCore,
 	}
 
 	lc.Append(fx.Hook{
@@ -64,12 +68,37 @@ func NewDatasetHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger,
 
 // datasetList
 func (handler *datasetHandler) datasetList(c echo.Context) error {
+
+	// this is only set by OPA auth
+	// if not set and local auth is enabled then use that
 	accessible := c.Get("datasets")
+	var err error
 
 	datasets := make([]server.DatasetName, 0)
 
-	if accessible == nil { // it's not set, so allow all
+	if accessible == nil {
 		datasets = handler.datasetManager.GetDatasetNames()
+		if handler.securityCore.IsLocalAuthEnabled {
+			user := c.Get("user")
+			token := user.(*jwt.Token)
+			claims := token.Claims.(*security.CustomClaims)
+			roles := claims.Roles
+			isAdmin := false
+
+			for _, role := range roles {
+				if role == "admin" {
+					isAdmin = true
+					break
+				}
+			}
+
+			if !isAdmin {
+				datasets, err = handler.securityCore.FilterDatasets(datasets, claims.Subject)
+				if err != nil {
+					return err
+				}
+			}
+		}
 	} else {
 		whitelist := accessible.([]string)
 		if len(whitelist) > 0 { // an empty list here doesn't need to do anything

@@ -76,10 +76,15 @@ func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 			GrantType:    viper.GetString("DL_JWT_GRANT_TYPE"),
 			Endpoint:     viper.GetString("DL_JWT_ENDPOINT"),
 		},
-		GcOnStartup:          viper.GetBool("GC_ON_STARTUP"),
-		FullsyncLeaseTimeout: viper.GetDuration("FULLSYNC_LEASE_TIMEOUT"),
-		BlockCacheSize:       viper.GetInt64("BLOCK_CACHE_SIZE"),
-		ValueLogFileSize:     viper.GetInt64("VALUE_LOG_FILE_SIZE"),
+		GcOnStartup:             viper.GetBool("GC_ON_STARTUP"),
+		FullsyncLeaseTimeout:    viper.GetDuration("FULLSYNC_LEASE_TIMEOUT"),
+		BlockCacheSize:          viper.GetInt64("BLOCK_CACHE_SIZE"),
+		ValueLogFileSize:        viper.GetInt64("VALUE_LOG_FILE_SIZE"),
+		AdminUserName:           viper.GetString("ADMIN_USERNAME"),
+		AdminPassword:           viper.GetString("ADMIN_PASSWORD"),
+		NodeId:                  viper.GetString("NODE_ID"),
+		SecurityStorageLocation: viper.GetString("SECURITY_STORAGE_LOCATION"),
+		BackupSourceLocation:    viper.GetString("BACKUP_SOURCE_LOCATION"),
 	}, nil
 }
 
@@ -123,11 +128,15 @@ func parseEnv(basePath *string, logger *zap.SugaredLogger, loadFromHome bool) er
 	viper.SetDefault("AUTHORIZATION_MIDDLEWARE", "noop")
 	viper.SetDefault("OPA_ENDPOINT", "")
 	viper.SetDefault("BACKUP_LOCATION", "")
+	viper.SetDefault("BACKUP_SOURCE_LOCATION", "")
 	viper.SetDefault("BACKUP_SCHEDULE", "*/5 * * * *") // every 5 mins
 	viper.SetDefault("BACKUP_USE_RSYNC", "true")
 	viper.SetDefault("SECRETS_MANAGER", "noop") // turned off by default
 	viper.SetDefault("GC_ON_STARTUP", "true")
 	viper.SetDefault("FULLSYNC_LEASE_TIMEOUT", "1h")
+
+	viper.SetDefault("NODE_ID", "anonymous-node")
+	viper.SetDefault("SECURITY_STORAGE_LOCATION", fmt.Sprintf("%s/%s", home, "datahubsecurity"))
 
 	viper.AutomaticEnv()
 

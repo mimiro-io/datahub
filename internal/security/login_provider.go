@@ -37,10 +37,11 @@ type Provider interface {
 }
 
 type ProviderManager struct {
-	env   *conf.Env
-	store *server.Store
-	log   *zap.SugaredLogger
-	sm    secrets.SecretStore
+	env            *conf.Env
+	store          *server.Store
+	log            *zap.SugaredLogger
+	sm             secrets.SecretStore
+	tokenProviders *TokenProviders
 }
 
 func NewProviderManager(lc fx.Lifecycle, env *conf.Env, store *server.Store, log *zap.SugaredLogger, sm secrets.SecretStore) *ProviderManager {
@@ -126,7 +127,12 @@ func (pm *ProviderManager) ListProviders() ([]ProviderConfig, error) {
 }
 
 func (pm *ProviderManager) AddProvider(providerConfig ProviderConfig) error {
-	return pm.store.StoreObject(server.LOGIN_PROVIDER_INDEX, providerConfig.Name, providerConfig)
+	err := pm.store.StoreObject(server.LOGIN_PROVIDER_INDEX, providerConfig.Name, providerConfig)
+	if err != nil {
+		return err
+	}
+	pm.tokenProviders.Add(providerConfig)
+	return nil
 }
 
 func (pm *ProviderManager) UpdateProvider(name string, providerConfig ProviderConfig) error {
@@ -154,7 +160,6 @@ func (pm *ProviderManager) FindByName(name string) (*ProviderConfig, error) {
 		}
 		return config, err
 	}
-
 }
 
 type ProviderConfig struct {

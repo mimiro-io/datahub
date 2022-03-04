@@ -31,7 +31,7 @@ func TestCrud(t *testing.T) {
 				StoreLocation: "./test_login_provider_" + strconv.Itoa(testCnt),
 			}
 			err := os.RemoveAll(e.StoreLocation)
-			g.Assert(err).IsNil("should be allowed to clean testfiles in " + e.StoreLocation)
+			g.Assert(err).IsNil("should be allowed to clean test files in " + e.StoreLocation)
 			devNull, _ := os.Open("/dev/null")
 			oldErr := os.Stderr
 			os.Stderr = devNull
@@ -42,6 +42,8 @@ func TestCrud(t *testing.T) {
 			lc.RequireStart()
 			os.Stderr = oldErr
 			pm = NewProviderManager(lc, e, store, zap.NewNop().Sugar(), sm)
+			tp := NewTokenProviders(lc, zap.NewNop().Sugar(), pm, nil)
+			pm.tokenProviders = tp
 		})
 		g.AfterEach(func() {
 			_ = store.Close()

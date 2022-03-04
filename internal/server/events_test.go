@@ -89,8 +89,8 @@ func TestEvents(t *testing.T) {
 
 			var webHander *web.WebHandler
 			webHander, mockServer = web.NewWebServer(lc, e, e.Logger, &statsd.NoOpClient{})
-			mw := web.NewMiddleware(lc, e, webHander, mockServer, web.NewAuthorizer(e, e.Logger))
-			web.NewDatasetHandler(lc, mockServer, e.Logger, mw, dsm, store, newBus)
+			mw := web.NewMiddleware(lc, e, webHander, mockServer, web.NewAuthorizer(e, e.Logger, nil), nil)
+			web.NewDatasetHandler(lc, mockServer, e.Logger, mw, dsm, store, newBus, nil)
 
 			err = lc.Start(context.Background())
 			g.Assert(err).IsNil()

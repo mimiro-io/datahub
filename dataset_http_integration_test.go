@@ -59,9 +59,9 @@ func TestFullSync(t *testing.T) {
 			os.Stderr = oldErr
 		})
 		g.After(func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 			err := app.Stop(ctx)
-			cancel()
+			defer cancel()
 			g.Assert(err).IsNil()
 			err = os.RemoveAll(location)
 			g.Assert(err).IsNil()
@@ -440,7 +440,6 @@ func TestFullSync(t *testing.T) {
 			g.Assert(len(entities)).Eql(2, "expected 0 entities plus @context and @continuation")
 			g.Assert(entities[1].ID).Eql("@continuation")
 		})
-
 	})
 }
 

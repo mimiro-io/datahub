@@ -16,6 +16,7 @@ package web
 
 import (
 	"context"
+	"github.com/mimiro-io/datahub/internal/security"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -36,7 +37,7 @@ type Middleware struct {
 	env        *conf.Env
 }
 
-func NewMiddleware(lc fx.Lifecycle, env *conf.Env, handler *WebHandler, e *echo.Echo, auth *AuthorizerConfig) *Middleware {
+func NewMiddleware(lc fx.Lifecycle, env *conf.Env, handler *WebHandler, e *echo.Echo, auth *AuthorizerConfig, core *security.ServiceCore) *Middleware {
 	skipper := func(c echo.Context) bool {
 		// don't secure health endpoints
 		if strings.HasPrefix(c.Request().URL.Path, "/health") {
@@ -54,13 +55,16 @@ func NewMiddleware(lc fx.Lifecycle, env *conf.Env, handler *WebHandler, e *echo.
 		if strings.HasPrefix(c.Request().URL.Path, "/static") {
 			return true
 		}
+		if strings.HasPrefix(c.Request().URL.Path, "/security/token") {
+			return true
+		}
 		return false
 	}
 
 	mw := &Middleware{
 		logger:     setupLogger(handler, skipper),
 		cors:       setupCors(),
-		jwt:        setupJWT(env, skipper),
+		jwt:        setupJWT(env, core, skipper),
 		recover:    setupRecovery(handler),
 		authorizer: auth.authorizer,
 		handler:    handler,
@@ -81,10 +85,18 @@ type AuthorizerConfig struct {
 	authorizer func(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc
 }
 
-func NewAuthorizer(env *conf.Env, logger *zap.SugaredLogger) *AuthorizerConfig {
+func NewAuthorizer(env *conf.Env, logger *zap.SugaredLogger, core *security.ServiceCore) *AuthorizerConfig {
 	log := logger.Named("authorizer")
 	var mws func(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc
+
 	switch env.Auth.Middleware {
+	case "local":
+		log.Infof("Adding node security Authorizer")
+		if env.AdminUserName == "" || env.AdminPassword == "" {
+			log.Warnf("Admin password or username not set")
+		} else {
+			mws = middlewares.LocalAuthorizer(core)
+		}
 	case "noop":
 		log.Infof("WARNING: Adding NoOp Authorizer")
 		mws = middlewares.NoOpAuthorizer
@@ -111,13 +123,21 @@ func (middleware *Middleware) configure(e *echo.Echo) {
 	e.Use(middleware.recover)
 }
 
-func setupJWT(env *conf.Env, skipper func(c echo.Context) bool) echo.MiddlewareFunc {
-	return middlewares.JWTHandler(&middlewares.JwtConfig{
+func setupJWT(env *conf.Env, core *security.ServiceCore, skipper func(c echo.Context) bool) echo.MiddlewareFunc {
+	config := &middlewares.JwtConfig{
 		Skipper:   skipper,
 		Audience:  env.Auth.Audience,
 		Issuer:    env.Auth.Issuer,
-		Wellknown: env.Auth.WellKnown,
-	})
+		Wellknown: env.Auth.WellKnown}
+
+	// if node security is enabled
+	if env.Auth.Middleware == "local" {
+		config.NodePublicKey = core.NodeInfo.KeyPairs[0].PublicKey
+		config.Issuer = "node:" + core.NodeInfo.NodeId
+		config.Audience = "node:" + core.NodeInfo.NodeId
+	}
+
+	return middlewares.JWTHandler(config)
 }
 
 func setupLogger(handler *WebHandler, skipper func(c echo.Context) bool) echo.MiddlewareFunc {

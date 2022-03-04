@@ -15,10 +15,11 @@
 package middlewares
 
 import (
+	"crypto/rsa"
 	"encoding/json"
 	"errors"
+	"github.com/mimiro-io/datahub/internal/security"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/goburrow/cache"
@@ -39,19 +40,19 @@ type (
 		Wellknown string
 		Audience  string
 		Issuer    string
+
+		// This is set if Node security is enabled
+		NodePublicKey *rsa.PublicKey
 	}
 )
 
-type CustomClaims struct {
+/* type CustomClaims struct {
 	Scope string `json:"scope"`
 	Gty   string `json:"gty"`
 	Adm   bool   `json:"adm"`
+	Roles []string `json:"roles"`
 	jwt.StandardClaims
-}
-
-func (claims CustomClaims) scopes() []string {
-	return strings.Split(claims.Scope, ",")
-}
+} */
 
 type Response struct {
 	Message string `json:"message"`
@@ -121,18 +122,25 @@ func JWTHandler(config *JwtConfig) echo.MiddlewareFunc {
 				return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 			}
 
-			token := new(jwt.Token)
-			token, err = parser.ParseWithClaims(auth, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
-				cert, err := getPemCert(token, config)
-				if err != nil {
-					return nil, err
+			token, err := parser.ParseWithClaims(auth, &security.CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+				if config.NodePublicKey != nil {
+					return config.NodePublicKey, nil
+				} else {
+					cert, err := getPemCert(token, config)
+					if err != nil {
+						return nil, err
+					}
+					result, err := jwt.ParseRSAPublicKeyFromPEM([]byte(cert))
+					if err != nil {
+						return nil, err
+					}
+					return result, nil
 				}
-				result, err := jwt.ParseRSAPublicKeyFromPEM([]byte(cert))
-				if err != nil {
-					return nil, err
-				}
-				return result, nil
 			})
+
+			if !token.Valid {
+				return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
+			}
 
 			if err != nil {
 				return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
@@ -143,7 +151,7 @@ func JWTHandler(config *JwtConfig) echo.MiddlewareFunc {
 				audience string
 				issuer   string
 			)
-			claims := token.Claims.(*CustomClaims)
+			claims := token.Claims.(*security.CustomClaims)
 			audience = config.Audience
 			issuer = config.Issuer
 
