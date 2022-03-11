@@ -19,6 +19,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"io"
 	"strings"
 
 	"github.com/mimiro-io/datahub/internal/conf"
@@ -49,7 +50,7 @@ func NewDsManager(lc fx.Lifecycle, env *conf.Env, store *Store, eb EventBus) *Ds
 		OnStart: func(ctx context.Context) error {
 			eb.Init(dsm.GetDatasetNames())
 			// if we are missing core datasets, we add these here
-			_, err := dsm.CreateDataset(datasetCore)
+			_, err := dsm.CreateDataset(datasetCore, nil)
 			if err != nil {
 				dsm.logger.Warn(err)
 			}
@@ -60,7 +61,7 @@ func NewDsManager(lc fx.Lifecycle, env *conf.Env, store *Store, eb EventBus) *Ds
 	return dsm
 }
 
-func (dsm *DsManager) GetDatasetEntity(name string) *Entity {
+func (dsm *DsManager) NewDatasetEntity(name string, proxyDatasetConfig *proxyDatasetConfig, namespaces []string) *Entity {
 
 	prefix, _ := dsm.store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/core/dataset/")
 	core, _ := dsm.store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/core/")
@@ -80,7 +81,12 @@ func (dsm *DsManager) storeEntity(dataset *Dataset, entity *Entity) error {
 	return dataset.StoreEntities(entities)
 }
 
-func (dsm *DsManager) CreateDataset(name string) (*Dataset, error) {
+type createDatasetConfig struct {
+	ProxyDatasetConfig *proxyDatasetConfig `json:"proxyDatasetConfig"`
+	PublicNamespaces   []string            `json:"publicNamespaces"`
+}
+
+func (dsm *DsManager) CreateDataset(name string, datasetConfigReader func() (io.ReadCloser, error)) (*Dataset, error) {
 	// fixme: race condition needs a lock
 
 	exists := dsm.IsDataset(name)
@@ -99,6 +105,20 @@ func (dsm *DsManager) CreateDataset(name string) (*Dataset, error) {
 	if err != nil {
 		return nil, err
 	}
+	if datasetConfigReader != nil {
+		reader, err := datasetConfigReader()
+		if err != nil {
+			return nil, err
+		}
+		createDatasetConfig := &createDatasetConfig{}
+		jsonDecoder := json.NewDecoder(reader)
+		err = jsonDecoder.Decode(createDatasetConfig)
+		if err != nil {
+			return nil, err
+		}
+		ds.ProxyConfig = createDatasetConfig.ProxyDatasetConfig
+		ds.PublicNamespaces = createDatasetConfig.PublicNamespaces
+	}
 
 	jsonData, _ := json.Marshal(ds)
 	err = dsm.store.storeValue(ds.getStorageKey(), jsonData)
@@ -113,7 +133,8 @@ func (dsm *DsManager) CreateDataset(name string) (*Dataset, error) {
 	dsm.eb.RegisterTopic(name)
 
 	// add the entity
-	ent := dsm.GetDatasetEntity(name)
+	ent := dsm.NewDatasetEntity(name, ds.ProxyConfig, ds.PublicNamespaces)
+
 	core := dsm.GetDataset(datasetCore)
 	err = dsm.storeEntity(core, ent)
 	if err != nil {
@@ -166,7 +187,10 @@ func (dsm *DsManager) DeleteDataset(name string) error {
 	dsm.eb.UnregisterTopic(name) // unregister event-handler on this topic. Note that subscriptions are left.
 
 	// also delete the associated entity
-	entity := dsm.GetDatasetEntity(name)
+	entity, err2 := dsm.store.GetEntity(dsm.NewDatasetEntity(name, nil, nil).ID, []string{datasetCore})
+	if err2 != nil {
+		return err2
+	}
 	entity.IsDeleted = true
 	core := dsm.GetDataset(datasetCore)
 	err = dsm.storeEntity(core, entity)
@@ -235,4 +259,9 @@ func (dsm *DsManager) IsDataset(name string) bool {
 		return true
 	}
 	return false
+}
+
+func (dsm *DsManager) CreateProxyDataset(name string, body func() (io.ReadCloser, error)) (interface{}, error) {
+	//todo: add validation for proxy parameters
+	return dsm.CreateDataset(name, body)
 }

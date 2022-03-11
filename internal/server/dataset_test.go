@@ -68,7 +68,7 @@ func TestDataset(t *testing.T) {
 			companyNamespacePrefix, err := s.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/company/")
 
 			// create dataset
-			peopleDataset, err := dsm.CreateDataset("people")
+			peopleDataset, err := dsm.CreateDataset("people", nil)
 			env = &testEnv{s,
 				peopleNamespacePrefix,
 				companyNamespacePrefix,

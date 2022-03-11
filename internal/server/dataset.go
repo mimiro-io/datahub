@@ -35,6 +35,8 @@ type fullSyncLease struct {
 	cancel func()
 }
 
+type proxyDatasetConfig struct{}
+
 // Dataset data structure
 type Dataset struct {
 	ID                  string `json:"id"`
@@ -52,6 +54,7 @@ type Dataset struct {
 	markedForDeletion   bool
 	PublicNamespaces    []string `json:"publicNamespaces"`
 	fullSyncID          string
+	ProxyConfig         *proxyDatasetConfig `json:"proxyConfig"`
 }
 
 // NewDataset Create a new dataset from the params provided

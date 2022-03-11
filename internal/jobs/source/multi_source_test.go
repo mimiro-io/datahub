@@ -1054,7 +1054,7 @@ func TestMultiSource(t *testing.T) {
 
 func createTestDataset(dsName string, entityNames []string, refMap map[string]map[string]interface{},
 	dsm *server.DsManager, g *goblin.G, store *server.Store) (*server.Dataset, string) {
-	dataset, err := dsm.CreateDataset(dsName)
+	dataset, err := dsm.CreateDataset(dsName, nil)
 	g.Assert(err).IsNil()
 	peoplePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://" + dsName + "/")
 	g.Assert(err).IsNil()

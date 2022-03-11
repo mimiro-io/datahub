@@ -252,7 +252,7 @@ func TestScheduler(t *testing.T) {
 			_, ok := runner.scheduledJobs[sj.Id]
 			g.Assert(ok).IsFalse("Our job is not registered as schedule (paused in json)")
 
-			_, _ = dsm.CreateDataset("People")
+			_, _ = dsm.CreateDataset("People", nil)
 
 			//register callback to get notified when job is done
 			wg := sync.WaitGroup{}

@@ -520,9 +520,9 @@ func setupJob(scheduler *Scheduler, g *goblin.G, runner *Runner, latestOnly bool
 func setupDatasets(store *server.Store, dsm *server.DsManager) (string, *server.Dataset, *server.Dataset, *server.Dataset) {
 	ns, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://namespace/")
 	// we have two source datasets: People and Companies
-	people, _ := dsm.CreateDataset("People")
-	companies, _ := dsm.CreateDataset("Companies")
+	people, _ := dsm.CreateDataset("People", nil)
+	companies, _ := dsm.CreateDataset("Companies", nil)
 	// and we compose both sources into a new dataset: Workers
-	employees, _ := dsm.CreateDataset("Employees")
+	employees, _ := dsm.CreateDataset("Employees", nil)
 	return ns, employees, people, companies
 }

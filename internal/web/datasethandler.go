@@ -129,29 +129,34 @@ func whitelistDatasets(datasets []server.DatasetName, whitelist []string) []serv
 // datasetCreate
 func (handler *datasetHandler) datasetCreate(c echo.Context) error {
 	datasetName := c.Param("dataset")
-
+	isProxy := c.Param("proxy")
 	exist := handler.datasetManager.IsDataset(datasetName)
 	if exist {
 		return echo.NewHTTPError(http.StatusBadRequest, "Dataset already exist")
 	}
 
-	_, err := handler.datasetManager.CreateDataset(datasetName)
+	var err error
+	if isProxy == "true" {
+		_, err = handler.datasetManager.CreateProxyDataset(datasetName, c.Request().GetBody)
+	} else {
+		_, err = handler.datasetManager.CreateDataset(datasetName, c.Request().GetBody)
+	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed creating dataset")
 	}
-
-	// TODO: remove the part under here
-	// this is done to potentially update "old" datasets
-	core := handler.datasetManager.GetDataset("core.Dataset")
-	entity := handler.datasetManager.GetDatasetEntity(datasetName)
-	entities := []*server.Entity{
-		entity,
-	}
-	err = core.StoreEntities(entities)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed creating dataset")
-	}
-
+	/*
+		// TODO: remove the part under here
+		// this is done to potentially update "old" datasets
+		core := handler.datasetManager.GetDataset("core.Dataset")
+		entity := handler.datasetManager.NewDatasetEntity(datasetName, nil, nil)
+		entities := []*server.Entity{
+			entity,
+		}
+		err = core.StoreEntities(entities)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "Failed creating dataset")
+		}
+	*/
 	return c.NoContent(http.StatusOK)
 }
 
