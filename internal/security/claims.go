@@ -6,9 +6,9 @@ import (
 )
 
 type CustomClaims struct {
-	Scope string `json:"scope"`
-	Gty   string `json:"gty"`
-	Adm   bool   `json:"adm"`
+	Scope string   `json:"scope"`
+	Gty   string   `json:"gty"`
+	Adm   bool     `json:"adm"`
 	Roles []string `json:"roles"`
 	jwt.StandardClaims
 }
@@ -16,4 +16,3 @@ type CustomClaims struct {
 func (claims CustomClaims) Scopes() []string {
 	return strings.Split(claims.Scope, ",")
 }
-

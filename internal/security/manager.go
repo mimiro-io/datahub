@@ -453,4 +453,3 @@ func (serviceCore *ServiceCore) CheckGranted(ac *AccessControl, resource string,
 
 	return false
 }
-

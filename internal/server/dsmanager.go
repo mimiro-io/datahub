@@ -15,6 +15,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -61,7 +62,7 @@ func NewDsManager(lc fx.Lifecycle, env *conf.Env, store *Store, eb EventBus) *Ds
 	return dsm
 }
 
-func (dsm *DsManager) NewDatasetEntity(name string, proxyDatasetConfig *proxyDatasetConfig, namespaces []string) *Entity {
+func (dsm *DsManager) NewDatasetEntity(name string, proxyDatasetConfig *proxyDatasetConfig, publicNamespaces []string) *Entity {
 
 	prefix, _ := dsm.store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/core/dataset/")
 	core, _ := dsm.store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/core/")
@@ -70,6 +71,18 @@ func (dsm *DsManager) NewDatasetEntity(name string, proxyDatasetConfig *proxyDat
 	entity.Properties[prefix+":name"] = name
 	entity.Properties[prefix+":items"] = 0
 	entity.References[rdfNamespacePrefix+":type"] = core + ":dataset"
+
+	if proxyDatasetConfig != nil && proxyDatasetConfig.RemoteUrl != "" {
+		entity.References[rdfNamespacePrefix+":type"] = core + ":proxy-dataset"
+		entity.Properties[prefix+":remoteUrl"] = proxyDatasetConfig.RemoteUrl
+		entity.Properties[prefix+":authProvider"] = proxyDatasetConfig.AuthProvider
+		entity.Properties[prefix+":downstreamTransform"] = proxyDatasetConfig.DownstreamTransform
+		entity.Properties[prefix+":upstreamTransform"] = proxyDatasetConfig.UpstreamTransform
+	}
+
+	if len(publicNamespaces) > 0 {
+		entity.Properties[prefix+":publicNamespaces"] = publicNamespaces
+	}
 
 	return entity
 }
@@ -86,7 +99,7 @@ type createDatasetConfig struct {
 	PublicNamespaces   []string            `json:"publicNamespaces"`
 }
 
-func (dsm *DsManager) CreateDataset(name string, datasetConfigReader func() (io.ReadCloser, error)) (*Dataset, error) {
+func (dsm *DsManager) CreateDataset(name string, datasetConfigReader io.ReadCloser) (*Dataset, error) {
 	// fixme: race condition needs a lock
 
 	exists := dsm.IsDataset(name)
@@ -106,14 +119,10 @@ func (dsm *DsManager) CreateDataset(name string, datasetConfigReader func() (io.
 		return nil, err
 	}
 	if datasetConfigReader != nil {
-		reader, err := datasetConfigReader()
-		if err != nil {
-			return nil, err
-		}
 		createDatasetConfig := &createDatasetConfig{}
-		jsonDecoder := json.NewDecoder(reader)
+		jsonDecoder := json.NewDecoder(datasetConfigReader)
 		err = jsonDecoder.Decode(createDatasetConfig)
-		if err != nil {
+		if err != nil && err != io.EOF { // eof means body was empty.
 			return nil, err
 		}
 		ds.ProxyConfig = createDatasetConfig.ProxyDatasetConfig
@@ -261,7 +270,15 @@ func (dsm *DsManager) IsDataset(name string) bool {
 	return false
 }
 
-func (dsm *DsManager) CreateProxyDataset(name string, body func() (io.ReadCloser, error)) (interface{}, error) {
+func (dsm *DsManager) CreateProxyDataset(name string, body io.ReadCloser) (*Dataset, error) {
 	//todo: add validation for proxy parameters
-	return dsm.CreateDataset(name, body)
+	createDatasetConfig := &createDatasetConfig{}
+	jsonDecoder := json.NewDecoder(body)
+	err := jsonDecoder.Decode(createDatasetConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	b, err := json.Marshal(createDatasetConfig)
+	return dsm.CreateDataset(name, io.NopCloser(bytes.NewReader(b)))
 }

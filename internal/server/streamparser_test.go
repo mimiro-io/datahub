@@ -98,7 +98,6 @@ func TestStreamParser(m *testing.T) {
 
 		})
 
-
 		g.It("Should process transaction with dataset with empty array of entities", func() {
 			reader := strings.NewReader(
 				`{

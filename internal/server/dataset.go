@@ -35,7 +35,12 @@ type fullSyncLease struct {
 	cancel func()
 }
 
-type proxyDatasetConfig struct{}
+type proxyDatasetConfig struct {
+	AuthProvider        string `json:"authProvider"`
+	RemoteUrl           string `json:"remoteUrl"`
+	UpstreamTransform   string `json:"upstreamTransform"`
+	DownstreamTransform string `json:"downstreamTransform"`
+}
 
 // Dataset data structure
 type Dataset struct {
@@ -678,10 +683,15 @@ func (ds *Dataset) updateDataset(newItemCount int64, entities []*Entity) error {
 			}
 			newNamespaces := dsEntity.Properties[dsInfo.PublicNamespacesKey]
 			if newNamespaces != nil {
-				interfacesArray := newNamespaces.([]interface{})
-				newNamespacesArray := make([]string, len(interfacesArray))
-				for i, v := range interfacesArray {
-					newNamespacesArray[i] = v.(string)
+				var newNamespacesArray []string
+				if strArray, ok := newNamespaces.([]string); ok {
+					newNamespacesArray = strArray
+				} else {
+					interfacesArray := newNamespaces.([]interface{})
+					newNamespacesArray = make([]string, len(interfacesArray))
+					for i, v := range interfacesArray {
+						newNamespacesArray[i] = v.(string)
+					}
 				}
 				dsInterface, found := ds.store.datasets.Load(dsEntity.Properties[dsInfo.NameKey])
 				if found {

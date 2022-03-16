@@ -31,11 +31,11 @@ type BackupManager struct {
 	backupLocation       string
 	backupSourceLocation string
 	schedule             string
-	useRsync       bool
-	lastID         uint64
-	isRunning      bool
-	store          *Store
-	logger         *zap.SugaredLogger
+	useRsync             bool
+	lastID               uint64
+	isRunning            bool
+	store                *Store
+	logger               *zap.SugaredLogger
 }
 
 func NewBackupManager(lc fx.Lifecycle, store *Store, env *conf.Env) (*BackupManager, error) {
