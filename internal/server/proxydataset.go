@@ -30,16 +30,18 @@ type ProxyDataset struct {
 	*proxyDatasetConfig
 	RemoteChangesUrl  string
 	RemoteEntitiesUrl string
+	auth              func(req *http.Request)
 }
 
 func (ds *Dataset) IsProxy() bool {
 	return ds.ProxyConfig != nil && ds.ProxyConfig.RemoteUrl != ""
 }
 
-func (ds *Dataset) AsProxy() *ProxyDataset {
+func (ds *Dataset) AsProxy(auth func(req *http.Request)) *ProxyDataset {
 	res := &ProxyDataset{badgerDataset: ds, proxyDatasetConfig: ds.ProxyConfig}
 	res.RemoteChangesUrl, _ = urlJoin(ds.ProxyConfig.RemoteUrl, "/changes")
 	res.RemoteEntitiesUrl, _ = urlJoin(ds.ProxyConfig.RemoteUrl, "/entities")
+	res.auth = auth
 	return res
 }
 func urlJoin(baseUrl string, elem ...string) (result string, err error) {
@@ -69,10 +71,18 @@ func (d *ProxyDataset) StreamEntitiesRaw(from string, limit int, f func(jsonData
 	}
 	uri.RawQuery = q.Encode()
 	fullUri := uri.String()
-	res, err := http.Get(fullUri)
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", fullUri, nil)
 	if err != nil {
 		return "", err
 	}
+	d.auth(req)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+
 	if res.StatusCode != 200 {
 		return "", errors.New("Proxy target responded with status " + res.Status)
 	}
@@ -114,10 +124,18 @@ func (d *ProxyDataset) StreamChangesRaw(since string, limit int, f func(jsonData
 	}
 	uri.RawQuery = q.Encode()
 	fullUri := uri.String()
-	res, err := http.Get(fullUri)
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", fullUri, nil)
 	if err != nil {
 		return "", err
 	}
+	d.auth(req)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+
 	if res.StatusCode != 200 {
 		return "", errors.New("Proxy target responded with status " + res.Status)
 	}

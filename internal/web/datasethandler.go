@@ -23,6 +23,7 @@ import (
 	"github.com/mimiro-io/datahub/internal/security"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 
 	"go.uber.org/fx"
@@ -37,16 +38,16 @@ type datasetHandler struct {
 	datasetManager *server.DsManager
 	store          *server.Store
 	eventBus       server.EventBus
-	securityCore   *security.ServiceCore
+	tokenProviders *security.TokenProviders
 }
 
-func NewDatasetHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, dm *server.DsManager, store *server.Store, eb server.EventBus, securityCore *security.ServiceCore) {
+func NewDatasetHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, dm *server.DsManager, store *server.Store, eb server.EventBus, tokenProviders *security.TokenProviders) {
 	log := logger.Named("web")
 	handler := &datasetHandler{
 		datasetManager: dm,
 		store:          store,
 		eventBus:       eb,
-		securityCore:   securityCore,
+		tokenProviders: tokenProviders,
 	}
 
 	lc.Append(fx.Hook{
@@ -78,7 +79,7 @@ func (handler *datasetHandler) datasetList(c echo.Context) error {
 
 	if accessible == nil {
 		datasets = handler.datasetManager.GetDatasetNames()
-		if handler.securityCore.IsLocalAuthEnabled {
+		if handler.tokenProviders.ServiceCore.IsLocalAuthEnabled {
 			user := c.Get("user")
 			token := user.(*jwt.Token)
 			claims := token.Claims.(*security.CustomClaims)
@@ -93,7 +94,7 @@ func (handler *datasetHandler) datasetList(c echo.Context) error {
 			}
 
 			if !isAdmin {
-				datasets, err = handler.securityCore.FilterDatasets(datasets, claims.Subject)
+				datasets, err = handler.tokenProviders.ServiceCore.FilterDatasets(datasets, claims.Subject)
 				if err != nil {
 					return err
 				}
@@ -240,7 +241,9 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 
 	var continuationToken string
 	if dataset.IsProxy() {
-		continuationToken, err = dataset.AsProxy().StreamEntitiesRaw(f, l, func(jsonData []byte) error {
+		continuationToken, err = dataset.AsProxy(
+			handler.lookupAuth(dataset.ProxyConfig.AuthProviderName),
+		).StreamEntitiesRaw(f, l, func(jsonData []byte) error {
 			_, _ = c.Response().Write([]byte(","))
 			_, _ = c.Response().Write(jsonData)
 			return nil
@@ -279,6 +282,20 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 	return nil
 }
 
+func (handler *datasetHandler) lookupAuth(authProviderName string) func(req *http.Request) {
+	if provider, ok := handler.tokenProviders.Get(authProviderName); ok {
+		os.Stdout.WriteString("found provider called " + authProviderName + "\n")
+		return func(r *http.Request) {
+			provider.Authorize(r)
+		}
+	}
+	os.Stdout.WriteString("NO AUTH found\n")
+	return func(req *http.Request) {
+		// noop
+	}
+
+}
+
 func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 	datasetName := c.Param("dataset")
 	limit := c.QueryParam("limit")
@@ -310,7 +327,9 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 	_, _ = c.Response().Write(jsonContext)
 
 	if dataset.IsProxy() {
-		continuationToken, err := dataset.AsProxy().StreamChangesRaw(since, l, func(jsonData []byte) error {
+		continuationToken, err := dataset.AsProxy(
+			handler.lookupAuth(dataset.ProxyConfig.AuthProviderName),
+		).StreamChangesRaw(since, l, func(jsonData []byte) error {
 			_, _ = c.Response().Write([]byte(","))
 			_, _ = c.Response().Write(jsonData)
 			return nil
@@ -368,7 +387,9 @@ func (handler *datasetHandler) processEntities(c echo.Context, datasetName strin
 	dataset := handler.datasetManager.GetDataset(datasetName)
 
 	if dataset.IsProxy() {
-		return dataset.AsProxy().ForwardEntities(c.Request().Body)
+		return dataset.AsProxy(
+			handler.lookupAuth(dataset.ProxyConfig.AuthProviderName),
+		).ForwardEntities(c.Request().Body)
 	}
 	// start new fullsync if requested
 	if fullSyncStart {

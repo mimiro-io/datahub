@@ -15,16 +15,13 @@
 package jobs
 
 import (
-	"context"
 	"encoding/base64"
 	"fmt"
+	"github.com/franela/goblin"
 	"math"
 	"os"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/franela/goblin"
 
 	"github.com/mimiro-io/datahub/internal/server"
 )
@@ -38,7 +35,6 @@ func TestPipelineHistory(t *testing.T) {
 		var store *server.Store
 		var runner *Runner
 		var storeLocation string
-		var mockService MockService
 		g.BeforeEach(func() {
 			// temp redirect of stdout and stderr to swallow some annoying init messages in fx and jobrunner and mockService
 			devNull, _ := os.Open("/dev/null")
@@ -51,10 +47,7 @@ func TestPipelineHistory(t *testing.T) {
 			storeLocation = fmt.Sprintf("./testpipeline_%v", testCnt)
 			err := os.RemoveAll(storeLocation)
 			g.Assert(err).IsNil("should be allowed to clean testfiles in " + storeLocation)
-			mockService = NewMockService()
-			go func() {
-				_ = mockService.echo.Start(":7777")
-			}()
+
 			scheduler, store, runner, dsm, _ = setupScheduler(storeLocation, t)
 
 			// undo redirect of stdout and stderr after successful init of fx and jobrunner
@@ -64,10 +57,6 @@ func TestPipelineHistory(t *testing.T) {
 		})
 		g.AfterEach(func() {
 			runner.Stop()
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-			_ = mockService.echo.Shutdown(ctx)
-			cancel()
-			mockService.HttpNotificationChannel = nil
 			_ = store.Close()
 			_ = os.RemoveAll(storeLocation)
 		})

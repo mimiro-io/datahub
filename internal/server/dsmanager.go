@@ -75,7 +75,7 @@ func (dsm *DsManager) NewDatasetEntity(name string, proxyDatasetConfig *proxyDat
 	if proxyDatasetConfig != nil && proxyDatasetConfig.RemoteUrl != "" {
 		entity.References[rdfNamespacePrefix+":type"] = core + ":proxy-dataset"
 		entity.Properties[prefix+":remoteUrl"] = proxyDatasetConfig.RemoteUrl
-		entity.Properties[prefix+":authProvider"] = proxyDatasetConfig.AuthProvider
+		entity.Properties[prefix+":authProviderName"] = proxyDatasetConfig.AuthProviderName
 		entity.Properties[prefix+":downstreamTransform"] = proxyDatasetConfig.DownstreamTransform
 		entity.Properties[prefix+":upstreamTransform"] = proxyDatasetConfig.UpstreamTransform
 	}

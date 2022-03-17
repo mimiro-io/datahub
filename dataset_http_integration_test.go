@@ -588,7 +588,6 @@ func TestFullSync(t *testing.T) {
 
 			})
 			g.It("Should expose publicNamespaces if configured on proxy dataset", func() {
-				g.Timeout(1 * time.Hour)
 				// delete proxy ds
 				req, _ := http.NewRequest("DELETE", proxyDsUrl, nil)
 				res, err := http.DefaultClient.Do(req)
@@ -604,8 +603,13 @@ func TestFullSync(t *testing.T) {
 
 				// recreate with publicNamespaces
 				res, err = http.Post(proxyDsUrl+"?proxy=true", "application/json", strings.NewReader(
-					`{"proxyDatasetConfig": {"remoteUrl": "http://localhost:7778/datasets/tomatoes"},
-						 "publicNamespaces": ["http://example.com", "http://example.mimiro.io/"]}`))
+					`{
+							"proxyDatasetConfig": {
+								"remoteUrl": "http://localhost:7778/datasets/tomatoes",
+                            	"authProviderName": "local"
+                         	},
+							"publicNamespaces": ["http://example.com", "http://example.mimiro.io/"]
+						}`))
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -626,6 +630,40 @@ func TestFullSync(t *testing.T) {
 				g.Assert(m[0]["namespaces"]).Eql(map[string]interface{}{
 					"ns3": "http://example.com",
 					"ns4": "http://example.mimiro.io/"})
+				g.Assert(mockLayer.RecordedHeaders.Get("Authorization")).IsZero(
+					"there is no authProvider, fallback to unauthed")
+			})
+
+			g.It("Should apply authProvider if configured", func() {
+				payload := strings.NewReader(`{
+					"name": "local",
+					"type": "basic",
+					"user": { "value": "u0", "type":"text" },
+					"password": { "value":"u1","type":"text"}
+				}`)
+				req, _ := http.NewRequest("POST", "http://localhost:24997/provider/logins", payload)
+				req.Header = http.Header{
+					"Content-Type": []string{"application/json"},
+				}
+				res, err := http.DefaultClient.Do(req)
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+
+				// read changes and verify auth is applied
+				res, err = http.Get(proxyDsUrl + "/changes?limit=1")
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+				b, _ := io.ReadAll(res.Body)
+				var entities []*server.Entity
+				err = json.Unmarshal(b, &entities)
+				g.Assert(len(entities)).Eql(3, "context, 1 entity and continuation")
+				g.Assert(entities[1].ID).Eql("ns4:c-0")
+				g.Assert(mockLayer.RecordedURI).Eql("/datasets/tomatoes/changes?limit=1")
+				t.Log(mockLayer.RecordedHeaders)
+				g.Assert(mockLayer.RecordedHeaders.Get("Authorization")).Eql("Basic dTA6dTE=",
+					"basic auth header expected")
 			})
 		})
 	})
@@ -652,28 +690,7 @@ type MockLayer struct {
 	echo             *echo.Echo
 	RecordedURI      string
 	RecordedBytes    map[string][]byte
-}
-
-func (m MockLayer) getContinuationTokenForDataset(dsName string) string {
-	token := ""
-	for _, e := range m.RecordedEntities[dsName] {
-		if e.ID == "@continuation" {
-			//continue so that we find the last token
-			token = fmt.Sprintf("%v", e.Properties)
-		}
-	}
-	return token
-}
-
-func (m MockLayer) getRecordedEntitiesForDataset(dsName string) []*server.Entity {
-	allEntities := m.RecordedEntities[dsName]
-	var readEntities []*server.Entity
-	for _, e := range allEntities {
-		if e.ID != "@context" {
-			readEntities = append(readEntities, e)
-		}
-	}
-	return readEntities
+	RecordedHeaders  http.Header
 }
 
 type Continuation struct {
@@ -708,6 +725,7 @@ func NewMockLayer() *MockLayer {
 		r := make([]interface{}, 0)
 		r = append(r, ctx)
 		result.RecordedURI = context.Request().RequestURI
+		result.RecordedHeaders = context.Request().Header
 
 		// add some objects
 		for i := 0; i < 10; i++ {
@@ -721,6 +739,7 @@ func NewMockLayer() *MockLayer {
 		r := make([]interface{}, 0)
 		r = append(r, ctx)
 		result.RecordedURI = context.Request().RequestURI
+		result.RecordedHeaders = context.Request().Header
 
 		// check for since
 		since := context.QueryParam("since")

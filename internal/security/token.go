@@ -25,7 +25,7 @@ type TokenProviders struct {
 	Providers   *map[string]Provider
 	log         *zap.SugaredLogger
 	pm          *ProviderManager
-	serviceCore *ServiceCore
+	ServiceCore *ServiceCore
 }
 
 func (providers *TokenProviders) Get(providerName string) (Provider, bool) {
@@ -56,7 +56,7 @@ func NewTokenProviders(lc fx.Lifecycle, logger *zap.SugaredLogger, providerManag
 	tp := &TokenProviders{
 		log:         log,
 		pm:          providerManager,
-		serviceCore: serviceCore,
+		ServiceCore: serviceCore,
 		Providers:   &providers,
 	}
 
@@ -82,7 +82,7 @@ func (providers *TokenProviders) toProvider(provider ProviderConfig) Provider {
 	if strings.ToLower(provider.Type) == "bearer" {
 		return NewDlJwtConfig(providers.log, provider, providers.pm)
 	} else if strings.ToLower(provider.Type) == "nodebearer" {
-		return NewNodeJwtBearerProvider(providers.log, providers.serviceCore, provider)
+		return NewNodeJwtBearerProvider(providers.log, providers.ServiceCore, provider)
 	} else {
 		return BasicProvider{
 			User:     providers.pm.LoadValue(provider.User),

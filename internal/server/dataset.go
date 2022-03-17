@@ -36,10 +36,10 @@ type fullSyncLease struct {
 }
 
 type proxyDatasetConfig struct {
-	AuthProvider        string `json:"authProvider"`
 	RemoteUrl           string `json:"remoteUrl"`
 	UpstreamTransform   string `json:"upstreamTransform"`
 	DownstreamTransform string `json:"downstreamTransform"`
+	AuthProviderName    string `json:"authProviderName"`
 }
 
 // Dataset data structure
