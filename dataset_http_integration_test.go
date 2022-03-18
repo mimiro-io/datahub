@@ -124,6 +124,15 @@ func TestFullSync(t *testing.T) {
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 			})
+			g.It("Should reject a proxy dataset if misconfigured", func() {
+				res, err := http.Post(proxyDsUrl+"2?proxy=true", "application/json", strings.NewReader(
+					`{"proxyDatasetConfig": {"remoteUrl": ""}}`))
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(400)
+				b, _ := io.ReadAll(res.Body)
+				g.Assert(string(b)).Eql("{\"message\":\"invalid proxy configuration provided\"}\n")
+			})
 			g.It("Should retrieve a proxy dataset", func() {
 				res, err := http.Get(proxyDsUrl)
 				g.Assert(err).IsNil()
@@ -587,6 +596,25 @@ func TestFullSync(t *testing.T) {
 				g.Assert(m[0]["namespaces"]).Eql(map[string]interface{}{"_": "http://example.com"})
 
 			})
+			g.It("Should forward fullsync headers for POST /entities", func() {
+				payload := strings.NewReader(bananasFromTo(1, 17, false))
+				ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+				req, _ := http.NewRequestWithContext(ctx, "POST", proxyDsUrl+"/entities", payload)
+				req.Header.Add("universal-data-api-full-sync-start", "true")
+				req.Header.Add("universal-data-api-full-sync-id", "46")
+				req.Header.Add("universal-data-api-full-sync-end", "true")
+				res, err := http.DefaultClient.Do(req)
+				cancel()
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+				recorded := mockLayer.RecordedEntities["tomatoes"]
+				g.Assert(mockLayer.RecordedHeaders.Get("universal-data-api-full-sync-start")).Eql("true")
+				g.Assert(mockLayer.RecordedHeaders.Get("universal-data-api-full-sync-id")).Eql("46")
+				g.Assert(mockLayer.RecordedHeaders.Get("universal-data-api-full-sync-end")).Eql("true")
+				g.Assert(len(recorded)).Eql(18, "context and 17 entities")
+
+			})
 			g.It("Should expose publicNamespaces if configured on proxy dataset", func() {
 				// delete proxy ds
 				req, _ := http.NewRequest("DELETE", proxyDsUrl, nil)
@@ -661,7 +689,6 @@ func TestFullSync(t *testing.T) {
 				g.Assert(len(entities)).Eql(3, "context, 1 entity and continuation")
 				g.Assert(entities[1].ID).Eql("ns4:c-0")
 				g.Assert(mockLayer.RecordedURI).Eql("/datasets/tomatoes/changes?limit=1")
-				t.Log(mockLayer.RecordedHeaders)
 				g.Assert(mockLayer.RecordedHeaders.Get("Authorization")).Eql("Basic dTA6dTE=",
 					"basic auth header expected")
 			})
@@ -719,6 +746,7 @@ func NewMockLayer() *MockLayer {
 		json.Unmarshal(b, &entities)
 		result.RecordedEntities["tomatoes"] = entities
 		result.RecordedBytes["tomatoes"] = b
+		result.RecordedHeaders = context.Request().Header
 		return context.NoContent(http.StatusOK)
 	})
 	e.GET("/datasets/tomatoes/entities", func(context echo.Context) error {

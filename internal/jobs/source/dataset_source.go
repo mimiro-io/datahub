@@ -15,18 +15,21 @@
 package source
 
 import (
+	"encoding/json"
 	"errors"
+	"net/http"
 	"strconv"
 
 	"github.com/mimiro-io/datahub/internal/server"
 )
 
 type DatasetSource struct {
-	DatasetName    string
-	Store          *server.Store
-	DatasetManager *server.DsManager
-	isFullSync     bool
-	LatestOnly     bool
+	DatasetName           string
+	Store                 *server.Store
+	DatasetManager        *server.DsManager
+	isFullSync            bool
+	LatestOnly            bool
+	AuthorizeProxyRequest func(authProviderName string) func(req *http.Request)
 }
 
 func (datasetSource *DatasetSource) StartFullSync() {
@@ -46,32 +49,67 @@ func (datasetSource *DatasetSource) ReadEntities(since DatasetContinuation, batc
 	dataset := datasetSource.DatasetManager.GetDataset(datasetSource.DatasetName)
 
 	entities := make([]*server.Entity, 0)
+	var err error
+	var cont *StringDatasetContinuation
 	if datasetSource.isFullSync {
-		continuation, err := dataset.MapEntities(since.GetToken(), batchSize, func(entity *server.Entity) error {
-			entities = append(entities, entity)
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-
-		err = processEntities(entities, &StringDatasetContinuation{continuation})
-		if err != nil {
-			return err
+		if dataset.IsProxy() {
+			continuation, err := dataset.AsProxy(
+				datasetSource.AuthorizeProxyRequest(dataset.ProxyConfig.AuthProviderName),
+			).StreamEntitiesRaw(since.GetToken(), batchSize, func(jsonData []byte) error {
+				e := &server.Entity{}
+				err := json.Unmarshal(jsonData, e)
+				if err != nil {
+					return err
+				}
+				entities = append(entities, e)
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+			cont = &StringDatasetContinuation{continuation}
+		} else {
+			continuation, err := dataset.MapEntities(since.GetToken(), batchSize, func(entity *server.Entity) error {
+				entities = append(entities, entity)
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+			cont = &StringDatasetContinuation{continuation}
 		}
 	} else {
-		continuation, err := dataset.ProcessChanges(since.AsIncrToken(), batchSize, datasetSource.LatestOnly,
-			func(entity *server.Entity) {
-				entities = append(entities, entity)
+		if dataset.IsProxy() {
+			continuation, err := dataset.AsProxy(
+				datasetSource.AuthorizeProxyRequest(dataset.ProxyConfig.AuthProviderName),
+			).StreamChangesRaw(since.GetToken(), batchSize, func(jsonData []byte) error {
+				e := &server.Entity{}
+				err := json.Unmarshal(jsonData, e)
+				if err != nil {
+					return err
+				}
+				entities = append(entities, e)
+				return nil
 			})
-		if err != nil {
-			return err
+			if err != nil {
+				return err
+			}
+			cont = &StringDatasetContinuation{continuation}
+		} else {
+			continuation, err := dataset.ProcessChanges(since.AsIncrToken(), batchSize, datasetSource.LatestOnly,
+				func(entity *server.Entity) {
+					entities = append(entities, entity)
+				})
+			if err != nil {
+				return err
+			}
+			cont = &StringDatasetContinuation{strconv.Itoa(int(continuation))}
 		}
+	}
 
-		err = processEntities(entities, &StringDatasetContinuation{strconv.Itoa(int(continuation))})
-		if err != nil {
-			return err
-		}
+	err = processEntities(entities, cont)
+	if err != nil {
+		return err
 	}
 
 	return nil

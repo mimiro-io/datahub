@@ -21,10 +21,11 @@ import (
 	"errors"
 	"github.com/golang-jwt/jwt"
 	"github.com/mimiro-io/datahub/internal/security"
+	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
+	"strings"
 
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -135,12 +136,21 @@ func (handler *datasetHandler) datasetCreate(c echo.Context) error {
 	if exist {
 		return echo.NewHTTPError(http.StatusBadRequest, "Dataset already exist")
 	}
-
-	var err error
-	if isProxy != "" {
-		_, err = handler.datasetManager.CreateProxyDataset(datasetName, c.Request().Body)
+	createDatasetConfig := &server.CreateDatasetConfig{}
+	jsonDecoder := json.NewDecoder(c.Request().Body)
+	err := jsonDecoder.Decode(createDatasetConfig)
+	if err != nil && err != io.EOF { // eof means body was empty.
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create dataset: "+err.Error())
+	}
+	if isProxy == "true" {
+		if createDatasetConfig.ProxyDatasetConfig == nil ||
+			createDatasetConfig.ProxyDatasetConfig.RemoteUrl == "" {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid proxy configuration provided")
+		}
+		_, err = handler.datasetManager.CreateDataset(datasetName, createDatasetConfig)
 	} else {
-		_, err = handler.datasetManager.CreateDataset(datasetName, c.Request().Body)
+		createDatasetConfig.ProxyDatasetConfig = nil // make sure we don't accidently store invalid proxy config
+		_, err = handler.datasetManager.CreateDataset(datasetName, createDatasetConfig)
 	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed creating dataset")
@@ -283,17 +293,14 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 }
 
 func (handler *datasetHandler) lookupAuth(authProviderName string) func(req *http.Request) {
-	if provider, ok := handler.tokenProviders.Get(authProviderName); ok {
-		os.Stdout.WriteString("found provider called " + authProviderName + "\n")
-		return func(r *http.Request) {
-			provider.Authorize(r)
-		}
+	if provider, ok := handler.tokenProviders.Get(strings.ToLower(authProviderName)); ok {
+		return provider.Authorize
 	}
-	os.Stdout.WriteString("NO AUTH found\n")
+
+	// if no authProvider es found, fall back to no auth for backend requests
 	return func(req *http.Request) {
 		// noop
 	}
-
 }
 
 func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
@@ -389,7 +396,7 @@ func (handler *datasetHandler) processEntities(c echo.Context, datasetName strin
 	if dataset.IsProxy() {
 		return dataset.AsProxy(
 			handler.lookupAuth(dataset.ProxyConfig.AuthProviderName),
-		).ForwardEntities(c.Request().Body)
+		).ForwardEntities(c.Request().Body, c.Request().Header)
 	}
 	// start new fullsync if requested
 	if fullSyncStart {

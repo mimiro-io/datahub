@@ -1310,5 +1310,82 @@ func TestPipeline(t *testing.T) {
 			g.Assert(err).IsNil()
 			g.Assert(jobResult.LastError == "").IsFalse()
 		})
+
+		g.It("Should support proxy dataset as incremental datasetSource", func() {
+			// populate dataset with some entities
+			_, err := dsm.CreateDataset("proxy", &server.CreateDatasetConfig{
+				ProxyDatasetConfig: &server.ProxyDatasetConfig{
+					RemoteUrl: "http://localhost:7777/datasets/people"}})
+			g.Assert(err).IsNil()
+
+			// define job
+			jobJson := `
+			{
+				"id" : "sync-proxydatasetsource-to-httpdatasetsink",
+				"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
+				"source" : {
+					"Type" : "DatasetSource",
+					"Name" : "proxy"
+				},
+				"sink" : {
+					"Type" : "HttpDatasetSink",
+					"Url" : "http://localhost:7777/datasets/proxysink/fullsync"
+				}
+			}`
+
+			jobConfig, _ := scheduler.Parse([]byte(jobJson))
+			pipeline, err := scheduler.toPipeline(jobConfig, JobTypeIncremental)
+			g.Assert(err).IsNil("pipeline is parsed correctly")
+
+			job := &job{
+				id:       jobConfig.Id,
+				pipeline: pipeline,
+				schedule: jobConfig.Triggers[0].Schedule,
+				runner:   runner,
+			}
+
+			job.Run()
+			g.Assert(len(mockService.RecordedEntities["proxysink"])).Eql(11, "sink received content")
+			g.Assert(mockService.RecordedEntities["proxysink"][1].ID).Eql("ns3:e-0", "sink received entity from proxy")
+		})
+
+		g.It("Should support proxy dataset as fullsync datasetSource", func() {
+			// populate dataset with some entities
+			_, err := dsm.CreateDataset("proxy", &server.CreateDatasetConfig{
+				ProxyDatasetConfig: &server.ProxyDatasetConfig{
+					RemoteUrl: "http://localhost:7777/datasets/people"}})
+			g.Assert(err).IsNil()
+
+			// define job
+			jobJson := `
+			{
+				"id" : "sync-proxydatasetsource-to-httpdatasetsink",
+				"triggers": [{"triggerType": "cron", "jobType": "fullsync", "schedule": "@every 2s"}],
+				"source" : {
+					"Type" : "DatasetSource",
+					"Name" : "proxy"
+				},
+				"sink" : {
+					"Type" : "HttpDatasetSink",
+					"Url" : "http://localhost:7777/datasets/proxysink/fullsync"
+				}
+			}`
+
+			jobConfig, _ := scheduler.Parse([]byte(jobJson))
+			pipeline, err := scheduler.toPipeline(jobConfig, JobTypeFull)
+			g.Assert(err).IsNil("pipeline is parsed correctly")
+
+			job := &job{
+				id:       jobConfig.Id,
+				pipeline: pipeline,
+				schedule: jobConfig.Triggers[0].Schedule,
+				runner:   runner,
+			}
+
+			job.Run()
+			ents := mockService.getRecordedEntitiesForDataset("proxysink")
+			g.Assert(len(ents)).Eql(10, "sink received content")
+			g.Assert(ents[0].ID).Eql("ns3:fs-0", "sink received entity from proxy")
+		})
 	})
 }

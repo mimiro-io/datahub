@@ -900,6 +900,17 @@ func NewMockService() MockService {
 		}
 		return context.JSON(http.StatusOK, result)
 	})
+	e.GET("/datasets/people/entities", func(context echo.Context) error {
+		result := make([]interface{}, 0)
+		result = append(result, ctx)
+
+		// add some objects
+		for i := 0; i < 10; i++ {
+			e := server.NewEntity("ex:fs-"+strconv.Itoa(i), 0)
+			result = append(result, e)
+		}
+		return context.JSON(http.StatusOK, result)
+	})
 
 	e.GET("/datasets/people/changeswithcontinuation", func(context echo.Context) error {
 		result := make([]interface{}, 0)

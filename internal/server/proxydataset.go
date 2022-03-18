@@ -22,12 +22,13 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 )
 
 type ProxyDataset struct {
 	badgerDataset *Dataset
-	*proxyDatasetConfig
+	*ProxyDatasetConfig
 	RemoteChangesUrl  string
 	RemoteEntitiesUrl string
 	auth              func(req *http.Request)
@@ -38,7 +39,7 @@ func (ds *Dataset) IsProxy() bool {
 }
 
 func (ds *Dataset) AsProxy(auth func(req *http.Request)) *ProxyDataset {
-	res := &ProxyDataset{badgerDataset: ds, proxyDatasetConfig: ds.ProxyConfig}
+	res := &ProxyDataset{badgerDataset: ds, ProxyDatasetConfig: ds.ProxyConfig}
 	res.RemoteChangesUrl, _ = urlJoin(ds.ProxyConfig.RemoteUrl, "/changes")
 	res.RemoteEntitiesUrl, _ = urlJoin(ds.ProxyConfig.RemoteUrl, "/entities")
 	res.auth = auth
@@ -164,10 +165,17 @@ func (d *ProxyDataset) StreamChangesRaw(since string, limit int, f func(jsonData
 
 }
 
-func (d *ProxyDataset) ForwardEntities(body io.ReadCloser) error {
+func (d *ProxyDataset) ForwardEntities(sourceBody io.ReadCloser, sourceHeader http.Header) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, "POST", d.RemoteEntitiesUrl, body)
+	req, _ := http.NewRequestWithContext(ctx, "POST", d.RemoteEntitiesUrl, sourceBody)
+	for k, v := range sourceHeader {
+		if strings.HasPrefix(strings.ToLower(k), "universal-data-api") {
+			for _, val := range v {
+				req.Header.Add(k, val)
+			}
+		}
+	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err

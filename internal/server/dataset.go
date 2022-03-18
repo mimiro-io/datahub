@@ -35,7 +35,7 @@ type fullSyncLease struct {
 	cancel func()
 }
 
-type proxyDatasetConfig struct {
+type ProxyDatasetConfig struct {
 	RemoteUrl           string `json:"remoteUrl"`
 	UpstreamTransform   string `json:"upstreamTransform"`
 	DownstreamTransform string `json:"downstreamTransform"`
@@ -59,7 +59,7 @@ type Dataset struct {
 	markedForDeletion   bool
 	PublicNamespaces    []string `json:"publicNamespaces"`
 	fullSyncID          string
-	ProxyConfig         *proxyDatasetConfig `json:"proxyConfig"`
+	ProxyConfig         *ProxyDatasetConfig `json:"proxyConfig"`
 }
 
 // NewDataset Create a new dataset from the params provided
