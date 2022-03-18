@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/mimiro-io/datahub/internal/security"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -838,7 +839,7 @@ type Continuation struct {
 
 type MockService struct {
 	RecordedEntities        map[string][]*server.Entity
-	HttpNotificationChannel chan string
+	HttpNotificationChannel chan *http.Request
 	echo                    *echo.Echo
 }
 
@@ -868,14 +869,14 @@ func NewMockService() MockService {
 	e := echo.New()
 	result := MockService{}
 	result.RecordedEntities = make(map[string][]*server.Entity)
-	result.HttpNotificationChannel = make(chan string, 100)
+	result.HttpNotificationChannel = make(chan *http.Request, 100)
 	result.echo = e
 	// attach middleware to wrap every handler with channel notifications
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// after handler (right before response is sent), notify channel
 			c.Response().Before(func() {
-				result.HttpNotificationChannel <- fmt.Sprintf("%v", c.Request())
+				result.HttpNotificationChannel <- c.Request()
 			})
 			return next(c)
 		}
@@ -975,6 +976,21 @@ func NewMockService() MockService {
 		result.RecordedEntities[datasetName] = append(result.RecordedEntities[datasetName], entities...)
 		return context.NoContent(http.StatusOK)
 	})
+	e.POST("/datasets/people/entities", func(context echo.Context) error {
+		body, err := ioutil.ReadAll(context.Request().Body)
+		if err != nil {
+			return err
+		}
+
+		var entities []*server.Entity
+		err = json.Unmarshal(body, &entities)
+		if err != nil {
+			return err
+		}
+		datasetName := "people"
+		result.RecordedEntities[datasetName] = append(result.RecordedEntities[datasetName], entities...)
+		return context.NoContent(http.StatusOK)
+	})
 
 	return result
 }
@@ -998,11 +1014,13 @@ func setupScheduler(storeLocation string, t *testing.T) (*Scheduler, *server.Sto
 	lc := fxtest.NewLifecycle(t)
 	store := server.NewStore(lc, e, statsdClient)
 
+	var pm = security.NewProviderManager(lc, e, store, logger)
+	var tps = security.NewTokenProviders(lc, logger, pm, nil)
 	runner := NewRunner(&RunnerConfig{
 		PoolIncremental: 10,
 		PoolFull:        5,
 		Concurrent:      0,
-	}, e, store, nil, eb, statsdClient)
+	}, e, store, tps, eb, statsdClient)
 
 	dsm := server.NewDsManager(lc, e, store, server.NoOpBus())
 
@@ -1016,6 +1034,13 @@ func setupScheduler(storeLocation string, t *testing.T) (*Scheduler, *server.Sto
 		fmt.Println(err.Error())
 		t.FailNow()
 	}
+	// add basic auth provider called local
+	tps.Add(security.ProviderConfig{
+		Name:     "local",
+		Type:     "basic",
+		User:     &security.ValueReader{Type: "text", Value: "u100"},
+		Password: &security.ValueReader{Type: "text", Value: "p200"},
+	})
 
 	return s, store, runner, dsm, statsdClient
 }

@@ -40,12 +40,13 @@ func (ds *Dataset) IsProxy() bool {
 
 func (ds *Dataset) AsProxy(auth func(req *http.Request)) *ProxyDataset {
 	res := &ProxyDataset{badgerDataset: ds, ProxyDatasetConfig: ds.ProxyConfig}
-	res.RemoteChangesUrl, _ = urlJoin(ds.ProxyConfig.RemoteUrl, "/changes")
-	res.RemoteEntitiesUrl, _ = urlJoin(ds.ProxyConfig.RemoteUrl, "/entities")
+	res.RemoteChangesUrl, _ = UrlJoin(ds.ProxyConfig.RemoteUrl, "/changes")
+	res.RemoteEntitiesUrl, _ = UrlJoin(ds.ProxyConfig.RemoteUrl, "/entities")
 	res.auth = auth
 	return res
 }
-func urlJoin(baseUrl string, elem ...string) (result string, err error) {
+
+func UrlJoin(baseUrl string, elem ...string) (result string, err error) {
 	u, err := url.Parse(baseUrl)
 	if err != nil {
 		return

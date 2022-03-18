@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"sync"
@@ -1312,7 +1313,6 @@ func TestPipeline(t *testing.T) {
 		})
 
 		g.It("Should support proxy dataset as incremental datasetSource", func() {
-			// populate dataset with some entities
 			_, err := dsm.CreateDataset("proxy", &server.CreateDatasetConfig{
 				ProxyDatasetConfig: &server.ProxyDatasetConfig{
 					RemoteUrl: "http://localhost:7777/datasets/people"}})
@@ -1350,7 +1350,6 @@ func TestPipeline(t *testing.T) {
 		})
 
 		g.It("Should support proxy dataset as fullsync datasetSource", func() {
-			// populate dataset with some entities
 			_, err := dsm.CreateDataset("proxy", &server.CreateDatasetConfig{
 				ProxyDatasetConfig: &server.ProxyDatasetConfig{
 					RemoteUrl: "http://localhost:7777/datasets/people"}})
@@ -1386,6 +1385,137 @@ func TestPipeline(t *testing.T) {
 			ents := mockService.getRecordedEntitiesForDataset("proxysink")
 			g.Assert(len(ents)).Eql(10, "sink received content")
 			g.Assert(ents[0].ID).Eql("ns3:fs-0", "sink received entity from proxy")
+		})
+
+		g.It("Should support proxy dataset as incremental datasetSink", func() {
+			_, err := dsm.CreateDataset("proxy", &server.CreateDatasetConfig{
+				ProxyDatasetConfig: &server.ProxyDatasetConfig{
+					RemoteUrl:        "http://localhost:7777/datasets/people",
+					AuthProviderName: "local",
+				}})
+			g.Assert(err).IsNil()
+
+			// define job
+			jobJson := `
+			{
+				"id" : "sync-proxydatasetsource-to-httpdatasetsink",
+				"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
+				"source" : {
+					"Type" : "HttpDatasetSource",
+					"Url" : "http://localhost:7777/datasets/people/changeswithcontinuation"
+				},
+				"sink" : {
+					"Type" : "DatasetSink",
+					"Name" : "proxy"
+				}
+			}`
+
+			jobConfig, _ := scheduler.Parse([]byte(jobJson))
+			pipeline, err := scheduler.toPipeline(jobConfig, JobTypeIncremental)
+			g.Assert(err).IsNil("pipeline is parsed correctly")
+
+			job := &job{
+				id:       jobConfig.Id,
+				pipeline: pipeline,
+				schedule: jobConfig.Triggers[0].Schedule,
+				runner:   runner,
+			}
+
+			job.Run()
+			var receivedMockRequests []*http.Request
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for afterCh := time.After(100 * time.Millisecond); ; {
+					select {
+					case d := <-mockService.HttpNotificationChannel:
+						receivedMockRequests = append(receivedMockRequests, d)
+					case <-afterCh:
+						return
+					}
+				}
+			}()
+			wg.Wait()
+
+			firstSinkReq := receivedMockRequests[1]
+			g.Assert(firstSinkReq.Header["Authorization"]).Eql([]string{"Basic dTEwMDpwMjAw"})
+			ents := mockService.getRecordedEntitiesForDataset("people")
+			g.Assert(len(receivedMockRequests)).Eql(4, "2 requests to source and 2 to sink")
+			g.Assert(len(ents)).Eql(20, "sink received 2 batches of content")
+			g.Assert(ents[10].ID).Eql("ns3:e-0")
+		})
+
+		g.It("Should support proxy dataset as fullsync datasetSink", func() {
+			_, err := dsm.CreateDataset("proxy", &server.CreateDatasetConfig{
+				ProxyDatasetConfig: &server.ProxyDatasetConfig{
+					RemoteUrl:        "http://localhost:7777/datasets/people",
+					AuthProviderName: "local",
+				}})
+			g.Assert(err).IsNil()
+
+			// define job
+			jobJson := `
+			{
+				"id" : "sync-proxydatasetsource-to-httpdatasetsink",
+				"triggers": [{"triggerType": "cron", "jobType": "fullSync", "schedule": "@every 2s"}],
+				"source" : {
+					"Type" : "HttpDatasetSource",
+					"Url" : "http://localhost:7777/datasets/people/changeswithcontinuation"
+				},
+				"sink" : {
+					"Type" : "DatasetSink",
+					"Name" : "proxy"
+				}
+			}`
+
+			jobConfig, _ := scheduler.Parse([]byte(jobJson))
+			pipeline, err := scheduler.toPipeline(jobConfig, JobTypeFull)
+			g.Assert(err).IsNil("pipeline is parsed correctly")
+
+			job := &job{
+				id:       jobConfig.Id,
+				pipeline: pipeline,
+				schedule: jobConfig.Triggers[0].Schedule,
+				runner:   runner,
+			}
+
+			job.Run()
+			var receivedMockRequests []*http.Request
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for afterCh := time.After(100 * time.Millisecond); ; {
+					select {
+					case d := <-mockService.HttpNotificationChannel:
+						receivedMockRequests = append(receivedMockRequests, d)
+					case <-afterCh:
+						return
+					}
+				}
+			}()
+			wg.Wait()
+
+			firstSinkReq := receivedMockRequests[1]
+			g.Assert(firstSinkReq.Header["Authorization"]).Eql([]string{"Basic dTEwMDpwMjAw"})
+			g.Assert(firstSinkReq.Header["Universal-Data-Api-Full-Sync-Id"]).IsNotZero()
+			g.Assert(firstSinkReq.Header["Universal-Data-Api-Full-Sync-Start"]).Eql([]string{"true"})
+			g.Assert(firstSinkReq.Header["Universal-Data-Api-Full-Sync-End"]).IsZero()
+			secondSinkReq := receivedMockRequests[3]
+			g.Assert(secondSinkReq.Header["Authorization"]).Eql([]string{"Basic dTEwMDpwMjAw"})
+			g.Assert(secondSinkReq.Header["Universal-Data-Api-Full-Sync-Id"]).IsNotZero()
+			g.Assert(secondSinkReq.Header["Universal-Data-Api-Full-Sync-Start"]).IsZero()
+			g.Assert(secondSinkReq.Header["Universal-Data-Api-Full-Sync-End"]).IsZero()
+			thirdSinkReq := receivedMockRequests[4]
+			g.Assert(thirdSinkReq.Header["Authorization"]).Eql([]string{"Basic dTEwMDpwMjAw"})
+			g.Assert(thirdSinkReq.Header["Universal-Data-Api-Full-Sync-Id"]).IsNotZero()
+			g.Assert(thirdSinkReq.Header["Universal-Data-Api-Full-Sync-Start"]).IsZero()
+			g.Assert(thirdSinkReq.Header["Universal-Data-Api-Full-Sync-End"]).Eql([]string{"true"})
+			ents := mockService.getRecordedEntitiesForDataset("people")
+			g.Assert(len(receivedMockRequests)).Eql(5, "2 requests to source and 2 to sink plus fullsync end to sink")
+			g.Assert(len(ents)).Eql(20, "sink received 2 batches of content")
+			g.Assert(ents[10].ID).Eql("ns3:e-0")
 		})
 	})
 }
