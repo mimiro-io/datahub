@@ -288,11 +288,19 @@ func (multiSource *MultiSource) incrementalRead(since DatasetContinuation, batch
 
 // ParseDependencies populates MultiSource dependencies based on given json config
 func (multiSource *MultiSource) ParseDependencies(dependenciesConfig interface{}) error {
+	dataset := multiSource.DatasetManager.GetDataset(multiSource.DatasetName)
+	if dataset != nil && dataset.IsProxy() {
+		return fmt.Errorf("main dataset multiSource must not be a proxy dataset: %v", multiSource.DatasetName)
+	}
 	if depsList, ok := dependenciesConfig.([]interface{}); ok {
 		for _, dep := range depsList {
 			if m, ok := dep.(map[string]interface{}); ok {
 				newDep := Dependency{}
 				newDep.Dataset = m["dataset"].(string)
+				depDataset := multiSource.DatasetManager.GetDataset(newDep.Dataset)
+				if depDataset != nil && depDataset.IsProxy() {
+					return fmt.Errorf("dependency dataset %v in multiSource %v must not be a proxy dataset", newDep.Dataset, multiSource.DatasetName)
+				}
 
 				for _, j := range m["joins"].([]interface{}) {
 					newJoin := Join{}
