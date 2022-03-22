@@ -75,10 +75,10 @@ func setupBench() (string, string, string, *Dataset) {
 	}
 
 	// if we are missing core datasets, we add these here
-	dsm.CreateDataset(datasetCore)
+	dsm.CreateDataset(datasetCore, nil)
 
 	peopleNamespacePrefix, _ := s.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
 	companyNamespacePrefix, _ := s.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/company/")
-	ds, _ := dsm.CreateDataset("people")
+	ds, _ := dsm.CreateDataset("people", nil)
 	return storeLocation, peopleNamespacePrefix, companyNamespacePrefix, ds
 }

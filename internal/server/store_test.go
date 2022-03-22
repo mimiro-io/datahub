@@ -71,7 +71,7 @@ func TestStoreRelations(test *testing.T) {
 
 		g.It("Should delete the correct old outgoing references in array after entity modified", func() {
 			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
-			friendsDS, _ := dsm.CreateDataset("friends")
+			friendsDS, _ := dsm.CreateDataset("friends", nil)
 
 			_ = friendsDS.StoreEntities([]*Entity{
 				NewEntityFromMap(map[string]interface{}{
@@ -122,7 +122,7 @@ func TestStoreRelations(test *testing.T) {
 
 		g.It("Should delete the correct old outgoing references after entity modified", func() {
 			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
-			friendsDS, _ := dsm.CreateDataset("friends")
+			friendsDS, _ := dsm.CreateDataset("friends", nil)
 
 			_ = friendsDS.StoreEntities([]*Entity{
 				NewEntityFromMap(map[string]interface{}{
@@ -158,7 +158,7 @@ func TestStoreRelations(test *testing.T) {
 
 		g.It("Should delete the correct incoming and outgoing references after entity deleted", func() {
 			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
-			friendsDS, _ := dsm.CreateDataset("friends")
+			friendsDS, _ := dsm.CreateDataset("friends", nil)
 
 			_ = friendsDS.StoreEntities([]*Entity{
 				NewEntityFromMap(map[string]interface{}{
@@ -224,10 +224,10 @@ func TestStoreRelations(test *testing.T) {
 			workPrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/work/")
 			g.Assert(count(b)).Eql(16)
 
-			friendsDS, _ := dsm.CreateDataset("friends")
+			friendsDS, _ := dsm.CreateDataset("friends", nil)
 			g.Assert(count(b)).Eql(24)
 
-			workDS, _ := dsm.CreateDataset("work")
+			workDS, _ := dsm.CreateDataset("work", nil)
 			g.Assert(count(b)).Eql(32)
 
 			_ = friendsDS.StoreEntities([]*Entity{
@@ -288,7 +288,7 @@ func TestStoreRelations(test *testing.T) {
 
 		g.It("Should store references of new deleted entities as deleted", func() {
 			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
-			friendsDS, _ := dsm.CreateDataset("friends")
+			friendsDS, _ := dsm.CreateDataset("friends", nil)
 
 			p1 := NewEntityFromMap(map[string]interface{}{
 				"id":    peopleNamespacePrefix + ":person-1",
@@ -320,7 +320,7 @@ func TestStoreRelations(test *testing.T) {
 
 		g.It("Should build query results", func() {
 			// create dataset
-			ds, err := dsm.CreateDataset("people")
+			ds, err := dsm.CreateDataset("people", nil)
 
 			batchSize := 5
 			entities := make([]*Entity, batchSize)
@@ -453,7 +453,7 @@ func TestStore(test *testing.T) {
 
 		g.It("Should store entity batches without error", func() {
 			// create dataset
-			ds, _ := dsm.CreateDataset("people")
+			ds, _ := dsm.CreateDataset("people", nil)
 
 			entities := make([]*Entity, 1)
 			entity := NewEntity("http://data.mimiro.io/people/homer", 0)
@@ -484,7 +484,7 @@ func TestStore(test *testing.T) {
 
 		g.It("Should make entities retrievable", func() {
 			// create dataset
-			ds, _ := dsm.CreateDataset("people")
+			ds, _ := dsm.CreateDataset("people", nil)
 
 			entities := make([]*Entity, 1)
 			entity := NewEntity("http://data.mimiro.io/people/homer", 0)
@@ -507,7 +507,7 @@ func TestStore(test *testing.T) {
 
 		g.It("Should only update entities if they are different (batch)", func() {
 			// create dataset
-			ds, _ := dsm.CreateDataset("people")
+			ds, _ := dsm.CreateDataset("people", nil)
 
 			entities := make([]*Entity, 1)
 			entity := NewEntity("http://data.mimiro.io/people/homer", 0)
@@ -550,9 +550,9 @@ func TestStore(test *testing.T) {
 
 		g.It("Should track changes", func() {
 			// create dataset
-			_, _ = dsm.CreateDataset("companies")
-			_, _ = dsm.CreateDataset("animals")
-			ds, err := dsm.CreateDataset("people")
+			_, _ = dsm.CreateDataset("companies", nil)
+			_, _ = dsm.CreateDataset("animals", nil)
+			ds, err := dsm.CreateDataset("people", nil)
 			g.Assert(err).IsNil()
 
 			entities := make([]*Entity, 3)
@@ -566,7 +566,7 @@ func TestStore(test *testing.T) {
 			_ = ds.StoreEntities(entities)
 
 			_ = dsm.DeleteDataset("people")
-			ds, _ = dsm.CreateDataset("people")
+			ds, _ = dsm.CreateDataset("people", nil)
 
 			entities = make([]*Entity, 3)
 			entity1 = NewEntity("http://data.mimiro.io/people/homer", 0)
@@ -602,12 +602,12 @@ func TestStore(test *testing.T) {
 
 		g.It("Should paginate entities with continuation tokens", func() {
 			// create dataset
-			c, _ := dsm.CreateDataset("companies")
-			_, _ = dsm.CreateDataset("animals")
-			ds, _ := dsm.CreateDataset("people")
+			c, _ := dsm.CreateDataset("companies", nil)
+			_, _ = dsm.CreateDataset("animals", nil)
+			ds, _ := dsm.CreateDataset("people", nil)
 
 			_ = dsm.DeleteDataset("people")
-			ds, _ = dsm.CreateDataset("people")
+			ds, _ = dsm.CreateDataset("people", nil)
 
 			entities := make([]*Entity, 3)
 			entity1 := NewEntity("http://data.mimiro.io/people/homer", 0)
@@ -648,11 +648,11 @@ func TestStore(test *testing.T) {
 		g.It("Should not struggle with many batch writes", func() {
 			g.Timeout(5 * time.Minute)
 			// create dataset
-			ds1, err := dsm.CreateDataset("people0")
-			ds2, err := dsm.CreateDataset("people1")
-			ds3, err := dsm.CreateDataset("people2")
-			ds4, err := dsm.CreateDataset("people3")
-			ds5, err := dsm.CreateDataset("people4")
+			ds1, err := dsm.CreateDataset("people0", nil)
+			ds2, err := dsm.CreateDataset("people1", nil)
+			ds3, err := dsm.CreateDataset("people2", nil)
+			ds4, err := dsm.CreateDataset("people3", nil)
+			ds5, err := dsm.CreateDataset("people4", nil)
 
 			batchSize := 1000
 			iterationSize := 100
@@ -692,7 +692,7 @@ func TestStore(test *testing.T) {
 
 		g.It("Should do deletion detection when running in fullsync mode", func() {
 			// create dataset
-			ds, err := dsm.CreateDataset("people")
+			ds, err := dsm.CreateDataset("people", nil)
 			g.Assert(err).IsNil()
 			batchSize := 5
 
@@ -744,7 +744,7 @@ func TestStore(test *testing.T) {
 
 		g.It("Should enable iterating over a dataset (MapEntitites)", func() {
 			// create dataset
-			ds, err := dsm.CreateDataset("people")
+			ds, err := dsm.CreateDataset("people", nil)
 			g.Assert(err).IsNil()
 			batchSize := 5
 
@@ -935,7 +935,7 @@ func TestStore(test *testing.T) {
 
 		g.It("Should build query results", func() {
 			// create dataset
-			ds, err := dsm.CreateDataset("people")
+			ds, err := dsm.CreateDataset("people", nil)
 
 			batchSize := 5
 			entities := make([]*Entity, batchSize)
@@ -1014,7 +1014,7 @@ func TestStore(test *testing.T) {
 
 		g.It("Should perform batch updates without error with concurrent requests", func() {
 			// create dataset
-			ds, err := dsm.CreateDataset("people")
+			ds, err := dsm.CreateDataset("people", nil)
 			g.Assert(err).IsNil()
 
 			batchSize := 5000
@@ -1045,7 +1045,7 @@ func TestStore(test *testing.T) {
 		g.It("Should store and replace large batches without error", func() {
 
 			// create dataset
-			ds, _ := dsm.CreateDataset("people")
+			ds, _ := dsm.CreateDataset("people", nil)
 
 			batchSize := 5000
 			entities := make([]*Entity, batchSize)
@@ -1111,8 +1111,8 @@ func TestStore(test *testing.T) {
 			rdfNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion(RdfNamespaceExpansion)
 
 			// create dataset
-			peopleDataset, _ := dsm.CreateDataset("people")
-			companiesDataset, _ := dsm.CreateDataset("companies")
+			peopleDataset, _ := dsm.CreateDataset("people", nil)
+			companiesDataset, _ := dsm.CreateDataset("companies", nil)
 
 			numOfCompanies := 10
 			numOfEmployees := 1000
@@ -1168,7 +1168,7 @@ func TestStore(test *testing.T) {
 			rdfNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion(RdfNamespaceExpansion)
 
 			// create dataset
-			peopleDataset, _ := dsm.CreateDataset("people")
+			peopleDataset, _ := dsm.CreateDataset("people", nil)
 			// 	companiesDataset, err := dsm.CreateDataset("companies")
 
 			people := make([]*Entity, 0)
@@ -1230,9 +1230,9 @@ func TestDatasetScope(test *testing.T) {
 			modelNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/model/")
 			rdfNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(RdfNamespaceExpansion)
 			// create dataset
-			peopleDataset, _ := dsm.CreateDataset(PEOPLE)
-			companiesDataset, _ := dsm.CreateDataset(COMPANIES)
-			employmentHistoryDataset, _ := dsm.CreateDataset(HISTORY)
+			peopleDataset, _ := dsm.CreateDataset(PEOPLE, nil)
+			companiesDataset, _ := dsm.CreateDataset(COMPANIES, nil)
+			employmentHistoryDataset, _ := dsm.CreateDataset(HISTORY, nil)
 
 			/* Install the following setup
 			{person: 1, workhistory: []int{}, currentwork: 1},
@@ -1470,9 +1470,9 @@ func TestDatasetScope(test *testing.T) {
 
 			// create dataset
 			const PEOPLE = "people"
-			peopleDataset, _ := dsm.CreateDataset(PEOPLE)
+			peopleDataset, _ := dsm.CreateDataset(PEOPLE, nil)
 			const EMPLOYEES = "employees"
-			employeeDataset, _ := dsm.CreateDataset(EMPLOYEES)
+			employeeDataset, _ := dsm.CreateDataset(EMPLOYEES, nil)
 
 			_ = peopleDataset.StoreEntities([]*Entity{
 				NewEntityFromMap(map[string]interface{}{
@@ -1529,10 +1529,10 @@ func TestDatasetScope(test *testing.T) {
 
 		g.It("Should perform txn updates without error", func() {
 			// create dataset
-			_, err := dsm.CreateDataset("people")
+			_, err := dsm.CreateDataset("people", nil)
 			g.Assert(err).IsNil()
 
-			_, err = dsm.CreateDataset("places")
+			_, err = dsm.CreateDataset("places", nil)
 			g.Assert(err).IsNil()
 
 			entities := make([]*Entity, 1)
@@ -1566,7 +1566,7 @@ func TestDatasetScope(test *testing.T) {
 			peopleNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
 
 			// create dataset
-			ds, err := dsm.CreateDataset("people")
+			ds, err := dsm.CreateDataset("people", nil)
 			g.Assert(err).IsNil()
 
 			entities := make([]*Entity, 1)

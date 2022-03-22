@@ -47,8 +47,21 @@ func (s *Scheduler) parseSink(jobConfig *JobConfiguration) (Sink, error) {
 		sinkTypeName := sinkConfig["Type"]
 		if sinkTypeName != nil {
 			if sinkTypeName == "DatasetSink" {
+				dsname := (sinkConfig["Name"]).(string)
+				dataset := s.DatasetManager.GetDataset(dsname)
+				if dataset != nil && dataset.IsProxy() {
+					sink := &httpDatasetSink{}
+					sink.Store = s.Store
+					sink.logger = s.Logger.Named("sink")
+					sink.Endpoint, _ = server.UrlJoin(dataset.ProxyConfig.RemoteUrl, "/entities")
+
+					if dataset.ProxyConfig.AuthProviderName != "" {
+						sink.TokenProvider = dataset.ProxyConfig.AuthProviderName
+					}
+					return sink, nil
+				}
 				sink := &datasetSink{}
-				sink.DatasetName = (sinkConfig["Name"]).(string)
+				sink.DatasetName = dsname
 				sink.Store = s.Store
 				sink.DatasetManager = s.DatasetManager
 				return sink, nil

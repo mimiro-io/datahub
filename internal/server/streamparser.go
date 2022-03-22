@@ -66,7 +66,7 @@ func (esp *EntityStreamParser) ParseTransaction(reader io.Reader) (*Transaction,
 	}
 
 	// key @context
-	t,err = decoder.Token()
+	t, err = decoder.Token()
 	if err != nil {
 		return nil, errors.New("parsing error: Bad token at read @context key " + err.Error())
 	}
@@ -82,7 +82,7 @@ func (esp *EntityStreamParser) ParseTransaction(reader io.Reader) (*Transaction,
 	}
 
 	for {
-		t,err = decoder.Token()
+		t, err = decoder.Token()
 		delimVal, isDelim := t.(json.Delim)
 		if isDelim {
 			if delimVal.String() == "}" {
@@ -94,7 +94,7 @@ func (esp *EntityStreamParser) ParseTransaction(reader io.Reader) (*Transaction,
 			datasetName := t.(string)
 
 			// read [
-			t,err = decoder.Token()
+			t, err = decoder.Token()
 			if err != nil {
 				return nil, errors.New("parsing error: Unable to read next token " + err.Error())
 			}

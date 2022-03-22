@@ -59,4 +59,3 @@ func (txnHandler *txnHandler) processTransaction(c echo.Context) error {
 
 	return c.NoContent(http.StatusOK)
 }
-

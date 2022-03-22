@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -548,6 +549,17 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 				src.Store = s.Store
 				src.DatasetManager = s.DatasetManager
 				src.DatasetName = (sourceConfig["Name"]).(string)
+				src.AuthorizeProxyRequest = func(authProviderName string) func(req *http.Request) {
+					if s.Runner.tokenProviders != nil {
+						if provider, ok := s.Runner.tokenProviders.Get(strings.ToLower(authProviderName)); ok {
+							return provider.Authorize
+						}
+					}
+					// if no authProvider is found, fall back to no auth for backend requests
+					return func(req *http.Request) {
+						//noop
+					}
+				}
 				if sourceConfig["LatestOnly"] != nil {
 					i := sourceConfig["LatestOnly"]
 					if boolVal, ok := i.(bool); ok {

@@ -194,6 +194,18 @@ Entities are returned as an array of JSON objects and can also contain a continu
 By default, the context object in datahub responses lists all available namespace mappings in the datahub. When there is a large number of datasets with many namespaces in the datahub, this can be undesired.
 Therefore, it is possible to configure a limited list of namespaces per dataset to be used in response contexts.
 
+### Creating datasets with public namespaces
+
+The recommended way to provide public namespaces is to provide them when creating new datasets.
+
+```
+> mim dataset create test.people --publicNamespaces=http://test.name.space,http://namespace.test
+
+SUCCESS  Dataset has been created
+```
+
+### Update existing datasets with public namespaces
+
 Each dataset has a meta-entity in an dataset called `core.Dataset`. To configure custom namespaces, the property `http://data.mimiro.io/core/dataset/publicNamespaces`
 can be added to the dataset's entity in `core.Dataset`.
 
@@ -245,6 +257,25 @@ ns0 | http://data.mimiro.io/core/dataset/
 ns1 | http://data.mimiro.io/core/
 
 ```
+## Proxy Datasets
+
+If data hub is deployed in an infrastructure setting with both internal and external services connected to it, data hub
+can act as proxy for datasets in unexposed services.
+
+An example: there is a UDA layer in an internal network, exposing tables of a relational database as datasets.
+There is also a data hub with access to the internal network. The data hub is accessible from the internet.
+By setting up proxy datasets for the database layer, data hub can make the data accessible for external services
+without having to load the data.
+
+Proxy datasets need the base Url of the proxied remote dataset as configuration. Optionally a security provider can
+be referenced if the remote dataset requires authentication. See (security providers)[#Working_with_security_providers]
+
+```
+> mim dataset create test.people --proxy=true --proxyRemoteUrl=https://url --proxyAuthProvider=authProviderName
+
+SUCCESS  Dataset has been created
+```
+
 
 ## Query
 

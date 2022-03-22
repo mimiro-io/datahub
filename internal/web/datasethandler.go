@@ -21,9 +21,11 @@ import (
 	"errors"
 	"github.com/golang-jwt/jwt"
 	"github.com/mimiro-io/datahub/internal/security"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -37,16 +39,16 @@ type datasetHandler struct {
 	datasetManager *server.DsManager
 	store          *server.Store
 	eventBus       server.EventBus
-	securityCore   *security.ServiceCore
+	tokenProviders *security.TokenProviders
 }
 
-func NewDatasetHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, dm *server.DsManager, store *server.Store, eb server.EventBus, securityCore *security.ServiceCore) {
+func NewDatasetHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, dm *server.DsManager, store *server.Store, eb server.EventBus, tokenProviders *security.TokenProviders) {
 	log := logger.Named("web")
 	handler := &datasetHandler{
 		datasetManager: dm,
 		store:          store,
 		eventBus:       eb,
-		securityCore:   securityCore,
+		tokenProviders: tokenProviders,
 	}
 
 	lc.Append(fx.Hook{
@@ -78,7 +80,7 @@ func (handler *datasetHandler) datasetList(c echo.Context) error {
 
 	if accessible == nil {
 		datasets = handler.datasetManager.GetDatasetNames()
-		if handler.securityCore.IsLocalAuthEnabled {
+		if handler.tokenProviders.ServiceCore.IsLocalAuthEnabled {
 			user := c.Get("user")
 			token := user.(*jwt.Token)
 			claims := token.Claims.(*security.CustomClaims)
@@ -93,7 +95,7 @@ func (handler *datasetHandler) datasetList(c echo.Context) error {
 			}
 
 			if !isAdmin {
-				datasets, err = handler.securityCore.FilterDatasets(datasets, claims.Subject)
+				datasets, err = handler.tokenProviders.ServiceCore.FilterDatasets(datasets, claims.Subject)
 				if err != nil {
 					return err
 				}
@@ -129,29 +131,43 @@ func whitelistDatasets(datasets []server.DatasetName, whitelist []string) []serv
 // datasetCreate
 func (handler *datasetHandler) datasetCreate(c echo.Context) error {
 	datasetName := c.Param("dataset")
-
+	isProxy := c.QueryParam("proxy")
 	exist := handler.datasetManager.IsDataset(datasetName)
 	if exist {
 		return echo.NewHTTPError(http.StatusBadRequest, "Dataset already exist")
 	}
-
-	_, err := handler.datasetManager.CreateDataset(datasetName)
+	createDatasetConfig := &server.CreateDatasetConfig{}
+	jsonDecoder := json.NewDecoder(c.Request().Body)
+	err := jsonDecoder.Decode(createDatasetConfig)
+	if err != nil && err != io.EOF { // eof means body was empty.
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create dataset: "+err.Error())
+	}
+	if isProxy == "true" {
+		if createDatasetConfig.ProxyDatasetConfig == nil ||
+			createDatasetConfig.ProxyDatasetConfig.RemoteUrl == "" {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid proxy configuration provided")
+		}
+		_, err = handler.datasetManager.CreateDataset(datasetName, createDatasetConfig)
+	} else {
+		createDatasetConfig.ProxyDatasetConfig = nil // make sure we don't accidently store invalid proxy config
+		_, err = handler.datasetManager.CreateDataset(datasetName, createDatasetConfig)
+	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed creating dataset")
 	}
-
-	// TODO: remove the part under here
-	// this is done to potentially update "old" datasets
-	core := handler.datasetManager.GetDataset("core.Dataset")
-	entity := handler.datasetManager.GetDatasetEntity(datasetName)
-	entities := []*server.Entity{
-		entity,
-	}
-	err = core.StoreEntities(entities)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed creating dataset")
-	}
-
+	/*
+		// TODO: remove the part under here
+		// this is done to potentially update "old" datasets
+		core := handler.datasetManager.GetDataset("core.Dataset")
+		entity := handler.datasetManager.NewDatasetEntity(datasetName, nil, nil)
+		entities := []*server.Entity{
+			entity,
+		}
+		err = core.StoreEntities(entities)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "Failed creating dataset")
+		}
+	*/
 	return c.NoContent(http.StatusOK)
 }
 
@@ -211,12 +227,6 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 	}
 
 	f := c.QueryParam("from")
-	if f != "" {
-		_, err = base64.StdEncoding.DecodeString(f)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, server.SinceParseErr(err).Error())
-		}
-	}
 
 	// check dataset exists
 	dataset := handler.datasetManager.GetDataset(datasetName)
@@ -239,20 +249,58 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 		return err
 	}
 
-	continuationToken, err := dataset.MapEntitiesRaw(f, l, func(jsonData []byte) error {
-		_, err := c.Response().Write([]byte(","))
-		if err != nil {
-			return err
+	var continuationToken string
+	if dataset.IsProxy() {
+		continuationToken, err = dataset.AsProxy(
+			handler.lookupAuth(dataset.ProxyConfig.AuthProviderName),
+		).StreamEntitiesRaw(f, l, func(jsonData []byte) error {
+			_, _ = c.Response().Write([]byte(","))
+			_, _ = c.Response().Write(jsonData)
+			return nil
+		})
+		if continuationToken != "" {
+			// write the continuation token and end the array of entities
+			_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + continuationToken + "\"}]"))
+		} else {
+			// write only array closing bracket
+			_, _ = c.Response().Write([]byte("]"))
 		}
-		_, err = c.Response().Write(jsonData)
-		return err
-	})
+	} else {
+		if f != "" {
+			_, err = base64.StdEncoding.DecodeString(f)
+			if err != nil {
+				return echo.NewHTTPError(http.StatusBadRequest, server.SinceParseErr(err).Error())
+			}
+		}
+		continuationToken, err = dataset.MapEntitiesRaw(f, l, func(jsonData []byte) error {
+			_, err := c.Response().Write([]byte(","))
+			if err != nil {
+				return err
+			}
+			_, err = c.Response().Write(jsonData)
+			return err
+		})
+		// write the continuation token and end the array of entities
+		_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + continuationToken + "\"}]"))
+	}
 
-	// write the continuation token and end the array of entities
-	_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + continuationToken + "\"}]"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
 	c.Response().Flush()
 
 	return nil
+}
+
+func (handler *datasetHandler) lookupAuth(authProviderName string) func(req *http.Request) {
+	if provider, ok := handler.tokenProviders.Get(strings.ToLower(authProviderName)); ok {
+		return provider.Authorize
+	}
+
+	// if no authProvider es found, fall back to no auth for backend requests
+	return func(req *http.Request) {
+		// noop
+	}
 }
 
 func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
@@ -270,11 +318,6 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 		l = int(f)
 	}
 
-	sinceNum, err := decodeSince(since)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.SinceParseErr(err).Error())
-	}
-
 	// check dataset exists
 	dataset := handler.datasetManager.GetDataset(datasetName)
 	if dataset == nil {
@@ -290,14 +333,41 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 	jsonContext, _ := json.Marshal(dataset.GetContext())
 	_, _ = c.Response().Write(jsonContext)
 
-	continuationToken, err := dataset.ProcessChangesRaw(sinceNum, l, false, func(jsonData []byte) error {
-		_, _ = c.Response().Write([]byte(","))
-		_, _ = c.Response().Write(jsonData)
-		return nil
-	})
+	if dataset.IsProxy() {
+		continuationToken, err := dataset.AsProxy(
+			handler.lookupAuth(dataset.ProxyConfig.AuthProviderName),
+		).StreamChangesRaw(since, l, func(jsonData []byte) error {
+			_, _ = c.Response().Write([]byte(","))
+			_, _ = c.Response().Write(jsonData)
+			return nil
+		})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		if continuationToken != "" {
+			// write the continuation token and end the array of entities
+			_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + continuationToken + "\"}]"))
+		} else {
+			// write only array closing bracket
+			_, _ = c.Response().Write([]byte("]"))
+		}
+	} else {
+		sinceNum, err := decodeSince(since)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, server.SinceParseErr(err).Error())
+		}
 
+		continuationToken, err := dataset.ProcessChangesRaw(sinceNum, l, false, func(jsonData []byte) error {
+			_, _ = c.Response().Write([]byte(","))
+			_, _ = c.Response().Write(jsonData)
+			return nil
+		})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + encodeSince(continuationToken) + "\"}]"))
+	}
 	// write the continuation token and end the array of entities
-	_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + encodeSince(continuationToken) + "\"}]"))
 	c.Response().Flush()
 
 	return nil
@@ -323,6 +393,11 @@ func (handler *datasetHandler) processEntities(c echo.Context, datasetName strin
 
 	dataset := handler.datasetManager.GetDataset(datasetName)
 
+	if dataset.IsProxy() {
+		return dataset.AsProxy(
+			handler.lookupAuth(dataset.ProxyConfig.AuthProviderName),
+		).ForwardEntities(c.Request().Body, c.Request().Header)
+	}
 	// start new fullsync if requested
 	if fullSyncStart {
 		err := dataset.StartFullSyncWithLease(fullSyncID)

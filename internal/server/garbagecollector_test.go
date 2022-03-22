@@ -67,7 +67,7 @@ func TestGC(t *testing.T) {
 			b := gc.store.database
 			g.Assert(count(b)).Eql(16)
 
-			ds, _ := dsm.CreateDataset("test")
+			ds, _ := dsm.CreateDataset("test", nil)
 			g.Assert(count(b)).Eql(24)
 
 			_ = ds.StoreEntities([]*Entity{NewEntity("hei", 0)})
@@ -84,10 +84,10 @@ func TestGC(t *testing.T) {
 			b := store.database
 			g.Assert(count(b)).Eql(16)
 
-			ds, _ := dsm.CreateDataset("test")
+			ds, _ := dsm.CreateDataset("test", nil)
 			g.Assert(count(b)).Eql(24)
 
-			ds2, _ := dsm.CreateDataset("delete.me")
+			ds2, _ := dsm.CreateDataset("delete.me", nil)
 			g.Assert(count(b)).Eql(32)
 
 			_ = ds.StoreEntities([]*Entity{NewEntity("p1", 0)})
@@ -111,10 +111,10 @@ func TestGC(t *testing.T) {
 			workPrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/work/")
 			g.Assert(count(b)).Eql(16)
 
-			friendsDS, _ := dsm.CreateDataset("friends")
+			friendsDS, _ := dsm.CreateDataset("friends", nil)
 			g.Assert(count(b)).Eql(24)
 
-			workDS, _ := dsm.CreateDataset("work")
+			workDS, _ := dsm.CreateDataset("work", nil)
 			g.Assert(count(b)).Eql(32)
 
 			_ = friendsDS.StoreEntities([]*Entity{

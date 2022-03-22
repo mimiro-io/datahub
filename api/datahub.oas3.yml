@@ -460,8 +460,8 @@ paths:
         '500':
           description: Internal server error
     post:
-      summary: Update dataset
-      description: Updates (and/or creates) a Dataset.
+      summary: Create dataset
+      description: creates a Dataset.
       parameters:
         - in: path
           name: dataset
@@ -470,6 +470,37 @@ paths:
           required: true
           description:
             The name of the Dataset to recover
+        - in: query
+          name: proxy
+          schema:
+            type: boolean
+          required: false
+          description: if true, the dataset will forwand all user requests to configured proxy dataset. requires request body with proxyDatasetConfig
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              properties:
+                proxyDatasetConfig:
+                  description: configuration for proxy datasets. only required when dataset is created with ?proxy=true option.
+                  type: object
+                  properties:
+                    remoteUrl:
+                      description: base url of proxied UDA dataset in the form //host/datasets/datasetname.
+                      type: string
+                    authProviderName:
+                      description: reference to an authentication provider in the datahub. if omitted or not found, proxy requests are sent without Authorization header.
+                      type: string
+                publicNamespaces:
+                  description: only expose these namespaces to users of this dataset. if omitted, all namespaces are exposed
+                  type: array
+                  items:
+                    type: string
+            examples:
+              proxyDatasetConfig:
+                remoteUrl: "http://hostname/datasets/example"
+                authProviderName: "local"
+              publicNamespaces: ["http://example.com", "http://example.mimiro.io/"]
       tags:
         - dataset
       security:
@@ -1053,4 +1084,3 @@ components:
           description: |
             Contains the continuation token. This should be a base64 encoded string. What's inside the
             token is up to the server.
-

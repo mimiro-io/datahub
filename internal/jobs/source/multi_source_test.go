@@ -981,12 +981,10 @@ func TestMultiSource(t *testing.T) {
 			g.Assert(m["Lisa"]).IsTrue()
 		})
 
-	})
-
-	g.Describe("parseDependencies", func() {
-		g.It("should translate json to config", func() {
-			s := source.MultiSource{}
-			srcJSON := `{
+		g.Describe("parseDependencies", func() {
+			g.It("should translate json to config", func() {
+				s := source.MultiSource{DatasetName: "person", Store: store, DatasetManager: dsm}
+				srcJSON := `{
 				"Type" : "MultiSource",
 				"Name" : "person",
 				"Dependencies": [
@@ -1018,43 +1016,100 @@ func TestMultiSource(t *testing.T) {
 				]
 			}`
 
-			srcConfig := map[string]interface{}{}
-			err := json.Unmarshal([]byte(srcJSON), &srcConfig)
-			g.Assert(err).IsNil()
-			err = s.ParseDependencies(srcConfig["Dependencies"])
-			g.Assert(err).IsNil()
+				srcConfig := map[string]interface{}{}
+				err := json.Unmarshal([]byte(srcJSON), &srcConfig)
+				g.Assert(err).IsNil()
+				err = s.ParseDependencies(srcConfig["Dependencies"])
+				g.Assert(err).IsNil()
 
-			g.Assert(s.Dependencies).IsNotZero()
-			g.Assert(len(s.Dependencies)).Eql(2)
+				g.Assert(s.Dependencies).IsNotZero()
+				g.Assert(len(s.Dependencies)).Eql(2)
 
-			dep := s.Dependencies[0]
-			g.Assert(dep.Dataset).Eql("product")
-			g.Assert(dep.Joins).IsNotZero()
-			g.Assert(len(dep.Joins)).Eql(2)
-			j := dep.Joins[0]
-			g.Assert(j.Dataset).Eql("order")
-			g.Assert(j.Predicate).Eql("product-ordered")
-			g.Assert(j.Inverse).IsTrue()
-			j = dep.Joins[1]
-			g.Assert(j.Dataset).Eql("person")
-			g.Assert(j.Predicate).Eql("ordering-customer")
-			g.Assert(j.Inverse).IsFalse()
+				dep := s.Dependencies[0]
+				g.Assert(dep.Dataset).Eql("product")
+				g.Assert(dep.Joins).IsNotZero()
+				g.Assert(len(dep.Joins)).Eql(2)
+				j := dep.Joins[0]
+				g.Assert(j.Dataset).Eql("order")
+				g.Assert(j.Predicate).Eql("product-ordered")
+				g.Assert(j.Inverse).IsTrue()
+				j = dep.Joins[1]
+				g.Assert(j.Dataset).Eql("person")
+				g.Assert(j.Predicate).Eql("ordering-customer")
+				g.Assert(j.Inverse).IsFalse()
 
-			dep = s.Dependencies[1]
-			g.Assert(dep.Dataset).Eql("order")
-			g.Assert(dep.Joins).IsNotZero()
-			g.Assert(len(dep.Joins)).Eql(1)
-			j = dep.Joins[0]
-			g.Assert(j.Dataset).Eql("person")
-			g.Assert(j.Predicate).Eql("ordering-customer")
-			g.Assert(j.Inverse).IsFalse()
+				dep = s.Dependencies[1]
+				g.Assert(dep.Dataset).Eql("order")
+				g.Assert(dep.Joins).IsNotZero()
+				g.Assert(len(dep.Joins)).Eql(1)
+				j = dep.Joins[0]
+				g.Assert(j.Dataset).Eql("person")
+				g.Assert(j.Predicate).Eql("ordering-customer")
+				g.Assert(j.Inverse).IsFalse()
+			})
+			g.It("Should fail if main dataset is proxy dataset", func() {
+				// create main dataset as proxy dataset
+				_, err := dsm.CreateDataset("people", &server.CreateDatasetConfig{
+					ProxyDatasetConfig: &server.ProxyDatasetConfig{
+						RemoteUrl: "http://localhost:7777/datasets/people",
+					}})
+				g.Assert(err).IsNil()
+
+				// now instantiate (simulating job start)
+				testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
+				srcJSON := `{ "Type" : "MultiSource", "Name" : "people", "Dependencies": [
+                          {
+							"dataset": "address",
+							"joins": [
+							  { "dataset": "office", "predicate": "http://office/location", "inverse": true },
+							  { "dataset": "people", "predicate": "http://office/contact", "inverse": false },
+							  { "dataset": "team", "predicate": "http://team/lead", "inverse": true },
+							  { "dataset": "people", "predicate": "http://team/member", "inverse": false }
+							]
+                          }
+                        ] }`
+
+				srcConfig := map[string]interface{}{}
+				_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
+				err = testSource.ParseDependencies(srcConfig["Dependencies"])
+				//t.Log(err)
+				g.Assert(err).IsNotNil()
+			})
+			g.It("Should fail if a dependency is a proxy dataset", func() {
+				// create dependency dataset as proxy dataset
+				_, err := dsm.CreateDataset("address", &server.CreateDatasetConfig{
+					ProxyDatasetConfig: &server.ProxyDatasetConfig{
+						RemoteUrl: "http://localhost:7777/datasets/address",
+					}})
+				g.Assert(err).IsNil()
+
+				// now instantiate (simulating job start)
+				testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
+				srcJSON := `{ "Type" : "MultiSource", "Name" : "people", "Dependencies": [
+                          {
+							"dataset": "address",
+							"joins": [
+							  { "dataset": "office", "predicate": "http://office/location", "inverse": true },
+							  { "dataset": "people", "predicate": "http://office/contact", "inverse": false },
+							  { "dataset": "team", "predicate": "http://team/lead", "inverse": true },
+							  { "dataset": "people", "predicate": "http://team/member", "inverse": false }
+							]
+                          }
+                        ] }`
+
+				srcConfig := map[string]interface{}{}
+				_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
+				err = testSource.ParseDependencies(srcConfig["Dependencies"])
+				//t.Log(err)
+				g.Assert(err).IsNotNil()
+			})
 		})
 	})
 }
 
 func createTestDataset(dsName string, entityNames []string, refMap map[string]map[string]interface{},
 	dsm *server.DsManager, g *goblin.G, store *server.Store) (*server.Dataset, string) {
-	dataset, err := dsm.CreateDataset(dsName)
+	dataset, err := dsm.CreateDataset(dsName, nil)
 	g.Assert(err).IsNil()
 	peoplePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://" + dsName + "/")
 	g.Assert(err).IsNil()

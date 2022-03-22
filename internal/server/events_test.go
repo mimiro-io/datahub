@@ -98,7 +98,7 @@ func TestEvents(t *testing.T) {
 			os.Stderr = oldErr
 			os.Stdout = oldOut
 
-			peopleDs, err = dsm.CreateDataset("people")
+			peopleDs, err = dsm.CreateDataset("people", nil)
 			g.Assert(err).IsNil()
 		})
 		g.AfterEach(func() {
@@ -195,7 +195,7 @@ func TestEvents(t *testing.T) {
 			//add data to people dataset
 			err := peopleDs.StoreEntities([]*server.Entity{server.NewEntity("homer", 0)})
 			g.Assert(err).IsNil()
-			target, err := dsm.CreateDataset("peoplecopy")
+			target, err := dsm.CreateDataset("peoplecopy", nil)
 			g.Assert(err).IsNil()
 
 			//setup job
