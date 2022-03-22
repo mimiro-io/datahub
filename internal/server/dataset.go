@@ -432,10 +432,19 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 			// incoming buffer ic-indexid:relatedid:rid:time:predid:deleted => nil
 			for k, stringOrArrayValue := range e.References {
 
-				// need to check if v is string or []string
-				refs, isArray := stringOrArrayValue.([]string)
-				if !isArray {
+				// need to check if v is string, []interface{} or []string
+				var refs []string
+				switch stringOrArrayValue.(type) {
+				case string:
 					refs = []string{stringOrArrayValue.(string)}
+				case []string:
+					refs = stringOrArrayValue.([]string)
+				case []interface{}:
+					interfaceRefs := stringOrArrayValue.([]interface{})
+					refs = make([]string, len(interfaceRefs))
+					for i, v := range interfaceRefs {
+						refs[i] = v.(string)
+					}
 				}
 
 				for _, ref := range refs {
