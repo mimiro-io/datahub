@@ -234,21 +234,23 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 		return c.NoContent(http.StatusNotFound)
 	}
 
-	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	c.Response().WriteHeader(http.StatusOK)
+	preStream := func() error {
+		c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		c.Response().WriteHeader(http.StatusOK)
 
-	_, err = c.Response().Write([]byte("["))
-	if err != nil {
-		return err
+		_, err = c.Response().Write([]byte("["))
+		if err != nil {
+			return err
+		}
+
+		// write context
+		jsonContext, _ := json.Marshal(dataset.GetContext())
+		_, err = c.Response().Write(jsonContext)
+		if err != nil {
+			return err
+		}
+		return nil
 	}
-
-	// write context
-	jsonContext, _ := json.Marshal(dataset.GetContext())
-	_, err = c.Response().Write(jsonContext)
-	if err != nil {
-		return err
-	}
-
 	var continuationToken string
 	if dataset.IsProxy() {
 		continuationToken, err = dataset.AsProxy(
@@ -257,7 +259,10 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 			_, _ = c.Response().Write([]byte(","))
 			_, _ = c.Response().Write(jsonData)
 			return nil
-		})
+		}, preStream)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
 		if continuationToken != "" {
 			// write the continuation token and end the array of entities
 			_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + continuationToken + "\"}]"))
@@ -272,6 +277,10 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 				return echo.NewHTTPError(http.StatusBadRequest, server.SinceParseErr(err).Error())
 			}
 		}
+		err = preStream()
+		if err != nil {
+			return err
+		}
 		continuationToken, err = dataset.MapEntitiesRaw(f, l, func(jsonData []byte) error {
 			_, err := c.Response().Write([]byte(","))
 			if err != nil {
@@ -280,13 +289,13 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 			_, err = c.Response().Write(jsonData)
 			return err
 		})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
 		// write the continuation token and end the array of entities
 		_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + continuationToken + "\"}]"))
 	}
 
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
 	c.Response().Flush()
 
 	return nil
@@ -324,15 +333,16 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 		return c.NoContent(http.StatusNotFound)
 	}
 
-	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	c.Response().WriteHeader(http.StatusOK)
+	preStream := func() {
+		c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		c.Response().WriteHeader(http.StatusOK)
 
-	_, _ = c.Response().Write([]byte("["))
+		_, _ = c.Response().Write([]byte("["))
 
-	// write context
-	jsonContext, _ := json.Marshal(dataset.GetContext())
-	_, _ = c.Response().Write(jsonContext)
-
+		// write context
+		jsonContext, _ := json.Marshal(dataset.GetContext())
+		_, _ = c.Response().Write(jsonContext)
+	}
 	if dataset.IsProxy() {
 		continuationToken, err := dataset.AsProxy(
 			handler.lookupAuth(dataset.ProxyConfig.AuthProviderName),
@@ -340,7 +350,7 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 			_, _ = c.Response().Write([]byte(","))
 			_, _ = c.Response().Write(jsonData)
 			return nil
-		})
+		}, preStream)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
@@ -356,7 +366,7 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, server.SinceParseErr(err).Error())
 		}
-
+		preStream()
 		continuationToken, err := dataset.ProcessChangesRaw(sinceNum, l, false, func(jsonData []byte) error {
 			_, _ = c.Response().Write([]byte(","))
 			_, _ = c.Response().Write(jsonData)

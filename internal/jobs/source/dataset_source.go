@@ -63,7 +63,7 @@ func (datasetSource *DatasetSource) ReadEntities(since DatasetContinuation, batc
 				}
 				entities = append(entities, e)
 				return nil
-			})
+			}, nil)
 			if err != nil {
 				return err
 			}
@@ -90,7 +90,7 @@ func (datasetSource *DatasetSource) ReadEntities(since DatasetContinuation, batc
 				}
 				entities = append(entities, e)
 				return nil
-			})
+			}, nil)
 			if err != nil {
 				return err
 			}
