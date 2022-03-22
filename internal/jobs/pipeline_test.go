@@ -657,6 +657,8 @@ func TestPipeline(t *testing.T) {
 			entities[0] = server.NewEntity(testNamespacePrefix+":homer", 0)
 			entities[0].Properties[testNamespacePrefix+":name"] = "homer"
 			entities[0].Properties[testNamespacePrefix+":address"] = address
+			entities[0].Properties[testNamespacePrefix+":listref"] = []string{"//homer", "//male"}
+			entities[0].Properties[testNamespacePrefix+":ref"] = "//homer"
 
 			entities[1] = server.NewEntity(testNamespacePrefix+":barney", 0)
 			entities[1].Properties[testNamespacePrefix+":name"] = "barney"
@@ -673,6 +675,8 @@ func TestPipeline(t *testing.T) {
 			var result = [];
 		    for (e of entities) {
                 var address = GetProperty(e, test_ns, "address");
+				var listref = GetProperty(e, test_ns, "listref");
+				var ref = GetProperty(e, test_ns, "ref");
                 //sub-entities must be converted to Entity instances before GetProperty and other helpers work on them
                 var addressEntity = AsEntity(address)
                 var street = GetProperty(addressEntity, test_ns, "street");
@@ -681,6 +685,8 @@ func TestPipeline(t *testing.T) {
 	            SetProperty(r, test_ns,"street",street);
 	            SetProperty(r, test_ns,"address",AsEntity(address));
 	            SetProperty(r, test_ns,"no_address",AsEntity(street));
+				AddReference(r, test_ns, "listref", "listref")
+				AddReference(r, test_ns, "ref", "ref")
                 result.push(r);
 		    }
 
