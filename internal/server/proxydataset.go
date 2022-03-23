@@ -59,7 +59,7 @@ func UrlJoin(baseUrl string, elem ...string) (result string, err error) {
 	return
 }
 
-func (d *ProxyDataset) StreamEntitiesRaw(from string, limit int, f func(jsonData []byte) error) (string, error) {
+func (d *ProxyDataset) StreamEntitiesRaw(from string, limit int, f func(jsonData []byte) error, preStream func() error) (string, error) {
 	uri, err := url.Parse(d.RemoteEntitiesUrl)
 	if err != nil {
 		return "", err
@@ -88,6 +88,14 @@ func (d *ProxyDataset) StreamEntitiesRaw(from string, limit int, f func(jsonData
 	if res.StatusCode != 200 {
 		return "", errors.New("Proxy target responded with status " + res.Status)
 	}
+
+	if preStream != nil {
+		err = preStream()
+		if err != nil {
+			return "", err
+		}
+	}
+
 	p := NewEntityStreamParser(d.badgerDataset.store)
 	var cont *Entity
 	err = p.ParseStream(res.Body, func(entity *Entity) error {
@@ -112,7 +120,12 @@ func (d *ProxyDataset) StreamEntitiesRaw(from string, limit int, f func(jsonData
 	return cont.Properties["token"].(string), nil
 
 }
-func (d *ProxyDataset) StreamChangesRaw(since string, limit int, f func(jsonData []byte) error) (string, error) {
+
+// StreamChangesRaw stream through the dataset's changes and call `f` for each entity.
+// a `preStream` function can be provided if StreamChangesRaw is used in a web handler. It allows
+// to leave the http response uncommitted until `f` is called, so that an http error handler
+// still can modify status code while the response is uncommitted
+func (d *ProxyDataset) StreamChangesRaw(since string, limit int, f func(jsonData []byte) error, preStream func()) (string, error) {
 	uri, err := url.Parse(d.RemoteChangesUrl)
 	if err != nil {
 		return "", err
@@ -140,6 +153,10 @@ func (d *ProxyDataset) StreamChangesRaw(since string, limit int, f func(jsonData
 
 	if res.StatusCode != 200 {
 		return "", errors.New("Proxy target responded with status " + res.Status)
+	}
+
+	if preStream != nil {
+		preStream()
 	}
 	p := NewEntityStreamParser(d.badgerDataset.store)
 	var cont *Entity
