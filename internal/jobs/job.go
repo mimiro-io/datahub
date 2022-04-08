@@ -62,7 +62,8 @@ func (job *job) Run() {
 					duration = d
 				}
 			}
-			job.runner.logger.Infow(fmt.Sprintf("Job %v (%s) is running, queuing current run request for retry in %v", job.id, job.title, duration),
+			job.runner.logger.Infow(fmt.Sprintf("Job %v (%s) is running or could not get a ticket (%v avail). "+
+				"queuing for retry in %v", job.id, job.title, job.runner.raffle.ticketsFull, duration),
 				"job.jobId", job.id,
 				"job.jobTitle", job.title,
 				"job.state", "Running")
@@ -71,8 +72,10 @@ func (job *job) Run() {
 			}
 			return
 		}
-		// could not obtain ticket. This indicates a job with the same jobId is running already.
+		// could not obtain ticket. This indicates a job with the same jobId is running already. Or tickets are empty.
 		// We skip this execution request
+		job.runner.logger.Infow(fmt.Sprintf("Job %v (%s) running or did not get a ticket (%v avail), skipping.",
+			job.id, job.title, job.runner.raffle.ticketsIncr), "job.jobId", job.id, "job.jobTitle", job.title)
 		return
 	}
 	defer job.runner.raffle.returnTicket(ticket)
