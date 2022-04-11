@@ -37,15 +37,6 @@ type Runner struct {
 	eventBus       server.EventBus
 }
 
-// RunnerConfig sets the initial config for the underlying job runner.
-// PoolIncremental defines the max number of jobs that can be ran at once
-// Concurrent defines how many of the same EntryID should be allowed, this should always be 0 in the datahub
-type RunnerConfig struct {
-	PoolIncremental int
-	PoolFull        int
-	Concurrent      int
-}
-
 // SyncJobState used to capture the state of a running job
 type SyncJobState struct {
 	ID                 string `json:"id"`
@@ -54,18 +45,11 @@ type SyncJobState struct {
 	LastRunError       string `json:"lastrunerror"`
 }
 
-func NewRunnerConfig() *RunnerConfig {
-	return &RunnerConfig{
-		PoolIncremental: 10,
-		PoolFull:        10,
-		Concurrent:      1,
-	}
-}
-
 // NewRunner creates a new job runner. It should only be used from the main.go
-func NewRunner(config *RunnerConfig, env *conf.Env, store *server.Store, tokenProviders *security.TokenProviders, eb server.EventBus, statsdClient statsd.ClientInterface) *Runner {
+func NewRunner(env *conf.Env, store *server.Store, tokenProviders *security.TokenProviders, eb server.EventBus, statsdClient statsd.ClientInterface) *Runner {
 	logger := env.Logger.Named("jobrunner")
-	logger.Infof("Starting the JobRunner")
+	config := env.RunnerConfig
+	logger.Infof("Starting the JobRunner with config %+v", config)
 	jobrunner.Start(config.PoolIncremental+config.PoolFull+3, config.Concurrent) // we add 3 extra to be able to postpone pipelines
 	return &Runner{
 		logger:         logger,

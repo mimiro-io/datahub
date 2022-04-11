@@ -69,7 +69,8 @@ func TestEvents(t *testing.T) {
 				Logger:        zap.NewNop().Sugar(),
 				StoreLocation: storeLocation,
 				Port:          "5555",
-				Auth:          &conf.AuthConfig{Middleware: "noop"}}
+				Auth:          &conf.AuthConfig{Middleware: "noop"},
+				RunnerConfig:  &conf.RunnerConfig{PoolIncremental: 10, PoolFull: 5}}
 
 			devNull, _ := os.Open("/dev/null")
 			oldErr := os.Stderr
@@ -83,7 +84,7 @@ func TestEvents(t *testing.T) {
 			eventBus = newBus.(*server.MEventBus)
 			dsm = server.NewDsManager(lc, e, store, newBus)
 
-			runner = jobs.NewRunner(&jobs.RunnerConfig{PoolIncremental: 10, PoolFull: 5},
+			runner = jobs.NewRunner(
 				e, store, nil, eventBus, &statsd.NoOpClient{})
 			scheduler = jobs.NewScheduler(lc, e, store, dsm, runner)
 

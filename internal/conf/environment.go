@@ -41,6 +41,7 @@ type Env struct {
 	NodeId                  string
 	SecurityStorageLocation string
 	BackupSourceLocation    string
+	RunnerConfig            *RunnerConfig
 }
 
 type AuthConfig struct {
@@ -56,4 +57,13 @@ type DatalayerJwtConfig struct {
 	Audience     string
 	GrantType    string
 	Endpoint     string
+}
+
+// RunnerConfig sets the initial config for the underlying job runner.
+// PoolIncremental defines the max number of jobs that can be ran at once
+// Concurrent defines how many of the same EntryID should be allowed, this should always be 0 in the datahub
+type RunnerConfig struct {
+	PoolIncremental int
+	PoolFull        int
+	Concurrent      int
 }

@@ -1001,6 +1001,11 @@ func setupScheduler(storeLocation string, t *testing.T) (*Scheduler, *server.Sto
 	e := &conf.Env{
 		Logger:        logger,
 		StoreLocation: storeLocation,
+		RunnerConfig: &conf.RunnerConfig{
+			PoolIncremental: 10,
+			PoolFull:        5,
+			Concurrent:      0,
+		},
 	}
 
 	eb := server.NoOpBus()
@@ -1016,11 +1021,7 @@ func setupScheduler(storeLocation string, t *testing.T) (*Scheduler, *server.Sto
 
 	var pm = security.NewProviderManager(lc, e, store, logger)
 	var tps = security.NewTokenProviders(lc, logger, pm, nil)
-	runner := NewRunner(&RunnerConfig{
-		PoolIncremental: 10,
-		PoolFull:        5,
-		Concurrent:      0,
-	}, e, store, tps, eb, statsdClient)
+	runner := NewRunner(e, store, tps, eb, statsdClient)
 
 	dsm := server.NewDsManager(lc, e, store, server.NoOpBus())
 
