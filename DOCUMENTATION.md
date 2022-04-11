@@ -719,7 +719,7 @@ The data structure for a transaction consists of a namespace declaring context, 
 
 The following example shows a transaction serialised as JSON.
 
-```
+```json
 {
   "@context" : {
     "namespaces" : {
@@ -1292,7 +1292,37 @@ You can tune the LOG_LEVEL of the Datahub. The supported values are DEBUG and IN
 
 The Datahub supports reporting metrics trough a StatsD server. This is turned off if left empty, and you can turn it on by giving it an ip-address and a port combination.
 
-#### Securing the Datahub
+#### Securing the Data Hub
+
+There are four main security models for the data hub. 
+
+1. No security / API gateway seured. All calls are allowed at the data hub API level. This mode can be used either when developing or when the data hub API is protected behind an API gateway that implements secure access. 
+
+2. Data Hub Security. This involves a datahub allowing for the registration of clients and a public key. The client (often in this model another datahub) retrieves a JWT access token by sending a request (signed with a private key) to authenticate. 
+
+3. OPA. OPA is used to authorizate requests, but authentication is still perfomed by external provider. See below. 
+
+4. External Provider is used to validate JWT tokens. This is an OAuth2 provider.
+
+Typically, either 1, 2 or 3&4 in combination are employed to secure a data hub instance.
+
+The following environment variables can be set to configure the data hub security. 
+
+```NODE_ID=```
+
+NODE_ID is used to give a unique identifier to a running data hub instance. It is needed when regstering this data hub instance as a client to other data hubs. It is the users responsibility to assign unique identifiers.
+
+```ADMIN_USER=```
+
+To boot strap the administration and secure access via client certificates a root admin user is requried. The credentials for this are passed in at start up as environment variables. Depending on the setup these values can come from secrets managers such as SSM. If these values are not set then there is NO amdin login. e.g. "" is not a value admin user or password.
+
+```ADMIN_PWD=```
+
+This is the password value for the admin user. If left unset no admin access is enabled. It is highly recommended to ensure that this password is very secure.  
+
+```ADMIN_LOCAL_ONLY=false```
+
+If set to true admin access is only available from the local machine / container where the datahub is running. (coming soon)
 
 ```AUTHORIZATION_MIDDLEWARE=noop```
 
@@ -1300,7 +1330,8 @@ By configuring what AUTHORIZATION_MIDDLEWARE to use, you can configure how you w
 
 * noop - this completely turns Authorization and Authentication off. Use for testing only!
 * jwt - this validates JWT tokens. It uses jwt scopes for authorization. See more complete description below.
-* opa - this validates JWT tokens, but uses an OPA server to authenticate. See more complete description below.
+* opa - this validates JWT tokens, but uses an OPA server to authorization. See more complete description below.
+* nodejwt - indicates that this datahub can issue and validate JWT tokens and uses configured client ACL for authorisation.
 
 ```TOKEN_WELL_KNOWN=https://auth.mimiro.io/jwks/.well-known/jwks.json```
 
@@ -1375,6 +1406,85 @@ if deleted.
 However, you can add more providers. Currently 2 types of providers are supported, namely basic username/password and auth0 compatible jwt tokens
 with id and secret.
 
+### Securing Data Hub with ACLs and Client Certificates
+
+Assuming there are two data hubs and the goal is to have one data hub be able to run a job that accesses a dataset on another.
+
+To register clients and ACLs it is first necessary to authenticate with the admin credentials to retrieve a JWT token. This token can then be used to register clients and their associated ACLs.
+
+The endpoints for security are available over HTTP(s) only. MIM support will come.
+
+Login with admin credentials
+
+```
+
+```
+
+Then get the client info which includes the client id and public key.
+
+```
+mim client-info
+```
+
+Then login to the second data hub (this is likely a different user and admin credentials)
+
+```
+mim login server-data-hub admin_user admin_pwd
+```
+
+Then register the client on the server data hub with the client id and client key
+
+```
+mim register-client client-id clientkey.pub
+```
+
+You can list registered clients with:
+
+```
+mim client list
+```
+
+Then get, edit and update the ACL for the client:
+
+```
+mim client get-acl client-id acl.json
+```
+
+Add to the ACL file so it looks like:
+
+```json
+{
+    ""
+}
+```
+
+Then upload the config.
+
+```
+mim client set-acl <client-id> acl.json
+```
+
+On the client datahub it is necessary to upload a provider config that can be referenced from jobs that need to access the remote data hub. 
+
+This can be done with the following:
+
+POST /provider/logins
+
+```json
+{
+    "name":"login1",
+    "type":"basic",
+    "user: {
+        "type": "text",
+        "value": "server1"
+    },
+    "password": {
+        "type": "env",
+        "value": "SERVER1_SECRET_PASSWORD"
+    }
+}
+```
+
 ### Working with security providers
 
 There is an endpoint to work with these, please see the api spec file for details.
@@ -1395,7 +1505,6 @@ POST /provider/logins:
         "value": "SERVER1_SECRET_PASSWORD"
     }
 }
-
 ```
 
 2 different providers are currently supported, "basic", "bearer". Basic means username+password, "bearer" means an auth0 compatible bearer token id and secret.
