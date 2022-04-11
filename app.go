@@ -42,7 +42,6 @@ func wire() *fx.App {
 			server.NewDsManager,
 			security.NewProviderManager,
 			security.NewTokenProviders,
-			jobs.NewRunnerConfig,
 			jobs.NewRunner,
 			jobs.NewScheduler,
 			content.NewContent,

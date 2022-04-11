@@ -85,6 +85,11 @@ func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 		NodeId:                  viper.GetString("NODE_ID"),
 		SecurityStorageLocation: viper.GetString("SECURITY_STORAGE_LOCATION"),
 		BackupSourceLocation:    viper.GetString("BACKUP_SOURCE_LOCATION"),
+		RunnerConfig: &RunnerConfig{
+			PoolIncremental: viper.GetInt("JOBS_MAX_INCREMENTAL"),
+			PoolFull:        viper.GetInt("JOBS_MAX_FULLSYNC"),
+			Concurrent:      1,
+		},
 	}, nil
 }
 
@@ -134,10 +139,10 @@ func parseEnv(basePath *string, logger *zap.SugaredLogger, loadFromHome bool) er
 	viper.SetDefault("SECRETS_MANAGER", "noop") // turned off by default
 	viper.SetDefault("GC_ON_STARTUP", "true")
 	viper.SetDefault("FULLSYNC_LEASE_TIMEOUT", "1h")
-
 	viper.SetDefault("NODE_ID", "anonymous-node")
 	viper.SetDefault("SECURITY_STORAGE_LOCATION", fmt.Sprintf("%s/%s", home, "datahubsecurity"))
-
+	viper.SetDefault("JOBS_MAX_INCREMENTAL", 10)
+	viper.SetDefault("JOBS_MAX_FULLSYNC", 10)
 	viper.AutomaticEnv()
 
 	viper.SetConfigType("env")
