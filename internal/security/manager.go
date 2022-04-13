@@ -7,15 +7,16 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
-	"github.com/golang-jwt/jwt"
-	"github.com/google/uuid"
-	"github.com/mimiro-io/datahub/internal/conf"
-	"github.com/mimiro-io/datahub/internal/server"
 	"io/ioutil"
 	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/golang-jwt/jwt"
+	"github.com/google/uuid"
+	"github.com/mimiro-io/datahub/internal/conf"
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 // NodeInfo is a data structure that represents a node in the security topology
@@ -241,6 +242,55 @@ func (serviceCore *ServiceCore) Init() error {
 		serviceCore.NodeInfo.KeyPairs = make([]*KeyPair, 0)
 		serviceCore.NodeInfo.KeyPairs = append(serviceCore.NodeInfo.KeyPairs, keyPair)
 	}
+
+	// load clients
+	err = serviceCore.loadClients()
+	if err != nil {
+		return err
+	}
+
+	// load acls
+	err = serviceCore.loadAcls()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (serviceCore *ServiceCore) loadClients() error {
+	clients := make(map[string]*ClientInfo)
+	jsondata, err := ioutil.ReadFile(serviceCore.Location + string(os.PathSeparator) + "clients.json")
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(jsondata, &clients)
+	if err != nil {
+		return err
+	}
+
+	for clientId, clientInfo := range clients {
+		serviceCore.clients.Store(clientId, clientInfo)
+	}
+
+	return nil
+}
+
+func (serviceCore *ServiceCore) loadAcls() error {
+	acls := make(map[string][]*AccessControl)
+	jsondata, err := ioutil.ReadFile(serviceCore.Location + string(os.PathSeparator) + "acls.json")
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(jsondata, &acls)
+	if err != nil {
+		return err
+	}
+
+	for clientId, acls := range acls {
+		serviceCore.accessControls.Store(clientId, acls)
+	}
+
 	return nil
 }
 
