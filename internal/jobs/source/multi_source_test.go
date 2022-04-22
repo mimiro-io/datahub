@@ -18,10 +18,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/DataDog/datadog-go/v5/statsd"
 	"os"
 	"testing"
 
-	"github.com/DataDog/datadog-go/statsd"
 	"github.com/franela/goblin"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"

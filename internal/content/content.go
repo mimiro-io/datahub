@@ -17,7 +17,7 @@ package content
 import (
 	"encoding/json"
 
-	"github.com/DataDog/datadog-go/statsd"
+	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/server"
 	"go.uber.org/zap"

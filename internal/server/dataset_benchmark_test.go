@@ -15,7 +15,7 @@
 package server
 
 import (
-	"github.com/DataDog/datadog-go/statsd"
+	"github.com/DataDog/datadog-go/v5/statsd"
 	"go.uber.org/zap"
 	"os"
 	"strconv"

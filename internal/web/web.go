@@ -16,11 +16,11 @@ package web
 
 import (
 	"context"
+	"github.com/DataDog/datadog-go/v5/statsd"
 	"html/template"
 	"io"
 	"net/http"
 
-	"github.com/DataDog/datadog-go/statsd"
 	"github.com/labstack/echo/v4"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/content"

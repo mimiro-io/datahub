@@ -36,7 +36,7 @@ import (
 	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx/fxtest"
 
-	"github.com/DataDog/datadog-go/statsd"
+	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/labstack/echo/v4"
 	"github.com/mimiro-io/datahub/internal/server"
 	"go.uber.org/zap"
@@ -1051,6 +1051,16 @@ type StatsDRecorder struct {
 	Counts         map[string]int64
 	GaugesCallback func(map[string]interface{})
 	CountCallback  func(map[string]interface{})
+}
+
+func (r *StatsDRecorder) IsClosed() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r *StatsDRecorder) GetTelemetry() statsd.Telemetry {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (r *StatsDRecorder) Reset() {
