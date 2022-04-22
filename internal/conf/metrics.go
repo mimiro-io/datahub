@@ -16,13 +16,13 @@ package conf
 
 import (
 	"context"
+	"github.com/DataDog/datadog-go/v5/statsd"
 	"math"
 	"runtime"
 	"runtime/metrics"
 	"strings"
 	"time"
 
-	"github.com/DataDog/datadog-go/statsd"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )

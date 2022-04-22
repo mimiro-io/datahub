@@ -3,7 +3,7 @@ module github.com/mimiro-io/datahub
 go 1.17
 
 require (
-	github.com/DataDog/datadog-go v4.5.0+incompatible
+	github.com/DataDog/datadog-go/v5 v5.1.0
 	github.com/PaddleHQ/go-aws-ssm v0.8.0
 	github.com/aws/aws-sdk-go v1.38.4
 	github.com/bamzi/jobrunner v1.0.0
@@ -27,7 +27,7 @@ require (
 )
 
 require (
-	github.com/Microsoft/go-winio v0.4.16 // indirect
+	github.com/Microsoft/go-winio v0.5.0 // indirect
 	github.com/OneOfOne/xxhash v1.2.8 // indirect
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
