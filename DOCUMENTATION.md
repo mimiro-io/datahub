@@ -1410,32 +1410,25 @@ with id and secret.
 
 Assuming there are two data hubs and the goal is to have one data hub be able to run a job that accesses a dataset on another.
 
-To register clients and ACLs it is first necessary to authenticate with the admin credentials to retrieve a JWT token. This token can then be used to register clients and their associated ACLs.
+To register clients and ACLs it is first necessary to log into the datahub with the admin permissions.
 
-The endpoints for security are available over HTTP(s) only. MIM support will come.
-
-Login with admin credentials
+To login with admin credentials create a new login alias. Notice the type is 'admin'. The clientId and secret should align with the data hub environment variables ADMIN_USER and ADMIN_PASSWORD.
 
 ```
-
+mim login add
+    --alias localadmin \
+    --type admin
+    --server "https://localhost:8080" \
+    --clientId "ADMIN_USER_NAME" \
+    --clientSecret "ADMIN_PASSWORD" \
 ```
 
-Then get the client info which includes the client id and public key.
+Then get the client id and public key from the data hub that will be connecting to this datahub. The client-id is the NODE_ID of the data hub that will be a client. The public key can be found based on the SECURITY_LOCATION environment variable of the client data hub. Ensure you only share the public key.
+
+Register the client data hub with the following command:
 
 ```
-mim client-info
-```
-
-Then login to the second data hub (this is likely a different user and admin credentials)
-
-```
-mim login server-data-hub admin_user admin_pwd
-```
-
-Then register the client on the server data hub with the client id and client key
-
-```
-mim register-client client-id clientkey.pub
+mim client add <client-id> -f clientkey.pub
 ```
 
 You can list registered clients with:
@@ -1444,24 +1437,30 @@ You can list registered clients with:
 mim client list
 ```
 
+It will show something like:
+
+```json
+{"cnode23":{"ClientId":"cnode23","PublicKey":"LS0tLS1CRUdJTiBQVUJ .... dHSGNHSDBuSjltVGV1K1J1aXJkWEJxbFAvbXNyTmdzCjBTWXZSbEZvUG1UZk5KZE5nbmNRYkxscHF2U1h4eGdxbi9CT1gxdWhIVFprYUV5WWFtMVBuRzdVM3B5K3h3ancKWU9uc3F2Um5hQnJTOFJuRGU4VHFxR05HOTVjSm5DOEhkSmdNT1Zia09rdEsyYjBPTXlSQ1ozOGg5NG5QUkZBYwpwbzhNcW8xblVUZER0NkRhL3ZvQ1ZLMXU2dHp4UmxIM0RESm9aWll1NFBCMnBGTk94ODZlUG9pdERmTUdZUTlECisyR0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=","Deleted":false}}
+```
+
 Then get, edit and update the ACL for the client:
 
 ```
-mim client get-acl client-id acl.json
+mim acl get --clientid cnode23 > client23-acl.json
 ```
 
-Add to the ACL file so it looks like:
+To grant full access to the client. Add to the ACL file so it looks like:
 
 ```json
-{
-    ""
-}
+[{"Resource":"/*","Action":"write","Deny":false}]
 ```
+
+The resource patterns are either exact matches or '*' matches. This will match any subpart of the URL and isnt restricted to path segments. e.g. ´/datasets/core.*' can be used to secure all datasets starting with 'core.'.
 
 Then upload the config.
 
 ```
-mim client set-acl <client-id> acl.json
+mim acl add <client-id> -f acls.json
 ```
 
 On the client datahub it is necessary to upload a provider config that can be referenced from jobs that need to access the remote data hub. 
@@ -1472,15 +1471,15 @@ POST /provider/logins
 
 ```json
 {
-    "name":"login1",
-    "type":"basic",
-    "user: {
+    "name":"remote-datahub-name-provider",
+    "type":"nodebearer",
+    "endpoint: {
         "type": "text",
-        "value": "server1"
+        "value": "URL-of-datahub/security/token"
     },
-    "password": {
-        "type": "env",
-        "value": "SERVER1_SECRET_PASSWORD"
+    "audience": {
+        "type": "text",
+        "value": "the name (NODE_ID) of the remote datahub"
     }
 }
 ```
