@@ -1053,6 +1053,16 @@ type StatsDRecorder struct {
 	CountCallback  func(map[string]interface{})
 }
 
+func (r *StatsDRecorder) IsClosed() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r *StatsDRecorder) GetTelemetry() statsd.Telemetry {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (r *StatsDRecorder) Reset() {
 	r.Gauges = make(map[string]float64)
 	r.Counts = make(map[string]int64)
