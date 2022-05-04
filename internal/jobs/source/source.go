@@ -67,5 +67,15 @@ func DecodeToken(sourceType interface{}, token string) (DatasetContinuation, err
 		}
 		return result, nil
 	}
+	if sourceType == "UnionDatasetSource" {
+		result := &UnionDatasetContinuation{}
+		if token != "" {
+			err := json.Unmarshal([]byte(token), result)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return result, nil
+	}
 	return &StringDatasetContinuation{token}, nil
 }
