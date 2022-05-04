@@ -432,7 +432,6 @@ The dataset source reads entities from a dataset in the data hub.
     "source": {
         "Type": "DatasetSource",
         "Name": "name of the dataset to read from",
-        "BatchSize" : "optional int value of how many to read at a time",
         "LatestOnly": "true or false, indicating whether to emit all changes or only the latest change of each entity"
     }
 }
@@ -440,6 +439,33 @@ The dataset source reads entities from a dataset in the data hub.
 The `LatestOnly` flag can be set to limit the number of entities emitted to only the latest version of each entity.
 The default is that all changes of each entity are emitted, so that the whole dataset can be transformed and/or copied without loss of history.
 
+#### Union Dataset Source
+
+A union dataset source can be used to consume multiple datasets in the datahub.
+All configured datasets are read sequentially, as if their contents were concatenated.
+
+```json
+{
+    "source": {
+        "Type": "UnionDatasetSource",
+        "DatasetSources": [{
+            "Type": "DatasetSource",
+            "Name": "name of first dataset to read from",
+            "LatestOnly": "true or false, indicating whether to emit all changes or only the latest change of each entity"
+        },{
+            "Type": "DatasetSource",
+            "Name": "name of next dataset to read from",
+            "LatestOnly": "true or false, indicating whether to emit all changes or only the latest change of each entity"
+        }]
+    }
+}
+```
+`DatasetSources` is a list of `DatasetSource` configurations. Other source types
+are not supported.
+
+Also note that changing the order or adding new `DatasetSource`
+entries to the list makes previously produced continuation tokens invalid. The job
+should be reset in that case.
 #### Multi Source
 
 This source has one main dataset which works like a `DatasetSource`. In addition, a list of `dependency` datasets can be configured.
@@ -1294,19 +1320,19 @@ The Datahub supports reporting metrics trough a StatsD server. This is turned of
 
 #### Securing the Data Hub
 
-There are four main security models for the data hub. 
+There are four main security models for the data hub.
 
-1. No security / API gateway seured. All calls are allowed at the data hub API level. This mode can be used either when developing or when the data hub API is protected behind an API gateway that implements secure access. 
+1. No security / API gateway seured. All calls are allowed at the data hub API level. This mode can be used either when developing or when the data hub API is protected behind an API gateway that implements secure access.
 
-2. Data Hub Security. This involves a datahub allowing for the registration of clients and a public key. The client (often in this model another datahub) retrieves a JWT access token by sending a request (signed with a private key) to authenticate. 
+2. Data Hub Security. This involves a datahub allowing for the registration of clients and a public key. The client (often in this model another datahub) retrieves a JWT access token by sending a request (signed with a private key) to authenticate.
 
-3. OPA. OPA is used to authorizate requests, but authentication is still perfomed by external provider. See below. 
+3. OPA. OPA is used to authorizate requests, but authentication is still perfomed by external provider. See below.
 
 4. External Provider is used to validate JWT tokens. This is an OAuth2 provider.
 
 Typically, either 1, 2 or 3&4 in combination are employed to secure a data hub instance.
 
-The following environment variables can be set to configure the data hub security. 
+The following environment variables can be set to configure the data hub security.
 
 ```NODE_ID=```
 
@@ -1318,7 +1344,7 @@ To boot strap the administration and secure access via client certificates a roo
 
 ```ADMIN_PWD=```
 
-This is the password value for the admin user. If left unset no admin access is enabled. It is highly recommended to ensure that this password is very secure.  
+This is the password value for the admin user. If left unset no admin access is enabled. It is highly recommended to ensure that this password is very secure.
 
 ```ADMIN_LOCAL_ONLY=false```
 
@@ -1463,7 +1489,7 @@ Then upload the config.
 mim acl add <client-id> -f acls.json
 ```
 
-On the client datahub it is necessary to upload a provider config that can be referenced from jobs that need to access the remote data hub. 
+On the client datahub it is necessary to upload a provider config that can be referenced from jobs that need to access the remote data hub.
 
 This can be done with the following:
 

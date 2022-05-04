@@ -593,6 +593,19 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 					return nil, err
 				}
 				return src, nil
+			} else if sourceTypeName == "UnionDatasetSource" {
+				src := &source.UnionDatasetSource{}
+				datasets, ok := sourceConfig["DatasetSources"].([]interface{})
+				if ok {
+					for _, dsName := range datasets {
+						parseSource, err := s.parseSource(&JobConfiguration{Source: map[string]interface{}{"Type": "DatasetSource", "Name": dsName}})
+						if err != nil {
+							return nil, err
+						}
+						src.DatasetSources = append(src.DatasetSources, parseSource.(*source.DatasetSource))
+					}
+				}
+				return src, nil
 			} else if sourceTypeName == "SampleSource" {
 				src := &source.SampleSource{}
 				src.Store = s.Store

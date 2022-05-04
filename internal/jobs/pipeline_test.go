@@ -1250,7 +1250,86 @@ func TestPipeline(t *testing.T) {
 			g.Assert(token).Eql("{\"MainToken\":\"2\",\"DependencyTokens\":{\"dep\":{\"Token\":\"4\"}}}",
 				"dependency watermarks should be unchanged")
 		})
+		g.It("Should not store UnionDatasetContinuation after fullsync on UnionDatasetSource", func() {
+			ds1, _ := dsm.CreateDataset("src1", nil)
+			_ = ds1.StoreEntities([]*server.Entity{
+				server.NewEntity("1", 0),
+				server.NewEntity("2", 0)})
+			ds2, _ := dsm.CreateDataset("src2", nil)
+			_ = ds2.StoreEntities([]*server.Entity{
+				server.NewEntity("3", 0),
+				server.NewEntity("4", 0),
+				server.NewEntity("5", 0)})
 
+			jobJson := ` {
+			"id" : "sync-uniondatasetsource-to-nullsink",
+			"triggers": [{"triggerType": "cron", "jobType": "fullsync", "schedule": "@every 2s"}],
+			"source" : {
+				"Type" : "UnionDatasetSource",
+				"DatasetSources" : ["src1","src2"]
+			},
+			"sink" : {
+				"Type" : "HttpDatasetSink",
+				"Url":"http://localhost:7777/datasets/fulltest/fullsync"
+			} }`
+
+			jobConfig, _ := scheduler.Parse([]byte(jobJson))
+			pipeline, err := scheduler.toPipeline(jobConfig, JobTypeFull)
+			g.Assert(err).IsNil()
+			job := &job{id: "fs-1", pipeline: pipeline, runner: runner}
+			job.Run()
+
+			sinkChanges := mockService.getRecordedEntitiesForDataset("fulltest")
+			g.Assert(len(sinkChanges)).Eql(5, "Expected 5 entities in current state in fullsync")
+
+			syncJobState := &SyncJobState{}
+			err = store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+			g.Assert(err).IsNil()
+			token := syncJobState.ContinuationToken
+			g.Assert(token).Eql("",
+				"after job there should be NO token because fullsync uses entities towards httpsink")
+
+		})
+		g.It("Should store UnionDatasetContinuation after incremental on UnionDatasetSource", func() {
+			ds1, _ := dsm.CreateDataset("src1", nil)
+			_ = ds1.StoreEntities([]*server.Entity{
+				server.NewEntity("1", 0),
+				server.NewEntity("2", 0)})
+			ds2, _ := dsm.CreateDataset("src2", nil)
+			_ = ds2.StoreEntities([]*server.Entity{
+				server.NewEntity("3", 0),
+				server.NewEntity("4", 0),
+				server.NewEntity("5", 0)})
+
+			jobJson := ` {
+			"id" : "sync-uniondatasetsource-to-nullsink",
+			"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
+			"source" : {
+				"Type" : "UnionDatasetSource",
+				"DatasetSources" : ["src1","src2"]
+			},
+			"sink" : {
+				"Type" : "HttpDatasetSink",
+				"Url":"http://localhost:7777/datasets/inctest/fullsync"
+			} }`
+
+			jobConfig, _ := scheduler.Parse([]byte(jobJson))
+			pipeline, err := scheduler.toPipeline(jobConfig, JobTypeIncremental)
+			g.Assert(err).IsNil()
+			job := &job{id: "inc-1", pipeline: pipeline, runner: runner}
+			job.Run()
+
+			sinkChanges := mockService.getRecordedEntitiesForDataset("inctest")
+			g.Assert(len(sinkChanges)).Eql(5, "Expected 5 entities in current state")
+
+			syncJobState := &SyncJobState{}
+			err = store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+			g.Assert(err).IsNil()
+			token := syncJobState.ContinuationToken
+			g.Assert(token).Eql("{\"Tokens\":[{\"Token\":\"2\"},{\"Token\":\"3\"}],\"DatasetNames\":[\"src1\",\"src2\"]}",
+				"after job there should be a token stored")
+
+		})
 		g.It("Should fail run and return error when error in transform js", func() {
 			// populate dataset with some entities
 			ds, _ := dsm.CreateDataset("Products", nil)
