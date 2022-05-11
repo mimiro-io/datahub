@@ -246,7 +246,7 @@ mim dataset store core.Dataset --filename=update.json
 Now, when we retrieve entities from `namespaces.Test`, datahub will supply only `publicNamespaces` as context
 
 ```
-> mim dataset entities namespaces.
+> mim dataset entities namespaces.Test
 
 # Listing entities from http://localhost:8080/datasets/namespaces.Test/entities
 
