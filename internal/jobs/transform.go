@@ -386,7 +386,7 @@ func (javascriptTransform *JavascriptTransform) transformEntities(runner *Runner
 			if entity, ok := e.(*server.Entity); ok {
 				resultEntities = append(resultEntities, entity)
 			} else {
-				javascriptTransform.Logger.Warnf("invalid transformation result, not an entity: %v", e)
+				return nil, fmt.Errorf("transform emitted invalid entity: %v", e)
 			}
 		}
 	case []*server.Entity:

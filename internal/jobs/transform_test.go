@@ -51,6 +51,24 @@ func TestTransform(t *testing.T) {
 			g.Assert(strings.Split(err.Error(), " (")[0]).
 				Eql("ReferenceError: prefix is not defined at transform_entities")
 		})
+		g.It("Should return a go error when the script emits non-entities", func() {
+			// a failing function
+			js := ` function transform_entities(entities) {
+						return ["hello"];
+					}`
+			f := base64.StdEncoding.EncodeToString([]byte(js))
+
+			transform, err := newJavascriptTransform(zap.NewNop().Sugar(), f, nil)
+			g.Assert(err).IsNil("Expected transform runner to be created without error")
+
+			entities := make([]*server.Entity, 0)
+			entities = append(entities, server.NewEntity("1", 1))
+
+			_, err = transform.transformEntities(&Runner{statsdClient: &statsd.NoOpClient{}}, entities, "")
+			g.Assert(err).IsNotNil("transform should fail")
+			g.Assert(strings.Split(err.Error(), " (")[0]).
+				Eql("transform emitted invalid entity: hello")
+		})
 	})
 }
 
