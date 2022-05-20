@@ -597,13 +597,21 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 				src := &source.UnionDatasetSource{}
 				datasets, ok := sourceConfig["DatasetSources"].([]interface{})
 				if ok {
-					for _, dsName := range datasets {
-						parseSource, err := s.parseSource(&JobConfiguration{Source: map[string]interface{}{"Type": "DatasetSource", "Name": dsName}})
-						if err != nil {
-							return nil, err
+					for _, dsSrcConfig := range datasets {
+						if dsSrcConfigMap, ok2 := dsSrcConfig.(map[string]interface{}); ok2 {
+
+							dsSrcConfigMap["Type"] = "DatasetSource"
+							parseSource, err := s.parseSource(&JobConfiguration{Source: dsSrcConfigMap})
+							if err != nil {
+								return nil, err
+							}
+							src.DatasetSources = append(src.DatasetSources, parseSource.(*source.DatasetSource))
+						} else {
+							return nil, fmt.Errorf("could not parse dataset item in UnionDatasetSource %v: %v", jobConfig.Id, dsSrcConfig)
 						}
-						src.DatasetSources = append(src.DatasetSources, parseSource.(*source.DatasetSource))
 					}
+				} else {
+					return nil, fmt.Errorf("could not parse UnionDatasetSource: %v", sourceConfig)
 				}
 				return src, nil
 			} else if sourceTypeName == "SampleSource" {

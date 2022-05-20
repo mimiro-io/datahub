@@ -1266,14 +1266,15 @@ func TestPipeline(t *testing.T) {
 			"triggers": [{"triggerType": "cron", "jobType": "fullsync", "schedule": "@every 2s"}],
 			"source" : {
 				"Type" : "UnionDatasetSource",
-				"DatasetSources" : ["src1","src2"]
+				"DatasetSources" : [{"Name":"src1"},{"Name":"src2"}]
 			},
 			"sink" : {
 				"Type" : "HttpDatasetSink",
 				"Url":"http://localhost:7777/datasets/fulltest/fullsync"
 			} }`
 
-			jobConfig, _ := scheduler.Parse([]byte(jobJson))
+			jobConfig, err := scheduler.Parse([]byte(jobJson))
+			g.Assert(err).IsNil()
 			pipeline, err := scheduler.toPipeline(jobConfig, JobTypeFull)
 			g.Assert(err).IsNil()
 			job := &job{id: "fs-1", pipeline: pipeline, runner: runner}
@@ -1306,14 +1307,15 @@ func TestPipeline(t *testing.T) {
 			"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
 			"source" : {
 				"Type" : "UnionDatasetSource",
-				"DatasetSources" : ["src1","src2"]
+				"DatasetSources" : [{"Name":"src1"},{"Name":"src2", "LatestOnly": true}]
 			},
 			"sink" : {
 				"Type" : "HttpDatasetSink",
 				"Url":"http://localhost:7777/datasets/inctest/fullsync"
 			} }`
 
-			jobConfig, _ := scheduler.Parse([]byte(jobJson))
+			jobConfig, err := scheduler.Parse([]byte(jobJson))
+			g.Assert(err).IsNil()
 			pipeline, err := scheduler.toPipeline(jobConfig, JobTypeIncremental)
 			g.Assert(err).IsNil()
 			job := &job{id: "inc-1", pipeline: pipeline, runner: runner}
@@ -1522,7 +1524,7 @@ func TestPipeline(t *testing.T) {
 				}
 			}()
 			wg.Wait()
-
+			g.Assert(len(receivedMockRequests) > 0).IsTrue()
 			firstSinkReq := receivedMockRequests[1]
 			g.Assert(firstSinkReq.Header["Authorization"]).Eql([]string{"Basic dTEwMDpwMjAw"})
 			ents := mockService.getRecordedEntitiesForDataset("people")
@@ -1582,6 +1584,7 @@ func TestPipeline(t *testing.T) {
 			}()
 			wg.Wait()
 
+			g.Assert(len(receivedMockRequests) > 0).IsTrue()
 			firstSinkReq := receivedMockRequests[1]
 			g.Assert(firstSinkReq.Header["Authorization"]).Eql([]string{"Basic dTEwMDpwMjAw"})
 			g.Assert(firstSinkReq.Header["Universal-Data-Api-Full-Sync-Id"]).IsNotZero()
