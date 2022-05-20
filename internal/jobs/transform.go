@@ -383,7 +383,11 @@ func (javascriptTransform *JavascriptTransform) transformEntities(runner *Runner
 	case []interface{}:
 		resultEntities = make([]*server.Entity, 0)
 		for _, e := range v {
-			resultEntities = append(resultEntities, e.(*server.Entity))
+			if entity, ok := e.(*server.Entity); ok {
+				resultEntities = append(resultEntities, entity)
+			} else {
+				return nil, fmt.Errorf("transform emitted invalid entity: %v", e)
+			}
 		}
 	case []*server.Entity:
 		resultEntities = v
