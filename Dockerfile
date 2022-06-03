@@ -1,4 +1,4 @@
-FROM golang:1.17.1 as builder_src
+FROM golang:1.18.3 as builder_src
 
 COPY jemalloc-install.sh .
 
