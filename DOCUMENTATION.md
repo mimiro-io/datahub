@@ -246,7 +246,7 @@ mim dataset store core.Dataset --filename=update.json
 Now, when we retrieve entities from `namespaces.Test`, datahub will supply only `publicNamespaces` as context
 
 ```
-> mim dataset entities namespaces.
+> mim dataset entities namespaces.Test
 
 # Listing entities from http://localhost:8080/datasets/namespaces.Test/entities
 
@@ -1342,7 +1342,7 @@ NODE_ID is used to give a unique identifier to a running data hub instance. It i
 
 To boot strap the administration and secure access via client certificates a root admin user is requried. The credentials for this are passed in at start up as environment variables. Depending on the setup these values can come from secrets managers such as SSM. If these values are not set then there is NO amdin login. e.g. "" is not a value admin user or password.
 
-```ADMIN_PWD=```
+```ADMIN_PASSWORD=```
 
 This is the password value for the admin user. If left unset no admin access is enabled. It is highly recommended to ensure that this password is very secure.
 
@@ -1357,7 +1357,7 @@ By configuring what AUTHORIZATION_MIDDLEWARE to use, you can configure how you w
 * noop - this completely turns Authorization and Authentication off. Use for testing only!
 * jwt - this validates JWT tokens. It uses jwt scopes for authorization. See more complete description below.
 * opa - this validates JWT tokens, but uses an OPA server to authorization. See more complete description below.
-* nodejwt - indicates that this datahub can issue and validate JWT tokens and uses configured client ACL for authorisation.
+* local - indicates that this datahub can issue and validate JWT tokens and uses configured client ACL for authorisation.
 
 ```TOKEN_WELL_KNOWN=https://auth.mimiro.io/jwks/.well-known/jwks.json```
 
@@ -1445,11 +1445,11 @@ mim login add
     --alias localadmin \
     --type admin
     --server "https://localhost:8080" \
-    --clientId "ADMIN_USER_NAME" \
+    --clientId "ADMIN_USER" \
     --clientSecret "ADMIN_PASSWORD" \
 ```
 
-Then get the client id and public key from the data hub that will be connecting to this datahub. The client-id is the NODE_ID of the data hub that will be a client. The public key can be found based on the SECURITY_LOCATION environment variable of the client data hub. Ensure you only share the public key.
+Then get the client id and public key from the data hub that will be connecting to this datahub. The client-id is the NODE_ID of the data hub that will be a client. The public key can be found based on the SECURITY_STORAGE_LOCATION environment variable of the client data hub. Ensure you only share the public key.
 
 Register the client data hub with the following command:
 
@@ -1493,19 +1493,23 @@ On the client datahub it is necessary to upload a provider config that can be re
 
 This can be done with the following:
 
-POST /provider/logins
 
+```
+mim provider add -f remote-provider.json
+```
+Or 
+a POST to /provider/logins
 ```json
 {
     "name":"remote-datahub-name-provider",
     "type":"nodebearer",
-    "endpoint: {
+    "endpoint": {
         "type": "text",
         "value": "URL-of-datahub/security/token"
     },
     "audience": {
         "type": "text",
-        "value": "the name (NODE_ID) of the remote datahub"
+        "value": "the name (NODE_ID) of the remote datahub you want to read from"
     }
 }
 ```
@@ -1521,7 +1525,7 @@ POST /provider/logins:
 {
     "name":"login1",
     "type":"basic",
-    "user: {
+    "user": {
         "type": "text",
         "value": "server1"
     },
