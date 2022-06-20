@@ -16,7 +16,7 @@ package source
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -44,7 +44,7 @@ func (datasetSource *DatasetSource) ReadEntities(since DatasetContinuation, batc
 	processEntities func([]*server.Entity, DatasetContinuation) error) error {
 	exists := datasetSource.DatasetManager.IsDataset(datasetSource.DatasetName)
 	if !exists {
-		return errors.New("dataset is missing")
+		return fmt.Errorf("dataset does not exist: %v", datasetSource.DatasetName)
 	}
 	dataset := datasetSource.DatasetManager.GetDataset(datasetSource.DatasetName)
 

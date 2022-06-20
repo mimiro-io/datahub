@@ -307,18 +307,24 @@ type datasetSink struct {
 
 func (datasetSink *datasetSink) startFullSync(runner *Runner) error {
 	dataset := datasetSink.DatasetManager.GetDataset(datasetSink.DatasetName)
+	if dataset == nil {
+		return fmt.Errorf("dataset does not exist: %v", datasetSink.DatasetName)
+	}
 	return dataset.StartFullSync()
 }
 
 func (datasetSink *datasetSink) endFullSync(runner *Runner) error {
 	dataset := datasetSink.DatasetManager.GetDataset(datasetSink.DatasetName)
+	if dataset == nil {
+		return fmt.Errorf("dataset does not exist: %v", datasetSink.DatasetName)
+	}
 	return dataset.CompleteFullSync()
 }
 
 func (datasetSink *datasetSink) processEntities(runner *Runner, entities []*server.Entity) error {
 	exists := datasetSink.DatasetManager.IsDataset(datasetSink.DatasetName)
 	if !exists {
-		return errors.New("dataset is missing")
+		return fmt.Errorf("dataset does not exist: %v", datasetSink.DatasetName)
 	}
 
 	dataset := datasetSink.DatasetManager.GetDataset(datasetSink.DatasetName)
