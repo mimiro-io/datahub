@@ -2,7 +2,6 @@ package source
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/mimiro-io/datahub/internal/server"
 	"strconv"
@@ -45,7 +44,7 @@ func (s *UnionDatasetSource) ReadEntities(token DatasetContinuation, batchSize i
 		datasetSource := s.DatasetSources[d.activeIdx]
 		exists := datasetSource.DatasetManager.IsDataset(datasetSource.DatasetName)
 		if !exists {
-			return errors.New("dataset is missing")
+			return fmt.Errorf("dataset does not exist: %v", datasetSource.DatasetName)
 		}
 		dataset := datasetSource.DatasetManager.GetDataset(datasetSource.DatasetName)
 
