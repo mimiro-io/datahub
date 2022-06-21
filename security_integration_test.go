@@ -521,11 +521,10 @@ func TestNodeSecurity(t *testing.T) {
 			// upload job to access remote (loopback) dataset
 			jobJson := `{
 			"id" : "sync-from-remote-dataset-with-node-provider",
-			"triggers": [{"triggerType": "cron", "jobType": "fullsync", "schedule": "@every 2s"}],
-			"fullSyncSchedule" : "@every 2s",
+			"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
 			"source" : {
 				"Type" : "HttpDatasetSource",
-				"Url" : "` + datahubURL + `datasets/core.Dataset/entities",
+				"Url" : "` + datahubURL + `datasets/core.Dataset/changes",
 				"TokenProvider" : "node1provider"
 			},
 			"sink" : {
@@ -545,6 +544,39 @@ func TestNodeSecurity(t *testing.T) {
 			g.Assert(res).IsNotNil()
 			g.Assert(res.StatusCode).Eql(201)
 
+			// run job
+			req, _ = http.NewRequest("PUT", datahubURL+"job/sync-from-remote-dataset-with-node-provider/run", nil)
+			req.Header = http.Header{
+				"Content-Type":  []string{"application/json"},
+				"Authorization": []string{"Bearer " + token},
+			}
+			res, err = http.DefaultClient.Do(req)
+			g.Assert(err).IsNil()
+			g.Assert(res).IsNotNil()
+			g.Assert(res.StatusCode).Eql(200)
+
+			for {
+				time.Sleep(100 * time.Millisecond)
+				// check job status
+				req, _ = http.NewRequest("GET", datahubURL+"jobs/_/history", nil)
+				req.Header = http.Header{
+					"Content-Type":  []string{"application/json"},
+					"Authorization": []string{"Bearer " + token},
+				}
+				res, err = http.DefaultClient.Do(req)
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotNil()
+				g.Assert(res.StatusCode).Eql(200)
+				body, _ := ioutil.ReadAll(res.Body)
+				var hist []map[string]interface{}
+				json.Unmarshal(body, &hist)
+				//t.Log(hist)
+				if len(hist) != 0 {
+					g.Assert(hist[0]["lastError"]).IsZero("no error expected")
+					break
+				}
+
+			}
 		})
 
 		/*

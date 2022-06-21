@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/golang-jwt/jwt"
 	"go.uber.org/zap"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"time"
@@ -79,16 +80,27 @@ func (nodeTokenProvider *NodeJwtBearerProvider) callRemoteNodeEndpoint() (*jwt.T
 	requestFormData.Set("client_assertion", requestToken)
 
 	requestUrl := nodeTokenProvider.endpoint
-	res, err := http.PostForm(requestUrl, requestFormData)
+	var res *http.Response
+	res, err = http.PostForm(requestUrl, requestFormData)
+	if err != nil {
+		return nil, fmt.Errorf("error posting to %v: %w", requestUrl, err)
+	}
+
+	if res.StatusCode >= 300 {
+		body, _ := ioutil.ReadAll(res.Body)
+		return nil, fmt.Errorf("token request to %v returned status %v: %v", requestUrl, res.Status, string(body))
+	}
 
 	decoder := json.NewDecoder(res.Body)
 	response := make(map[string]interface{})
 	err = decoder.Decode(&response)
-	rawToken := response["access_token"].(string)
-
-	token, err := jwt.ParseWithClaims(rawToken, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return nil, nil
-	})
-
-	return token, nil
+	if accessToken, ok := response["access_token"]; ok {
+		if rawToken, isString := accessToken.(string); isString {
+			return jwt.ParseWithClaims(rawToken, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+				return nodeTokenProvider.serviceCore.GetActiveKeyPair().PublicKey, nil
+			})
+		}
+		return nil, fmt.Errorf("access_token returned from %v was not a string", requestUrl)
+	}
+	return nil, fmt.Errorf("token provider at %v did not return access_token in response", requestUrl)
 }
