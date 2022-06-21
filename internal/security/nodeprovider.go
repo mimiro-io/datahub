@@ -96,9 +96,15 @@ func (nodeTokenProvider *NodeJwtBearerProvider) callRemoteNodeEndpoint() (*jwt.T
 	err = decoder.Decode(&response)
 	if accessToken, ok := response["access_token"]; ok {
 		if rawToken, isString := accessToken.(string); isString {
-			return jwt.ParseWithClaims(rawToken, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+			token, parseErr := jwt.ParseWithClaims(rawToken, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+				//return nil, nil
 				return nodeTokenProvider.serviceCore.GetActiveKeyPair().PublicKey, nil
 			})
+			// we ignore validation errors, we just care about the token (and the remote will validate the now-obtained token anyway)
+			if parseErr != nil {
+				nodeTokenProvider.logger.Warnf("access_token did not validate, ignoring: %v", parseErr)
+			}
+			return token, nil
 		}
 		return nil, fmt.Errorf("access_token returned from %v was not a string", requestUrl)
 	}
