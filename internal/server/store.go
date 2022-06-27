@@ -19,7 +19,9 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -360,6 +362,16 @@ func (s *Store) Open() error {
 	db, err := badger.Open(opts)
 	if err != nil {
 		s.logger.Error(err)
+	}
+
+	// if new storage, create unique storage id file. BackupManager can use this id to ensure it does not overwrite
+	// a backup belonging to a different storage
+	storageIdFile := filepath.Join(s.storeLocation, "DATAHUB_BACKUPID")
+	if _, err := os.Stat(storageIdFile); errors.Is(err, os.ErrNotExist) {
+		err = os.WriteFile(storageIdFile, []byte(fmt.Sprintf("%v", time.Now().UnixNano())), 0644)
+		if err != nil {
+			s.logger.Error(err)
+		}
 	}
 
 	s.logger.Info("database opened")

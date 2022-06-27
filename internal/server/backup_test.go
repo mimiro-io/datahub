@@ -15,58 +15,123 @@
 package server
 
 import (
-	"context"
-	"os"
-	"testing"
-
+	"errors"
+	"fmt"
 	"github.com/DataDog/datadog-go/v5/statsd"
+	"github.com/franela/goblin"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
-
-	"github.com/franela/goblin"
+	"os"
+	"path/filepath"
+	"testing"
 )
 
 func TestBackup(t *testing.T) {
 	g := goblin.Goblin(t)
 	g.Describe("The BackupManager", func() {
 		var s *Store
-		g.It("Should run without error", func() {
-
-			storeLocation := "./test_store_backup"
-			backupLocation := "/tmp/badger/test_store_backup_backup"
-
+		testCnt := 0
+		var storeLocation string
+		var backupLocation string
+		var backup *BackupManager
+		g.BeforeEach(func() {
+			testCnt += 1
+			storeLocation = fmt.Sprintf("./test_store_backup_%v", testCnt)
+			backupLocation = fmt.Sprintf("./test_store_backup_backup_%v", testCnt)
 			err := os.RemoveAll(storeLocation)
-			g.Assert(err).IsNil()
-
-			defer func() { // clean after the test
-				_ = os.RemoveAll(storeLocation)
-				_ = os.RemoveAll(backupLocation)
-			}()
+			g.Assert(err).IsNil("should be allowed to clean testfiles in " + storeLocation)
+			err = os.RemoveAll(backupLocation)
+			g.Assert(err).IsNil("should be allowed to clean testfiles in " + storeLocation)
 
 			e := &conf.Env{
 				Logger:        zap.NewNop().Sugar(),
 				StoreLocation: storeLocation,
 			}
 
-			devNull, _ := os.Open("/dev/null")
-			oldErr := os.Stderr
-			os.Stderr = devNull
 			lc := fxtest.NewLifecycle(t)
 			s = NewStore(lc, e, &statsd.NoOpClient{})
 
-			err = lc.Start(context.Background())
-			g.Assert(err).IsNil()
-			os.Stderr = oldErr
+			g.Assert(s.Open()).IsNil()
 
-			backup := &BackupManager{}
+			backup = &BackupManager{}
+			backup.logger = zap.NewNop().Sugar()
 			backup.store = s
 			backup.backupLocation = backupLocation
+			backup.backupSourceLocation = storeLocation
+		})
+		g.AfterEach(func() {
+			_ = os.RemoveAll(storeLocation)
+			_ = os.RemoveAll(backupLocation)
+		})
 
+		g.It("Should perform native backup", func() {
+			var err error
 			backup.lastID, err = backup.LoadLastId()
 			g.Assert(err).IsNil()
-			err = backup.DoNativeBackup()
-			g.Assert(err).IsNil()
+			backup.Run()
+			// check backup id file is synced
+			storageIdFile := filepath.Join(backupLocation, StorageIdFileName)
+			if _, err := os.Stat(storageIdFile); errors.Is(err, os.ErrNotExist) {
+				g.Errorf("expected backup id file to be copied")
+				g.FailNow()
+			}
+
+			// check there is an actual backup
+			if _, err := os.Stat(filepath.Join(backupLocation, "datahub-backup.kv")); errors.Is(err, os.ErrNotExist) {
+				g.Errorf("expected backup file to be written")
+				g.FailNow()
+			}
+
+			// restart and backup again
+			s.Close()
+			s.Open()
+			backup.Run()
+			if _, err := os.Stat(storageIdFile); errors.Is(err, os.ErrNotExist) {
+				g.Errorf("expected backup id file to be copied")
+				g.FailNow()
+			}
 		})
+		g.It("Should perform rsync backup", func() {
+			backup.useRsync = true
+			var err error
+			backup.lastID, err = backup.LoadLastId()
+			g.Assert(err).IsNil()
+			backup.Run()
+			// check backup id file is synced
+			storageIdFile := filepath.Join(backupLocation, StorageIdFileName)
+			if _, err := os.Stat(storageIdFile); errors.Is(err, os.ErrNotExist) {
+				g.Errorf("expected backup id file to be copied")
+				g.FailNow()
+			}
+
+		})
+		g.It("Should stop datahub if backup to invalid location", func() {
+			backup.useRsync = true
+			backup.Run()
+			// check backup id file is synced
+			storageIdFile := filepath.Join(backupLocation, StorageIdFileName)
+			if _, err := os.Stat(storageIdFile); errors.Is(err, os.ErrNotExist) {
+				g.Errorf("expected backup id file to be copied")
+				g.FailNow()
+			}
+			// stop store, remove id file and start again - a new id file should be generated
+			s.Close()
+			os.Remove(filepath.Join(storeLocation, StorageIdFileName))
+			s.Open()
+
+			// backup should fail now
+			assertPanic(g, func() { backup.Run() })
+		})
+
 	})
+}
+func assertPanic(g *goblin.G, f func()) {
+	defer func() {
+		if r := recover(); r == nil {
+			g.Errorf("The code did not panic")
+			g.FailNow()
+		}
+	}()
+	f()
 }
