@@ -204,7 +204,7 @@ func (backupManager *BackupManager) validLocation() bool {
 
 		err = os.MkdirAll(backupManager.backupLocation, 0700)
 		if err != nil {
-			backupManager.logger.Errorf("Could not open backed up id file at %v. (%w)", backedUpDhIdFile, err)
+			backupManager.logger.Errorf("Could create backup dir at %v. (%w)", backupManager.backupLocation, err)
 			return false
 		}
 		destination, err := os.Create(backedUpDhIdFile)
