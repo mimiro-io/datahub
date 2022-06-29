@@ -1338,7 +1338,7 @@ The following environment variables can be set to configure the data hub securit
 
 NODE_ID is used to give a unique identifier to a running data hub instance. It is needed when regstering this data hub instance as a client to other data hubs. It is the users responsibility to assign unique identifiers.
 
-```ADMIN_USER=```
+```ADMIN_USERNAME=```
 
 To boot strap the administration and secure access via client certificates a root admin user is requried. The credentials for this are passed in at start up as environment variables. Depending on the setup these values can come from secrets managers such as SSM. If these values are not set then there is NO amdin login. e.g. "" is not a value admin user or password.
 
