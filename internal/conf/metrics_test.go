@@ -15,6 +15,7 @@
 package conf
 
 import (
+	"github.com/mimiro-io/datahub/internal"
 	"reflect"
 	"testing"
 
@@ -31,7 +32,7 @@ func TestStatsdClient(t *testing.T) {
 	var lc fx.Lifecycle
 	g.Describe("Start an instance", func() {
 		g.Before(func() {
-			lc = fxtest.NewLifecycle(t)
+			lc = fxtest.NewLifecycle(internal.FxTestLog(t, false))
 		})
 		g.It("should be of noop type when no agent host", func() {
 			env := &Env{

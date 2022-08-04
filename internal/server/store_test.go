@@ -17,6 +17,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"github.com/mimiro-io/datahub/internal"
 	"os"
 	"reflect"
 	"strconv"
@@ -52,17 +53,12 @@ func TestStoreRelations(test *testing.T) {
 				Logger:        zap.NewNop().Sugar(),
 				StoreLocation: storeLocation,
 			}
-
-			devNull, _ := os.Open("/dev/null")
-			oldErr := os.Stderr
-			os.Stderr = devNull
-			lc := fxtest.NewLifecycle(test)
+			lc := fxtest.NewLifecycle(internal.FxTestLog(test, false))
 			store = NewStore(lc, e, &statsd.NoOpClient{})
 			dsm = NewDsManager(lc, e, store, NoOpBus())
 
 			err = lc.Start(context.Background())
 			g.Assert(err).IsNil()
-			os.Stderr = oldErr
 		})
 		g.AfterEach(func() {
 			_ = store.Close()
@@ -425,17 +421,12 @@ func TestStore(test *testing.T) {
 				Logger:        zap.NewNop().Sugar(),
 				StoreLocation: storeLocation,
 			}
-
-			devNull, _ := os.Open("/dev/null")
-			oldErr := os.Stderr
-			os.Stderr = devNull
-			lc := fxtest.NewLifecycle(test)
+			lc := fxtest.NewLifecycle(internal.FxTestLog(test, false))
 			store = NewStore(lc, e, &statsd.NoOpClient{})
 			dsm = NewDsManager(lc, e, store, NoOpBus())
 
 			err = lc.Start(context.Background())
 			g.Assert(err).IsNil()
-			os.Stderr = oldErr
 		})
 		g.AfterEach(func() {
 			_ = store.Close()
@@ -1212,17 +1203,12 @@ func TestDatasetScope(test *testing.T) {
 				Logger:        zap.NewNop().Sugar(),
 				StoreLocation: storeLocation,
 			}
-
-			devNull, _ := os.Open("/dev/null")
-			oldErr := os.Stderr
-			os.Stderr = devNull
-			lc := fxtest.NewLifecycle(test)
+			lc := fxtest.NewLifecycle(internal.FxTestLog(test, false))
 			store = NewStore(lc, e, &statsd.NoOpClient{})
 			dsm = NewDsManager(lc, e, store, NoOpBus())
 
 			err = lc.Start(context.Background())
 			g.Assert(err).IsNil()
-			os.Stderr = oldErr
 
 			// namespaces
 			peopleNamespacePrefix, _ = store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")

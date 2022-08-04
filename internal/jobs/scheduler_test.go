@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/security"
 	"io/ioutil"
 	"net/http"
@@ -174,7 +175,7 @@ func TestScheduler(t *testing.T) {
 
 			//wait until our job is not running anymore
 			doneWg.Wait()
-			g.Assert(scheduler.GetRunningJob(sj.Id)).IsNotNil("Our job is killed now")
+			g.Assert(scheduler.GetRunningJob(sj.Id)).IsNil("Our job is killed now")
 		})
 
 		g.It("Should pause a job when asked to", func() {
@@ -1010,13 +1011,11 @@ func setupScheduler(storeLocation string, t *testing.T) (*Scheduler, *server.Sto
 
 	eb := server.NoOpBus()
 
-	// temp redirect of stdout and stderr to swallow some annoying init messages in fx and jobrunner and mockService
+	// temp redirect of stdout to swallow some annoying init messages in fx and jobrunner and mockService
 	devNull, _ := os.Open("/dev/null")
-	oldErr := os.Stderr
 	oldStd := os.Stdout
-	os.Stderr = devNull
 	os.Stdout = devNull
-	lc := fxtest.NewLifecycle(t)
+	lc := fxtest.NewLifecycle(internal.FxTestLog(t, false))
 	store := server.NewStore(lc, e, statsdClient)
 
 	var pm = security.NewProviderManager(lc, e, store, logger)
@@ -1027,8 +1026,7 @@ func setupScheduler(storeLocation string, t *testing.T) (*Scheduler, *server.Sto
 
 	s := NewScheduler(lc, e, store, dsm, runner)
 
-	// undo redirect of stdout and stderr after successful init of fx and jobrunner
-	os.Stderr = oldErr
+	// undo redirect of stdout after successful init of fx and jobrunner
 	os.Stdout = oldStd
 	err := lc.Start(context.Background())
 	if err != nil {
