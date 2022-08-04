@@ -60,7 +60,7 @@ jobs:
       - name: Trivy vulnerability scan
         uses : aquasecurity/trivy-action@master
         with :
-          image-ref: '${{ steps.get_version.outputs.version }}'
+          image-ref: '${{ steps.image_tag.outputs.image_tag }}'
           format: 'table'
           exit-code: '1'
           ignore-unfixed: true
@@ -128,7 +128,7 @@ jobs:
       - name: Trivy vulnerability scan
         uses : aquasecurity/trivy-action@master
         with :
-          image-ref: '${{ steps.get_version.outputs.version }}'
+          image-ref: '${{ steps.image_tag.outputs.image_tag }}'
           format: 'table'
           exit-code: '1'
           ignore-unfixed: true
