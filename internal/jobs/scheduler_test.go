@@ -175,7 +175,7 @@ func TestScheduler(t *testing.T) {
 
 			//wait until our job is not running anymore
 			doneWg.Wait()
-			g.Assert(scheduler.GetRunningJob(sj.Id)).IsNotNil("Our job is killed now")
+			g.Assert(scheduler.GetRunningJob(sj.Id)).IsNil("Our job is killed now")
 		})
 
 		g.It("Should pause a job when asked to", func() {
