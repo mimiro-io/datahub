@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go v1.44.69
 	github.com/bamzi/jobrunner v1.0.0
 	github.com/dgraph-io/badger/v3 v3.2103.2
-	github.com/dop251/goja v0.0.0-20220801092856-7adb49968576
+	github.com/dop251/goja v1.0.0
 	github.com/franela/goblin v0.0.0-20211003143422-0a4f594942bf
 	github.com/goburrow/cache v0.1.4
 	github.com/gofrs/uuid v4.2.0+incompatible
@@ -26,6 +26,8 @@ require (
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/dop251/goja => github.com/mimiro-io/goja v1.0.0
 
 require (
 	github.com/Microsoft/go-winio v0.5.0 // indirect
