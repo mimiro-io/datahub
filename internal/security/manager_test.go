@@ -3,6 +3,7 @@ package security
 import (
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/franela/goblin"
+	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/server"
 	"go.uber.org/fx/fxtest"
@@ -30,14 +31,10 @@ func TestManager(t *testing.T) {
 			}
 			err := os.RemoveAll(e.StoreLocation)
 			g.Assert(err).IsNil("should be allowed to clean testfiles in " + e.StoreLocation)
-			devNull, _ := os.Open("/dev/null")
-			oldErr := os.Stderr
-			os.Stderr = devNull
-			lc := fxtest.NewLifecycle(t)
+			lc := fxtest.NewLifecycle(internal.FxTestLog(t, false))
 			sc := &statsd.NoOpClient{}
 			store = server.NewStore(lc, e, sc)
 			lc.RequireStart()
-			os.Stderr = oldErr
 			pm = NewProviderManager(lc, e, store, zap.NewNop().Sugar())
 		})
 		g.AfterEach(func() {

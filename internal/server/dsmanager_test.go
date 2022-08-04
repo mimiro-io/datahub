@@ -17,6 +17,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"github.com/mimiro-io/datahub/internal"
 	"math"
 	"os"
 	"testing"
@@ -47,18 +48,13 @@ func TestDatasetManager(t *testing.T) {
 				Logger:        zap.NewNop().Sugar(),
 				StoreLocation: storeLocation,
 			}
-
-			devNull, _ := os.Open("/dev/null")
-			oldErr := os.Stderr
-			os.Stderr = devNull
-			lc := fxtest.NewLifecycle(t)
+			lc := fxtest.NewLifecycle(internal.FxTestLog(t, false))
 			store = NewStore(lc, e, &statsd.NoOpClient{})
 			dsm = NewDsManager(lc, e, store, NoOpBus())
 			gc = NewGarbageCollector(lc, store, e)
 
 			err = lc.Start(context.Background())
 			g.Assert(err).IsNil()
-			os.Stderr = oldErr
 		})
 		g.AfterEach(func() {
 			_ = store.Close()

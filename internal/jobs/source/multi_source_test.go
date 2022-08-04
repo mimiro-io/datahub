@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/DataDog/datadog-go/v5/statsd"
+	"github.com/mimiro-io/datahub/internal"
 	"os"
 	"testing"
 
@@ -39,13 +40,6 @@ func TestMultiSource(t *testing.T) {
 		var store *server.Store
 		var storeLocation string
 		g.BeforeEach(func() {
-			// temp redirect of stdout and stderr to swallow some annoying init messages in fx
-			devNull, _ := os.Open("/dev/null")
-			oldErr := os.Stderr
-			oldStd := os.Stdout
-			os.Stderr = devNull
-			os.Stdout = devNull
-
 			testCnt += 1
 			storeLocation = fmt.Sprintf("./test_multi_source_%v", testCnt)
 			err := os.RemoveAll(storeLocation)
@@ -55,7 +49,7 @@ func TestMultiSource(t *testing.T) {
 				Logger:        zap.NewNop().Sugar(),
 				StoreLocation: storeLocation,
 			}
-			lc := fxtest.NewLifecycle(t)
+			lc := fxtest.NewLifecycle(internal.FxTestLog(t, false))
 
 			store = server.NewStore(lc, e, &statsd.NoOpClient{})
 			dsm = server.NewDsManager(lc, e, store, server.NoOpBus())
@@ -65,11 +59,6 @@ func TestMultiSource(t *testing.T) {
 				fmt.Println(err.Error())
 				t.FailNow()
 			}
-
-			// undo redirect of stdout and stderr after successful init of fx
-			os.Stderr = oldErr
-			os.Stdout = oldStd
-
 		})
 		g.AfterEach(func() {
 			_ = store.Close()

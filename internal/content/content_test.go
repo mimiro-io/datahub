@@ -16,6 +16,7 @@ package content
 
 import (
 	"encoding/json"
+	"github.com/mimiro-io/datahub/internal"
 	"os"
 	"strconv"
 	"testing"
@@ -51,14 +52,10 @@ func TestContent(t *testing.T) {
 			}
 			err := os.RemoveAll(e.StoreLocation)
 			g.Assert(err).IsNil("should be allowed to clean testfiles in " + e.StoreLocation)
-			devNull, _ := os.Open("/dev/null")
-			oldErr := os.Stderr
-			os.Stderr = devNull
-			lc := fxtest.NewLifecycle(t)
+			lc := fxtest.NewLifecycle(internal.FxTestLog(t, false))
 			sc := &statsd.NoOpClient{}
 			store = server.NewStore(lc, e, sc)
 			lc.RequireStart()
-			os.Stderr = oldErr
 			contentConfig = NewContent(e, store, sc)
 		})
 		g.AfterEach(func() {

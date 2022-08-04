@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/franela/goblin"
+	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
@@ -49,7 +50,7 @@ func TestBackup(t *testing.T) {
 				StoreLocation: storeLocation,
 			}
 
-			lc := fxtest.NewLifecycle(t)
+			lc := fxtest.NewLifecycle(internal.FxTestLog(t, false))
 			s = NewStore(lc, e, &statsd.NoOpClient{})
 
 			g.Assert(s.Open()).IsNil()

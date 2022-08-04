@@ -17,6 +17,7 @@ package server_test
 import (
 	"context"
 	"fmt"
+	"github.com/mimiro-io/datahub/internal"
 	"net/http"
 	"os"
 	"reflect"
@@ -73,12 +74,10 @@ func TestEvents(t *testing.T) {
 				RunnerConfig:  &conf.RunnerConfig{PoolIncremental: 10, PoolFull: 5}}
 
 			devNull, _ := os.Open("/dev/null")
-			oldErr := os.Stderr
 			oldOut := os.Stdout
-			os.Stderr = devNull
 			os.Stdout = devNull
 
-			lc := fxtest.NewLifecycle(t)
+			lc := fxtest.NewLifecycle(internal.FxTestLog(t, false))
 			store = server.NewStore(lc, e, &statsd.NoOpClient{})
 			newBus, _ := server.NewBus(&conf.Env{Logger: zap.NewNop().Sugar()})
 			eventBus = newBus.(*server.MEventBus)
@@ -96,7 +95,6 @@ func TestEvents(t *testing.T) {
 			err = lc.Start(context.Background())
 			g.Assert(err).IsNil()
 
-			os.Stderr = oldErr
 			os.Stdout = oldOut
 
 			peopleDs, err = dsm.CreateDataset("people", nil)

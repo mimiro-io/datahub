@@ -17,6 +17,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/mimiro-io/datahub/internal"
 	"os"
 	"strings"
 	"testing"
@@ -39,8 +40,8 @@ func TestJsonOmitOnEntity(m *testing.T) {
 	}
 }
 
-func TestStreamParser(m *testing.T) {
-	g := goblin.Goblin(m)
+func TestStreamParser(t *testing.T) {
+	g := goblin.Goblin(t)
 	g.Describe("The stream parser", func() {
 		testCnt := 0
 		var store *Store
@@ -58,7 +59,7 @@ func TestStreamParser(m *testing.T) {
 			devNull, _ := os.Open("/dev/null")
 			oldErr := os.Stderr
 			os.Stderr = devNull
-			lc := fxtest.NewLifecycle(m)
+			lc := fxtest.NewLifecycle(internal.FxTestLog(t, false))
 			store = NewStore(lc, e, &statsd.NoOpClient{})
 			lc.RequireStart()
 			os.Stderr = oldErr

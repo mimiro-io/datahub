@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/franela/goblin"
+	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
@@ -49,7 +50,7 @@ func TestGC(t *testing.T) {
 			devNull, _ := os.Open("/dev/null")
 			oldErr := os.Stderr
 			os.Stderr = devNull
-			lc = fxtest.NewLifecycle(t)
+			lc = fxtest.NewLifecycle(internal.FxTestLog(t, false))
 			store = NewStore(lc, e, &statsd.NoOpClient{})
 			dsm = NewDsManager(lc, e, store, NoOpBus())
 			gc = NewGarbageCollector(lc, store, e)

@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/DataDog/datadog-go/v5/statsd"
+	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
@@ -52,15 +53,10 @@ func TestDataset(t *testing.T) {
 
 			// create store
 			e := &conf.Env{Logger: zap.NewNop().Sugar(), StoreLocation: storeLocation}
-
-			devNull, _ := os.Open("/dev/null")
-			oldErr := os.Stderr
-			os.Stderr = devNull
-			lc := fxtest.NewLifecycle(t)
+			lc := fxtest.NewLifecycle(internal.FxTestLog(t, false))
 			s := NewStore(lc, e, &statsd.NoOpClient{})
 			dsm := NewDsManager(lc, e, s, NoOpBus())
 			err = lc.Start(context.Background())
-			os.Stderr = oldErr
 			g.Assert(err).IsNil()
 
 			// namespaces
