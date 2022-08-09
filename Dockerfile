@@ -29,7 +29,8 @@ RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-extldflags=-static" -tags jemal
 RUN go test ./... -v
 
 FROM alpine:latest
-
+RUN apk update
+RUN apk add --upgrade rsync
 RUN apk --no-cache add ca-certificates rsync
 
 WORKDIR /root/
