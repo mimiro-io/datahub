@@ -22,10 +22,35 @@ jobs:
     
       - name: Checkout code
         uses: actions/checkout@v2  
+        with:
+          fetch-depth: 0
 
       - name: Set up Docker Buildx (enable caching)
         uses: docker/setup-buildx-action@v1
-            
+
+      - name: install semver tool
+        run: pip3 install semver
+
+      - name: validate release tag
+        run: |
+          if [ ${{ github.event_name }} == 'release' ]
+          then
+            echo "Validate that release tag is valid semver"
+            pysemver check $(echo $GITHUB_REF | cut -d / -f 3)
+          fi
+
+      - name: get next version
+        id: semver-tag
+        run: |
+          git fetch --all --tags
+          DESCRIBE=$( git describe --always --tags --long --first-parent )
+          VERSION=$(echo $DESCRIBE | cut -d "-" -f 1)
+          NEXT=$( pysemver bump patch $VERSION )
+          echo "::set-output name=tag::$NEXT"
+
+      - name: "Calculated unstable tag"
+        run: echo "base tag next unstable version... ${{ steps.semver-tag.outputs.tag }}"
+
       - name: Set Image Tag
         id: image_tag
         run: |
@@ -35,7 +60,7 @@ jobs:
             echo ::set-output name=image_tag:: ${{ env.DOCKERHUB_REPOSITORY }}:$(echo $GITHUB_REF | cut -d / -f 3)-$(uname -m)
           else
             echo "Setting Unstable Image"
-            echo ::set-output name=image_tag:: ${{ env.DOCKERHUB_REPOSITORY }}:v-$(cat VERSION.txt)$GITHUB_RUN_NUMBER-unstable-$(uname -m)
+            echo ::set-output name=image_tag:: ${{ env.DOCKERHUB_REPOSITORY }}:${{ steps.semver-tag.outputs.tag }}-$GITHUB_RUN_NUMBER-unstable-$(uname -m)
           fi
        
       # Login to Docker registry except on PR
@@ -90,10 +115,35 @@ jobs:
     
       - name: Checkout code
         uses: actions/checkout@v2  
+        with:
+          fetch-depth: 0
 
       - name: Set up Docker Buildx (enable caching)
         uses: docker/setup-buildx-action@v1
             
+      - name: install semver tool
+        run: pip3 install semver
+
+      - name: validate release tag
+        run: |
+          if [ ${{ github.event_name }} == 'release' ]
+          then
+            echo "Validate that release tag is valid semver"
+            /home/ec2-user/.local/bin/pysemver check $(echo $GITHUB_REF | cut -d / -f 3)
+          fi
+
+      - name: get next version
+        id: semver-tag
+        run: |
+          git fetch --all --tags
+          DESCRIBE=$( git describe --always --tags --long --first-parent )
+          VERSION=$(echo $DESCRIBE | cut -d "-" -f 1)
+          NEXT=$( /home/ec2-user/.local/bin/pysemver bump patch $VERSION )
+          echo "::set-output name=tag::$NEXT"
+
+      - name: "Calculated unstable tag"
+        run: echo "base tag next unstable version... ${{ steps.semver-tag.outputs.tag }}"
+
       - name: Set Image Tag
         id: image_tag
         run: |
@@ -103,7 +153,7 @@ jobs:
             echo ::set-output name=image_tag:: ${{ env.DOCKERHUB_REPOSITORY }}:$(echo $GITHUB_REF | cut -d / -f 3)-$(uname -m)
           else
             echo "Setting Unstable Image"
-            echo ::set-output name=image_tag:: ${{ env.DOCKERHUB_REPOSITORY }}:v-$(cat VERSION.txt)$GITHUB_RUN_NUMBER-unstable-$(uname -m)
+            echo ::set-output name=image_tag:: ${{ env.DOCKERHUB_REPOSITORY }}:${{ steps.semver-tag.outputs.tag }}-$GITHUB_RUN_NUMBER-unstable-$(uname -m)
           fi
        
       # Login to Docker registry except on PR
@@ -164,6 +214,31 @@ jobs:
       
       - name: Checkout code
         uses: actions/checkout@v2  
+        with:
+          fetch-depth: 0
+
+      - name: install semver tool
+        run: pip3 install semver
+
+      - name: validate release tag
+        run: |
+          if [ ${{ github.event_name }} == 'release' ]
+          then
+            echo "Validate that release tag is valid semver"
+            pysemver check $(echo $GITHUB_REF | cut -d / -f 3)
+          fi
+
+      - name: get next version
+        id: semver-tag
+        run: |
+          git fetch --all --tags
+          DESCRIBE=$( git describe --always --tags --long --first-parent )
+          VERSION=$(echo $DESCRIBE | cut -d "-" -f 1)
+          NEXT=$( pysemver bump patch $VERSION )
+          echo "::set-output name=tag::$NEXT"
+
+      - name: "Calculated unstable tag"
+        run: echo "base tag next unstable version... ${{ steps.semver-tag.outputs.tag }}"
 
       - name: Login to DockerHub
         id: docker_login
@@ -178,11 +253,11 @@ jobs:
           if [ ${{ github.event_name }} == 'release' ]
           then
             echo "Setting Stable Image Tag"
-            echo ::set-output name=image_tag:: ${{ env.DOCKERHUB_REPOSITORY }}:$(echo $GITHUB_REF | cut -d / -f 3)
+            echo ::set-output name=image_tag:: ${{ env.DOCKERHUB_REPOSITORY }}:$(echo $GITHUB_REF | cut -d / -f 3)-$(uname -m)
           else
             echo "Setting Unstable Image"
-            echo ::set-output name=image_tag:: ${{ env.DOCKERHUB_REPOSITORY }}:v-$(cat VERSION.txt)$GITHUB_RUN_NUMBER-unstable
-          fi  
+            echo ::set-output name=image_tag:: ${{ env.DOCKERHUB_REPOSITORY }}:${{ steps.semver-tag.outputs.tag }}-$GITHUB_RUN_NUMBER-unstable-$(uname -m)
+          fi
 
       - name: Show Tag
         run: echo ${{ steps.image_tag.outputs.image_tag }}  
