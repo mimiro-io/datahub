@@ -253,10 +253,10 @@ jobs:
           if [ ${{ github.event_name }} == 'release' ]
           then
             echo "Setting Stable Image Tag"
-            echo ::set-output name=image_tag:: ${{ env.DOCKERHUB_REPOSITORY }}:$(echo $GITHUB_REF | cut -d / -f 3)-$(uname -m)
+            echo ::set-output name=image_tag:: ${{ env.DOCKERHUB_REPOSITORY }}:$(echo $GITHUB_REF | cut -d / -f 3)
           else
             echo "Setting Unstable Image"
-            echo ::set-output name=image_tag:: ${{ env.DOCKERHUB_REPOSITORY }}:${{ steps.semver-tag.outputs.tag }}-$GITHUB_RUN_NUMBER-unstable-$(uname -m)
+            echo ::set-output name=image_tag:: ${{ env.DOCKERHUB_REPOSITORY }}:${{ steps.semver-tag.outputs.tag }}-$GITHUB_RUN_NUMBER-unstable
           fi
 
       - name: Show Tag
