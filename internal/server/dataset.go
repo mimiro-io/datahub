@@ -445,6 +445,8 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 					for i, v := range interfaceRefs {
 						refs[i] = v.(string)
 					}
+				case nil:
+					return newitems, fmt.Errorf("encountered nil ref, cannot store entity %v", e)
 				}
 
 				for _, ref := range refs {
@@ -503,8 +505,12 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 					// need to check if v is string or []string
 					refs, isArray := stringOrArrayValue.([]interface{})
 					if !isArray {
-						s := stringOrArrayValue.(interface{})
-						refs = []interface{}{s}
+						s, isSingle := stringOrArrayValue.(interface{})
+						if isSingle {
+							refs = []interface{}{s}
+						} else {
+							return newitems, fmt.Errorf("encountered nil reference, cannot store entity %v", e)
+						}
 					}
 
 					for _, ref := range refs {
@@ -579,6 +585,8 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 						for i, v := range interfaceRefs {
 							refs[i] = v.(string)
 						}
+					case nil:
+						return newitems, fmt.Errorf("encountered nil ref, cannot store entity %v", e)
 					}
 
 					for _, ref := range refs {
