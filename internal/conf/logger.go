@@ -42,6 +42,7 @@ func GetLogger(env string, level zapcore.Level) *zap.SugaredLogger {
 			OutputPaths:      []string{"stderr"},
 			ErrorOutputPaths: []string{"stderr"},
 		}
+		cfg.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 		logger, _ := cfg.Build()
 		slogger = logger.Sugar()
 	default:
