@@ -264,8 +264,17 @@ func (javascriptTransform *JavascriptTransform) ExecuteTransaction(txn *server.T
 	return javascriptTransform.Store.ExecuteTransaction(txn)
 }
 
-func (javascriptTransform *JavascriptTransform) Log(thing interface{}) {
-	javascriptTransform.Logger.Info(thing)
+func (javascriptTransform *JavascriptTransform) Log(thing interface{}, logLevel string) {
+	switch strings.ToLower(logLevel)  {
+	case "info":
+		javascriptTransform.Logger.Info(thing)
+	case "warn", "warning":
+		javascriptTransform.Logger.WithOptions(zap.AddStacktrace(zap.DPanicLevel)).Warn(thing)
+	case "error", "err":
+		javascriptTransform.Logger.WithOptions(zap.AddStacktrace(zap.DPanicLevel)).Error(thing)
+	default:
+		javascriptTransform.Logger.Info(thing)
+	}
 }
 
 func (javascriptTransform *JavascriptTransform) Timing(name string, end bool) {
