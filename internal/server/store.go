@@ -147,8 +147,9 @@ type Context struct {
 }
 
 // GetContext return a context instance
-//    containing namespace mappings for the given list of namespace prefixes
-//    if the give list of given namespace prefixes is empty, all namespace mappings are returned
+//
+//	containing namespace mappings for the given list of namespace prefixes
+//	if the give list of given namespace prefixes is empty, all namespace mappings are returned
 func (namespaceManager *NamespaceManager) GetContext(includedNamespaces []string) (context *Context) {
 	if len(includedNamespaces) > 0 {
 		filteredPrefixMapping := map[string]string{}
@@ -1149,6 +1150,22 @@ func (s *Store) storeValue(key []byte, value []byte) error {
 func (s *Store) deleteValue(key []byte) error {
 	err := s.database.Update(func(txn *badger.Txn) error {
 		err := txn.Delete(key)
+		return err
+	})
+	return err
+}
+
+func (s *Store) moveValue(oldKey, newKey, newValue []byte) error {
+	tags := []string{
+		"application:datahub",
+	}
+	err := s.database.Update(func(txn *badger.Txn) error {
+		err := txn.Delete(oldKey)
+		if err != nil {
+			return err
+		}
+		err = txn.Set(newKey, newValue)
+		_ = s.statsdClient.Count("store.added.bytes", int64(len(newValue)), tags, 1) // don't care about errors here
 		return err
 	})
 	return err

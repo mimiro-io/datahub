@@ -19,6 +19,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/mimiro-io/datahub/internal/conf"
@@ -97,6 +98,10 @@ type CreateDatasetConfig struct {
 	PublicNamespaces   []string            `json:"publicNamespaces"`
 }
 
+type UpdateDatasetConfig struct {
+	ID string // update id/name
+}
+
 func (dsm *DsManager) CreateDataset(name string, createDatasetConfig *CreateDatasetConfig) (*Dataset, error) {
 	// fixme: race condition needs a lock
 
@@ -145,6 +150,73 @@ func (dsm *DsManager) CreateDataset(name string, createDatasetConfig *CreateData
 	// making sure the event is triggered
 	dsm.eb.Emit(context.Background(), "dataset.core.Dataset", nil)
 
+	return ds, nil
+}
+
+func (dsm *DsManager) UpdateDataset(name string, config *UpdateDatasetConfig) (*Dataset, error) {
+	if name == datasetCore {
+		return nil, errors.New("cannot update " + datasetCore)
+	}
+	exists := dsm.IsDataset(name)
+	if !exists {
+		return nil, errors.New("attempt to update non existent dataset")
+	}
+
+	ds := dsm.GetDataset(name)
+	ds.WriteLock.Lock()
+	defer ds.WriteLock.Unlock()
+
+	// new ID means rename
+	if config.ID != name {
+		newName := config.ID
+		newExists := dsm.IsDataset(newName)
+		if newExists {
+			return nil, fmt.Errorf("cannot rename dataset %v to existing dataset %v", name, newName)
+		}
+		dsm.logger.Infof("renaming dataset %v to %v", name, newName)
+
+		oldKey := ds.getStorageKey()
+		//update stored datasets
+		ds.ID = newName
+		ds.SubjectIdentifier = "http://data.mimiro.io/datasets/" + newName
+		jsonData, _ := json.Marshal(ds)
+		newKey := ds.getStorageKey()
+		err := dsm.store.moveValue(oldKey, newKey, jsonData)
+		if err != nil {
+			return nil, err
+		}
+
+		//update in local cache
+		dsm.store.datasets.Delete(name)
+		dsm.store.datasets.Store(newName, ds)
+
+		// update eventbus
+		dsm.eb.UnregisterTopic(name)
+		dsm.eb.RegisterTopic(newName)
+
+		// update core entity
+
+		core := dsm.GetDataset(datasetCore)
+		dsInfo, err := ds.store.NamespaceManager.GetDatasetNamespaceInfo()
+		if err != nil {
+			return nil, err
+		}
+
+		entity, err := dsm.store.GetEntity(dsInfo.DatasetPrefix+":"+name, []string{datasetCore})
+		if err != nil {
+			return nil, err
+		}
+		entity.IsDeleted = true
+		err = dsm.storeEntity(core, entity)
+		entity.IsDeleted = false
+		entity.ID = dsInfo.DatasetPrefix + ":" + newName
+		entity.Properties[dsInfo.NameKey] = newName
+		err = dsm.storeEntity(core, entity)
+		if err != nil {
+			return nil, err
+		}
+		dsm.eb.Emit(context.Background(), "dataset.core.Dataset", nil)
+	}
 	return ds, nil
 }
 

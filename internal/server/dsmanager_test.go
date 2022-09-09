@@ -16,10 +16,12 @@ package server
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"github.com/mimiro-io/datahub/internal"
 	"math"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -205,6 +207,124 @@ func TestDatasetManager(t *testing.T) {
 				"Average batch time after first delete with gc should not exceed twice average of first batch-loop")
 			g.Assert(math.Abs(float64(avgs[2])-float64(avgs[0])) < float64(avgs[0])).IsTrue(
 				"Average batch time after 2nd delete should not exceed twice average of first batch-loop")
+		})
+
+		g.Describe("rename dataset", func() {
+			g.It("should fail but not panic for non existing src", func() {
+				_, err := dsm.UpdateDataset("people0", &UpdateDatasetConfig{ID: "people1"})
+				g.Assert(err).IsNotZero()
+			})
+			g.It("should fail but not panic for existing rename target", func() {
+				_, _ = dsm.CreateDataset("people0", nil)
+				_, _ = dsm.CreateDataset("people1", nil)
+				_, err := dsm.UpdateDataset("people0", &UpdateDatasetConfig{ID: "people1"})
+				g.Assert(err).IsNotZero()
+			})
+			g.It("should replace entry in system collection", func() {
+				_, _ = dsm.CreateDataset("people0", nil)
+				prefix := make([]byte, 2)
+				binary.BigEndian.PutUint16(prefix, SYS_DATASETS_ID)
+				storedDatasets := map[string]*Dataset{}
+				dsm.store.iterateObjects(prefix, reflect.TypeOf(Dataset{}), func(i interface{}) error {
+					ds := i.(*Dataset)
+					storedDatasets[ds.ID] = ds
+					return nil
+				})
+				g.Assert(len(storedDatasets)).Eql(2)
+				g.Assert(storedDatasets["people0"]).IsNotNil()
+				g.Assert(storedDatasets["people0"].InternalID).Eql(uint32(2))
+				g.Assert(storedDatasets["people0"].SubjectIdentifier).Eql("http://data.mimiro.io/datasets/people0")
+
+				// do the rename
+				_, err := dsm.UpdateDataset("people0", &UpdateDatasetConfig{ID: "people1"})
+				g.Assert(err).IsNil()
+
+				storedDatasets = map[string]*Dataset{}
+				dsm.store.iterateObjects(prefix, reflect.TypeOf(Dataset{}), func(i interface{}) error {
+					ds := i.(*Dataset)
+					storedDatasets[ds.ID] = ds
+					return nil
+				})
+				g.Assert(len(storedDatasets)).Eql(2)
+				g.Assert(storedDatasets["people1"]).IsNotNil()
+				g.Assert(storedDatasets["people1"].InternalID).Eql(uint32(2))
+				g.Assert(storedDatasets["people1"].SubjectIdentifier).Eql("http://data.mimiro.io/datasets/people1")
+			})
+			g.It("should replace entry in cached dataset list", func() {
+
+				_, _ = dsm.CreateDataset("people0", nil)
+				g.Assert(len(dsm.GetDatasetNames())).Eql(2)
+				seen := false
+				for _, n := range dsm.GetDatasetNames() {
+					if n.Name == "people0" {
+						seen = true
+					}
+				}
+				g.Assert(seen).IsTrue()
+				g.Assert(dsm.GetDataset("people0").InternalID).Eql(uint32(2))
+
+				// do the rename
+				_, err := dsm.UpdateDataset("people0", &UpdateDatasetConfig{ID: "people1"})
+				g.Assert(err).IsNil()
+
+				g.Assert(len(dsm.GetDatasetNames())).Eql(2)
+				seen = false
+				for _, n := range dsm.GetDatasetNames() {
+					if n.Name == "people1" {
+						seen = true
+					}
+				}
+				g.Assert(seen).IsTrue()
+				g.Assert(dsm.GetDataset("people1").InternalID).Eql(uint32(2))
+				g.Assert(dsm.GetDataset("people0")).IsNil()
+			})
+
+			g.It("should replace entry in core.Dataset, and dataset content", func() {
+				coreDs := dsm.GetDataset("core.Dataset")
+				ds, _ := dsm.CreateDataset("people0", nil)
+				_ = ds.StoreEntities([]*Entity{NewEntity("item0", 0), NewEntity("item1", 0), NewEntity("item2", 0)})
+				dsContent, err := ds.GetChanges(0, 100, false)
+				g.Assert(err).IsNil()
+				coreChanges, _ := coreDs.GetChanges(0, 100, true)
+				g.Assert(coreChanges).IsNotNil()
+				g.Assert(len(coreChanges.Entities)).Eql(2)
+				seen := false
+				for _, e := range coreChanges.Entities {
+					if e.ID == "ns0:people0" {
+						seen = true
+						g.Assert(e.IsDeleted).IsFalse()
+						g.Assert(e.Properties["ns0:name"]).Eql("people0")
+						g.Assert(e.Properties["ns0:items"]).Eql(3.0)
+					}
+				}
+				g.Assert(seen).IsTrue()
+
+				// do the rename
+				_, err = dsm.UpdateDataset("people0", &UpdateDatasetConfig{ID: "people1"})
+				g.Assert(err).IsNil()
+				coreChanges, _ = coreDs.GetChanges(0, 100, true)
+				g.Assert(coreChanges).IsNotNil()
+				g.Assert(len(coreChanges.Entities)).Eql(3)
+				seen0 := false
+				seen1 := false
+				for _, e := range coreChanges.Entities {
+					if e.ID == "ns0:people0" {
+						seen0 = true
+						g.Assert(e.IsDeleted).IsTrue()
+					}
+					if e.ID == "ns0:people1" {
+						seen1 = true
+						g.Assert(e.IsDeleted).IsFalse()
+						g.Assert(e.Properties["ns0:name"]).Eql("people1")
+						g.Assert(e.Properties["ns0:items"]).Eql(3.0)
+					}
+				}
+				g.Assert(seen0).IsTrue()
+				g.Assert(seen1).IsTrue()
+				dsContentNew, err := ds.GetChanges(0, 100, false)
+				g.Assert(err).IsNil()
+				g.Assert(dsContentNew).Eql(dsContent)
+			})
 		})
 	})
 }
