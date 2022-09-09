@@ -1472,7 +1472,7 @@ It will show something like:
 Then get, edit and update the ACL for the client:
 
 ```
-mim acl get --clientid cnode23 > client23-acl.json
+mim acl get <client-id> client23-acl.json
 ```
 
 To grant full access to the client. Add to the ACL file so it looks like:
