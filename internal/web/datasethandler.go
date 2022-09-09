@@ -60,6 +60,7 @@ func NewDatasetHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger,
 
 			e.GET("/datasets/:dataset", handler.datasetGet, mw.authorizer(log, datahubRead))
 			e.POST("/datasets/:dataset", handler.datasetCreate, mw.authorizer(log, datahubWrite))
+			e.PATCH("/datasets/:dataset", handler.datasetUpdate, mw.authorizer(log, datahubWrite))
 			e.DELETE("/datasets/:dataset", handler.deleteDatasetHandler, mw.authorizer(log, datahubWrite))
 			e.DELETE("/datasets", handler.deleteAllDatasets, mw.authorizer(log, datahubWrite))
 			return nil
@@ -168,6 +169,28 @@ func (handler *datasetHandler) datasetCreate(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusInternalServerError, "Failed creating dataset")
 		}
 	*/
+	return c.NoContent(http.StatusOK)
+}
+
+func (handler *datasetHandler) datasetUpdate(c echo.Context) error {
+	datasetName := c.Param("dataset")
+	exist := handler.datasetManager.IsDataset(datasetName)
+	if !exist {
+		return echo.NewHTTPError(http.StatusBadRequest, "Dataset does not exist")
+	}
+	updateDatasetConfig := &server.UpdateDatasetConfig{}
+	jsonDecoder := json.NewDecoder(c.Request().Body)
+	err := jsonDecoder.Decode(updateDatasetConfig)
+	if err != nil {
+		if err != io.EOF { // eof means body was empty.
+			return echo.NewHTTPError(http.StatusBadRequest, "update dataset request without payload: "+err.Error())
+		}
+		return echo.NewHTTPError(http.StatusBadRequest, "Could not parse update dataset payload: "+err.Error())
+	}
+	_, err = handler.datasetManager.UpdateDataset(datasetName, updateDatasetConfig)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed updating dataset")
+	}
 	return c.NoContent(http.StatusOK)
 }
 
