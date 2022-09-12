@@ -918,11 +918,18 @@ Timing("hello", true) // send duration since start for metric "hello"
 
 #### Log
 
-Any value can be passed to `Log` and it will print it to the console. This should be used when testing and developing transforms locally. When executed in the data hub this is a noop.
+Any value can be passed to `Log` and it will print it to the console. This should be used when testing and developing transforms locally. `Log()` can be used with different log-levels.
 
 ```javascript
 var someval = "hello";
 Log(someval);
+```
+Without defining the log-level the console log will default to loglevel `INFO`
+Supported log-levels are:
+```javascript
+Log(someval, "INFO");
+Log(someval, "WARNING");
+Log(someval, "ERROR");
 ```
 
 #### FindById
