@@ -23,8 +23,10 @@ import (
 	"github.com/mimiro-io/datahub/internal/server"
 )
 
-/**
-  MultiSource only operates on changes, but accepts calls to FullsyncStart to avoid processing dependencies during initial load
+/*
+*
+
+	MultiSource only operates on changes, but accepts calls to FullsyncStart to avoid processing dependencies during initial load
 */
 type Join struct {
 	Dataset   string
@@ -187,16 +189,18 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 			if err != nil {
 				return err
 			}
+			if len(changes.Entities) > 0 {
 
-			timestamp := int64(changes.Entities[0].Recorded)
+				timestamp := int64(changes.Entities[0].Recorded)
 
-			prevRelatedEntities, err := multiSource.Store.GetManyRelatedEntitiesAtTime(
-				uris, join.Predicate, join.Inverse, nil, timestamp)
-			if err != nil {
-				return fmt.Errorf("previous GetManyRelatedEntities failed for Join %+v at timestamp %v, %w", join, timestamp, err)
+				prevRelatedEntities, err := multiSource.Store.GetManyRelatedEntitiesAtTime(
+					uris, join.Predicate, join.Inverse, nil, timestamp)
+				if err != nil {
+					return fmt.Errorf("previous GetManyRelatedEntities failed for Join %+v at timestamp %v, %w", join, timestamp, err)
+				}
+
+				relatedEntities = append(relatedEntities, prevRelatedEntities...)
 			}
-
-			relatedEntities = append(relatedEntities, prevRelatedEntities...)
 		}
 
 		dedupCache := map[uint64]bool{}
