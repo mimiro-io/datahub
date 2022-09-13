@@ -592,6 +592,48 @@ func TestMultiSource(t *testing.T) {
 			//Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
 			g.Assert(recordedEntities[0].Properties["name"]).Eql("Bob")
 		})
+		g.It("should support empty dependency dastasets", func() {
+			_, _ = createTestDataset("people", []string{"Bob", "Alice"}, nil, dsm, g, store)
+			_, _ = createTestDataset("employment", nil, nil, dsm, g, store)
+
+			testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
+			srcJSON := `{ "Type" : "MultiSource", "Name" : "people", "Dependencies": [ {
+							"dataset": "employment",
+							"joins": [ { "dataset": "people", "predicate": "http://people/employment", "inverse": false } ] } ] }`
+
+			srcConfig := map[string]interface{}{}
+			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
+			_ = testSource.ParseDependencies(srcConfig["Dependencies"])
+
+			//fullsync
+			var recordedEntities []server.Entity
+			token := &source.MultiDatasetContinuation{}
+			var lastToken source.DatasetContinuation
+			testSource.StartFullSync()
+			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			testSource.EndFullSync()
+
+			g.Assert(len(recordedEntities)).Eql(2)
+
+			// run inc
+			recordedEntities = []server.Entity{}
+			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			g.Assert(len(recordedEntities)).Eql(0)
+		})
 
 		g.It("should emit main enitity if inverse multi hop dependency is removed", func() {
 			// people <- employment <- salary
