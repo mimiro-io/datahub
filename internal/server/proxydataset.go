@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -125,7 +125,7 @@ func (d *ProxyDataset) StreamEntitiesRaw(from string, limit int, f func(jsonData
 // a `preStream` function can be provided if StreamChangesRaw is used in a web handler. It allows
 // to leave the http response uncommitted until `f` is called, so that an http error handler
 // still can modify status code while the response is uncommitted
-func (d *ProxyDataset) StreamChangesRaw(since string, limit int, f func(jsonData []byte) error, preStream func()) (string, error) {
+func (d *ProxyDataset) StreamChangesRaw(since string, limit int, reverse bool, f func(jsonData []byte) error, preStream func()) (string, error) {
 	uri, err := url.Parse(d.RemoteChangesUrl)
 	if err != nil {
 		return "", err
@@ -136,6 +136,9 @@ func (d *ProxyDataset) StreamChangesRaw(since string, limit int, f func(jsonData
 	}
 	if limit > 0 {
 		q.Add("limit", strconv.Itoa(limit))
+	}
+	if reverse {
+		q.Add("reverse", "true")
 	}
 	uri.RawQuery = q.Encode()
 	fullUri := uri.String()

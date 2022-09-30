@@ -3,7 +3,7 @@ package internal
 import "testing"
 
 type FxLogger struct {
-	t      *testing.T
+	t      testing.TB
 	active bool
 }
 
@@ -20,6 +20,6 @@ func (l *FxLogger) Logf(f string, a ...interface{}) {
 		l.t.Logf(f, a...)
 	}
 }
-func FxTestLog(t *testing.T, active bool) *FxLogger {
+func FxTestLog(t testing.TB, active bool) *FxLogger {
 	return &FxLogger{t: t, active: active}
 }
