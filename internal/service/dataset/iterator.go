@@ -1,3 +1,17 @@
+// Copyright 2022 MIMIRO AS
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package dataset
 
 import (
@@ -57,7 +71,7 @@ func (b *BadgerDatasetIterator) Inverse() Iterator {
 	}
 	b.inverse = true
 	if b.startingOffset == 0 {
-		b.startingOffset = uint64(18446744073709551615) //max value, 0xFF,0xFF,0xFF,0xFF
+		b.startingOffset = uint64(18446744073709551615) // max value, 0xFF,0xFF,0xFF,0xFF
 	}
 	return b
 }
@@ -143,7 +157,7 @@ func (d IterableBadgerDataset) At(since uint64) (Iterator, error) {
 }
 
 func Of(store store.BadgerStore, datasetName string) (IterableDataset, error) {
-	id, b := store.LookupDatasetId(datasetName)
+	id, b := store.LookupDatasetID(datasetName)
 	if b {
 		return IterableBadgerDataset{store.GetDB(), id}, nil
 	}
