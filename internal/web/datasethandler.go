@@ -19,6 +19,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/golang-jwt/jwt"
 	"github.com/mimiro-io/datahub/internal/security"
 	"io"
@@ -33,6 +34,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/mimiro-io/datahub/internal/server"
+	ds "github.com/mimiro-io/datahub/internal/service/dataset"
 )
 
 type datasetHandler struct {
@@ -250,6 +252,10 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 	}
 
 	f := c.QueryParam("from")
+	reverse := c.QueryParam("reverse")
+	if reverse != "" {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Errorf("reverse parameter only supported for changes"))
+	}
 
 	// check dataset exists
 	dataset := handler.datasetManager.GetDataset(datasetName)
@@ -339,6 +345,8 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 	datasetName := c.Param("dataset")
 	limit := c.QueryParam("limit")
 	since := c.QueryParam("since")
+	reverse := c.QueryParam("reverse") == "true"
+
 	var (
 		l int
 	)
@@ -369,7 +377,7 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 	if dataset.IsProxy() {
 		continuationToken, err := dataset.AsProxy(
 			handler.lookupAuth(dataset.ProxyConfig.AuthProviderName),
-		).StreamChangesRaw(since, l, func(jsonData []byte) error {
+		).StreamChangesRaw(since, l, reverse, func(jsonData []byte) error {
 			_, _ = c.Response().Write([]byte(","))
 			_, _ = c.Response().Write(jsonData)
 			return nil
@@ -390,15 +398,48 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, server.SinceParseErr(err).Error())
 		}
 		preStream()
-		continuationToken, err := dataset.ProcessChangesRaw(sinceNum, l, false, func(jsonData []byte) error {
-			_, _ = c.Response().Write([]byte(","))
-			_, _ = c.Response().Write(jsonData)
-			return nil
-		})
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		if reverse {
+			continuationToken := sinceNum
+			of, err := ds.Of(server.NewBadgerAccess(handler.store, handler.datasetManager), dataset.ID)
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
+			it, err := of.At(sinceNum)
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
+			it = it.Inverse()
+			defer it.Close()
+			cnt := 0
+			for it.Next() {
+				jsonData := it.Item()
+				_, _ = c.Response().Write([]byte(","))
+				_, _ = c.Response().Write(jsonData)
+				cnt++
+				if cnt == l {
+					break
+				}
+			}
+			continuationToken = it.NextOffset()
+			if it.Error() != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, it.Error().Error())
+			}
+			if reverse && continuationToken == 0 {
+				_, _ = c.Response().Write([]byte("]"))
+			} else {
+				_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + encodeSince(continuationToken) + "\"}]"))
+			}
+		} else {
+			continuationToken, err := dataset.ProcessChangesRaw(sinceNum, l, false, func(jsonData []byte) error {
+				_, _ = c.Response().Write([]byte(","))
+				_, _ = c.Response().Write(jsonData)
+				return nil
+			})
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
+			_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + encodeSince(continuationToken) + "\"}]"))
 		}
-		_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + encodeSince(continuationToken) + "\"}]"))
 	}
 	// write the continuation token and end the array of entities
 	c.Response().Flush()

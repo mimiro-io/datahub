@@ -12,21 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package security
+package store
 
-import (
-	"github.com/golang-jwt/jwt"
-	"strings"
-)
+import "github.com/dgraph-io/badger/v3"
 
-type CustomClaims struct {
-	Scope string   `json:"scope"`
-	Gty   string   `json:"gty"`
-	Adm   bool     `json:"adm"`
-	Roles []string `json:"roles"`
-	jwt.StandardClaims
-}
-
-func (claims CustomClaims) Scopes() []string {
-	return strings.Split(claims.Scope, ",")
+type BadgerStore interface {
+	GetDB() *badger.DB
+	LookupDatasetID(datasetName string) (uint32, bool)
 }

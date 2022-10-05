@@ -1,3 +1,4 @@
+.PHONY: test
 SHELL := /bin/bash
 
 build:

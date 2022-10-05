@@ -82,7 +82,7 @@ func (datasetSource *DatasetSource) ReadEntities(since DatasetContinuation, batc
 		if dataset.IsProxy() {
 			continuation, err := dataset.AsProxy(
 				datasetSource.AuthorizeProxyRequest(dataset.ProxyConfig.AuthProviderName),
-			).StreamChangesRaw(since.GetToken(), batchSize, func(jsonData []byte) error {
+			).StreamChangesRaw(since.GetToken(), batchSize, false, func(jsonData []byte) error {
 				e := &server.Entity{}
 				err := json.Unmarshal(jsonData, e)
 				if err != nil {
