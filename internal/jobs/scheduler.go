@@ -154,7 +154,7 @@ func (s *Scheduler) AddJob(jobConfig *JobConfiguration) error {
 					return err
 				}
 			} else {
-				s.Logger.Infof("Job '%s' is currently paused, it will not be started automatically", jobConfig.Id)
+				s.Logger.Infof("Job '%s' is currently paused, it will not be started automatically", jobConfig.Title)
 			}
 		}
 		return nil
