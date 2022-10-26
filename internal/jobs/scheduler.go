@@ -449,6 +449,9 @@ func (s *Scheduler) verify(jobConfiguration *JobConfiguration) error {
 	if len(jobConfiguration.Id) <= 0 {
 		return errors.New("job configuration needs an id")
 	}
+	if len(jobConfiguration.Title) <= 0 {
+		return errors.New("job configuration needs a title")
+	}
 	// we need to have at least 1 sink & 1 source
 	if len(jobConfiguration.Source) <= 0 {
 		return errors.New("you must configure a source")
