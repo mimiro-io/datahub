@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestBackup(t *testing.T) {
@@ -94,6 +95,7 @@ func TestBackup(t *testing.T) {
 			}
 		})
 		g.It("Should perform rsync backup", func() {
+			g.Timeout(2 * time.Minute)
 			backup.useRsync = true
 			var err error
 			backup.lastID, err = backup.LoadLastId()
@@ -108,6 +110,7 @@ func TestBackup(t *testing.T) {
 
 		})
 		g.It("Should stop datahub if backup to invalid location", func() {
+			g.Timeout(2 * time.Minute)
 			backup.useRsync = true
 			backup.Run()
 			// check backup id file is synced
