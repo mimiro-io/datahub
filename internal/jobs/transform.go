@@ -142,13 +142,19 @@ func (s *Scheduler) parseTransform(config *JobConfiguration) (Transform, error) 
 		if transformTypeName != nil {
 			if transformTypeName == "HttpTransform" {
 				transform := &HttpTransform{}
-				endpoint, ok := transformConfig["Url"]
-				if ok && endpoint != "" {
-					transform.Endpoint = endpoint.(string)
+				url, ok := transformConfig["Url"]
+				if ok && url != "" {
+					transform.Url = url.(string)
 				}
 				tokenProvider, ok := transformConfig["TokenProvider"]
 				if ok {
 					transform.TokenProvider = tokenProvider.(string)
+				}
+				timeout, ok := transformConfig["TimeOut"]
+				if ok && timeout != 0 {
+					transform.TimeOut = timeout.(float64)
+				} else {
+					transform.TimeOut = 0
 				}
 				return transform, nil
 			} else if transformTypeName == "JavascriptTransform" {
@@ -265,7 +271,7 @@ func (javascriptTransform *JavascriptTransform) ExecuteTransaction(txn *server.T
 }
 
 func (javascriptTransform *JavascriptTransform) Log(thing interface{}, logLevel string) {
-	switch strings.ToLower(logLevel)  {
+	switch strings.ToLower(logLevel) {
 	case "info":
 		javascriptTransform.Logger.Info(thing)
 	case "warn", "warning":
@@ -415,11 +421,12 @@ func (javascriptTransform *JavascriptTransform) GetConfig() map[string]interface
 }
 
 type HttpTransform struct {
-	Endpoint       string
-	Authentication string // "none, basic, token"
-	User           string // for use in basic auth
-	Password       string // for use in basic auth
-	TokenProvider  string // for use in token auth
+	Url            string
+	Authentication string  // "none, basic, token"
+	User           string  // for use in basic auth
+	Password       string  // for use in basic auth
+	TokenProvider  string  // for use in token auth
+	TimeOut        float64 // set timeout for http-transform
 }
 
 func (httpTransform *HttpTransform) getParallelism() int {
@@ -427,11 +434,12 @@ func (httpTransform *HttpTransform) getParallelism() int {
 }
 
 func (httpTransform *HttpTransform) transformEntities(runner *Runner, entities []*server.Entity, jobTag string) ([]*server.Entity, error) {
-	timeout := 1000 * time.Millisecond
+
+	timeout := time.Duration(httpTransform.TimeOut) * time.Second
 	client := httpclient.NewClient(httpclient.WithHTTPTimeout(timeout))
 
 	// create headers if needed
-	url := httpTransform.Endpoint
+	url := httpTransform.Url
 
 	// set up our request
 	jsonEntities, err := json.Marshal(entities)
@@ -481,8 +489,9 @@ func (httpTransform *HttpTransform) transformEntities(runner *Runner, entities [
 func (httpTransform *HttpTransform) GetConfig() map[string]interface{} {
 	config := make(map[string]interface{})
 	config["Type"] = "HttpTransform"
-	config["Url"] = httpTransform.Endpoint
+	config["Url"] = httpTransform.Url
 	config["TokenProvider"] = httpTransform.TokenProvider
 	config["Authentication"] = httpTransform.Authentication
+	config["TimeOut"] = httpTransform.TimeOut
 	return config
 }

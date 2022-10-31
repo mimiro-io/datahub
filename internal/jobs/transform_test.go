@@ -122,3 +122,19 @@ func TestJavascriptTransform_ToString(t *testing.T) {
 		})
 	})
 }
+
+func TestHttpTransformConfig(t *testing.T) {
+	g := goblin.Goblin(t)
+	g.Describe("Test that httpTransform picks up timeout from config", func() {
+		g.It("Should return correct httpTransform", func() {
+			c := &JobConfiguration{Id: "oes3fjudqn", Title: "my-test-title", Description: "my-description", Source: map[string]interface{}{"Type": "DatasetSource", "Name": "test-dataset"}, Sink: map[string]interface{}{"Type": "DatasetSink", "Name": "test-transformed"}, Transform: map[string]interface{}{"TimeOut": 70.00, "Type": "HttpTransform", "Url": "https://very-external"}}
+			transform := &HttpTransform{TimeOut: 70.00, Url: "https://very-external"}
+			scheduler := Scheduler{}
+			test, err := scheduler.parseTransform(c)
+			g.Assert(err).IsNil("should not error here")
+
+			g.Assert(transform).Equal(test, "Bare minimum transform")
+
+		})
+	})
+}
