@@ -454,7 +454,9 @@ func (s *Scheduler) verify(jobConfiguration *JobConfiguration) error {
 	}
 	for _, config := range s.ListJobs() {
 		if config.Title == jobConfiguration.Title {
-			return errors.New("job configuration title must be unique")
+			if config.Id != jobConfiguration.Id {
+				return errors.New("job configuration title must be unique")
+			}
 		}
 	}
 	// we need to have at least 1 sink & 1 source
