@@ -785,17 +785,25 @@ The following example shows how to configure a job to use an HTTP transform:
 
 ```json
 {
+    "title" : "test-http-transform", 
     "id" : "sync-datasetsource-to-datasetsink-with-js",
-    "incrementalSchedule" : "@every 2s",
     "runOnce" : true,
     "source" : {
         "Type" : "DatasetSource",
         "Name" : "Products"
     },
-    "transform" : {
-        "Type" : "HttpTransform",
-        "Url" : "http://localhost:5555/transforms/product-transform"
-    },
+    "triggers": [
+    {
+      "triggerType": "onchange",
+      "jobType": "incremental",
+      "monitoredDataset": "Products"
+    }
+  ],
+    "transform": {
+        "Url": "http://localhost:8080/path-to/transform/",
+        "Type": "HttpTransform",
+        "TimeOut": 0
+  },
     "sink" : {
         "Type" : "DatasetSink",
         "Name" : "NewProducts"
@@ -803,13 +811,18 @@ The following example shows how to configure a job to use an HTTP transform:
 }
 ```
 
-Note: external transforms can suffer from latency issues as data must be passed back and forth over the wire and any queries are also executed remotely. To mitigate against this, ensure that the query for related entities is used in batch mode. Alternatively, use internal transforms where possible.
+Note: external transforms can suffer from latency issues as data must be passed back and forth over the wire and any queries are also executed remotely. To mitigate against this, ensure that the query for related entities is used in batch mode. Alternatively, use internal transforms where possible. Another option is to set the attribute `TimeOut` on the transform. If set to `0` as shown above, there will be no timeout or set it to infinite effectively. The timeout is set in seconds.
 
 ### Internal Transform
 
 Internal transforms are written in Javascript and executed in a sandbox.
 
-Note: The version of Javascript supported is ES5.1. Please check for the restrictions regarding this version, e.g. const and let are NOT supported.
+Note: The version of Javascript supported is ES6. Please check for the restrictions regarding this version. The examples in this documentation were written when ES5.1 was the newest version supported, therefore there are no examples with `const` or `let`.
+
+#### There is now support for writing transforms in TypeScript
+Link provideded below to tutorial on how to set up your environment to write transforms in TypeScript.
+
+[Open Mimiro TypeScript post](https://open.mimiro.io/software/typescript/)
 
 Internal transforms can be run in parallel. To do this include an attribute on the transform called `Parallelism` whose value is an integer. e.g. 10 to run the transform in parallel.
 
@@ -819,9 +832,16 @@ Example Job Definition:
 
 ```json
 {
+    "title" : "test-internal-transform",
     "id" : "sync-datasetsource-to-datasetsink-with-js",
-    "incrementalSchedule" : "@every 2s",
     "runOnce" : true,
+    "triggers": [
+    {
+      "triggerType": "onchange",
+      "jobType": "incremental",
+      "monitoredDataset": "Products"
+    }
+    ],
     "source" : {
         "Type" : "DatasetSource",
         "Name" : "Products"
