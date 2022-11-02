@@ -24,6 +24,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/mimiro-io/datahub/internal/server"
+	ent "github.com/mimiro-io/datahub/internal/service/entity"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
@@ -48,6 +49,7 @@ type Query struct {
 	Predicate        string   `json:"predicate"`
 	Inverse          bool     `json:"inverse"`
 	Datasets         []string `json:"datasets"`
+	Details          bool     `json:"details"`
 }
 
 type NamespacePrefix struct {
@@ -60,15 +62,17 @@ type EmptyEntity struct {
 }
 
 type queryHandler struct {
-	store  *server.Store
-	logger *zap.SugaredLogger
+	store          *server.Store
+	datasetManager *server.DsManager
+	logger         *zap.SugaredLogger
 }
 
-func NewQueryHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, store *server.Store) {
+func NewQueryHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, store *server.Store, datasetManager *server.DsManager) {
 	log := logger.Named("web")
 	handler := &queryHandler{
-		store:  store,
-		logger: log,
+		store:          store,
+		datasetManager: datasetManager,
+		logger:         log,
 	}
 
 	lc.Append(fx.Hook{
@@ -133,6 +137,11 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 			entity.Id = query.EntityId
 			result[1] = entity
 		} else {
+			if query.Details {
+				l, _ := ent.NewLookup(server.NewBadgerAccess(handler.store, handler.datasetManager))
+				details, _ := l.Details(query.EntityId, query.Datasets)
+				entity.Properties["datahub_details"] = details
+			}
 			result[1] = entity
 		}
 
