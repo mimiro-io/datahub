@@ -19,11 +19,11 @@ func NewLookup(s store.BadgerStore) (Lookup, error) {
 	return Lookup{s, ns}, nil
 }
 
-// Details retrieves a nested map structure with information about all datasets that contain entities with the given entity ID
+//Details retrieves a nested map structure with information about all datasets that contain entities with the given entity ID
 // The optional datasetNames parameter allows to narrow down in which datasets the function searches
 //
 // The result map has the following shape
-// ```
+//
 //
 //	{
 //	    "dataset1": {
@@ -41,7 +41,6 @@ func NewLookup(s store.BadgerStore) (Lookup, error) {
 //	    },
 //	}
 //
-// ```
 func (l Lookup) Details(id string, datasetNames []string) (map[string]interface{}, error) {
 	curie, err := l.asCURIE(id)
 	if err != nil {
