@@ -19,6 +19,12 @@ import (
 	"github.com/mimiro-io/datahub/internal/service/types"
 )
 
+type LegacyNamespaceAccess interface {
+	// need access ot in-memory mapping
+	LookupNamespaceExpansion(prefix types.Prefix) (types.URI, error)
+	LookupExpansionPrefix(input types.URI) (types.Prefix, error)
+}
+
 type BadgerStore interface {
 	GetDB() *badger.DB
 	LookupDatasetID(datasetName string) (types.InternalDatasetID, bool)
@@ -26,7 +32,6 @@ type BadgerStore interface {
 	LookupDatasetName(internalDatasetID types.InternalDatasetID) (string, bool)
 
 	// need access ot in-memory mapping
-	LookupNamespaceExpansion(prefix types.Prefix) (types.URI, error)
-	LookupExpansionPrefix(input types.URI) (types.Prefix, error)
 	IsDatasetDeleted(datasetId types.InternalDatasetID) bool
+	LegacyNamespaceAccess
 }

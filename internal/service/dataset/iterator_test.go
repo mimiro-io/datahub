@@ -23,6 +23,7 @@ import (
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/server"
 	ds "github.com/mimiro-io/datahub/internal/service/dataset"
+	"github.com/mimiro-io/datahub/internal/service/types"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
 	"os"
@@ -84,7 +85,7 @@ func TestDatasetIterator(t *testing.T) {
 			it, err := dataset.At(0)
 			g.Assert(err).IsNil()
 			g.Assert(it.Error()).IsNil()
-			var continuationToken uint64 = 0
+			var continuationToken types.DatasetOffset = 0
 			var foundIds []string
 			for it.Next() {
 				jsonData := it.Item()
@@ -97,7 +98,7 @@ func TestDatasetIterator(t *testing.T) {
 			it.Close()
 			g.Assert(it.Error()).IsNil()
 			g.Assert(foundIds).Equal([]string{"I", "II", "III", "IV"})
-			g.Assert(continuationToken).Equal(uint64(4))
+			g.Assert(continuationToken).Equal(types.DatasetOffset(4))
 		})
 		g.It("should be able to create a 3 offset", func() {
 			dataset, err := ds.Of(server.NewBadgerAccess(store, dsm), ds1.ID)
@@ -105,7 +106,7 @@ func TestDatasetIterator(t *testing.T) {
 			it, err := dataset.At(3)
 			g.Assert(err).IsNil()
 			g.Assert(it.Error()).IsNil()
-			var continuationToken uint64 = 0
+			var continuationToken types.DatasetOffset = 0
 			var foundIds []string
 			for it.Next() {
 				jsonData := it.Item()
@@ -118,7 +119,7 @@ func TestDatasetIterator(t *testing.T) {
 			it.Close()
 			g.Assert(it.Error()).IsNil()
 			g.Assert(foundIds).Equal([]string{"IV"})
-			g.Assert(continuationToken).Equal(uint64(4))
+			g.Assert(continuationToken).Equal(types.DatasetOffset(4))
 		})
 		g.It("should produce correct nextOffsets", func() {
 			dataset, err := ds.Of(server.NewBadgerAccess(store, dsm), ds1.ID)
@@ -126,7 +127,7 @@ func TestDatasetIterator(t *testing.T) {
 			it, err := dataset.At(0)
 			g.Assert(err).IsNil()
 			g.Assert(it.Error()).IsNil()
-			var continuationToken uint64 = 0
+			var continuationToken types.DatasetOffset = 0
 			var foundIds []string
 			for it.Next() {
 				jsonData := it.Item()
@@ -142,7 +143,7 @@ func TestDatasetIterator(t *testing.T) {
 			it.Close()
 			g.Assert(it.Error()).IsNil()
 			g.Assert(foundIds).Equal([]string{"I", "II"})
-			g.Assert(continuationToken).Equal(uint64(2))
+			g.Assert(continuationToken).Equal(types.DatasetOffset(2))
 
 			it, err = dataset.At(continuationToken)
 			foundIds = []string{}
@@ -157,7 +158,7 @@ func TestDatasetIterator(t *testing.T) {
 			it.Close()
 			g.Assert(it.Error()).IsNil()
 			g.Assert(foundIds).Equal([]string{"III", "IV"})
-			g.Assert(continuationToken).Equal(uint64(4))
+			g.Assert(continuationToken).Equal(types.DatasetOffset(4))
 		})
 		g.It("should be able to create a 4 offset", func() {
 			dataset, err := ds.Of(server.NewBadgerAccess(store, dsm), ds1.ID)
@@ -167,7 +168,7 @@ func TestDatasetIterator(t *testing.T) {
 			g.Assert(it.Next()).IsFalse("nothing found")
 			it.Close()
 			g.Assert(it.Error()).IsNil()
-			g.Assert(it.NextOffset()).Equal(uint64(4))
+			g.Assert(it.NextOffset()).Equal(types.DatasetOffset(4))
 		})
 		g.It("should not fail for too large offset, but emit nothing", func() {
 			dataset, err := ds.Of(server.NewBadgerAccess(store, dsm), ds1.ID)
@@ -177,7 +178,7 @@ func TestDatasetIterator(t *testing.T) {
 			g.Assert(it.Next()).IsFalse("nothing found")
 			it.Close()
 			g.Assert(it.Error()).IsNil()
-			g.Assert(it.NextOffset()).Equal(uint64(5))
+			g.Assert(it.NextOffset()).Equal(types.DatasetOffset(5))
 		})
 		g.It("should list inverse changes from 0", func() {
 			g.Timeout(1 * time.Hour)
@@ -187,7 +188,7 @@ func TestDatasetIterator(t *testing.T) {
 			g.Assert(err).IsNil()
 			it = it.Inverse()
 			g.Assert(it.Error()).IsNil()
-			var continuationToken uint64 = 0
+			var continuationToken types.DatasetOffset = 0
 			var foundIds []string
 			for it.Next() {
 				jsonData := it.Item()
@@ -200,7 +201,7 @@ func TestDatasetIterator(t *testing.T) {
 			it.Close()
 			g.Assert(it.Error()).IsNil()
 			g.Assert(foundIds).Equal([]string{"IV", "III", "II", "I"})
-			g.Assert(continuationToken).Equal(uint64(0))
+			g.Assert(continuationToken).Equal(types.DatasetOffset(0))
 		})
 		g.It("should produce correct inverse nextOffsets", func() {
 			dataset, err := ds.Of(server.NewBadgerAccess(store, dsm), ds1.ID)
@@ -209,7 +210,7 @@ func TestDatasetIterator(t *testing.T) {
 			it = it.Inverse()
 			g.Assert(err).IsNil()
 			g.Assert(it.Error()).IsNil()
-			var continuationToken uint64 = 0
+			var continuationToken types.DatasetOffset = 0
 			var foundIds []string
 			for it.Next() {
 				jsonData := it.Item()
@@ -225,7 +226,7 @@ func TestDatasetIterator(t *testing.T) {
 			it.Close()
 			g.Assert(it.Error()).IsNil()
 			g.Assert(foundIds).Equal([]string{"IV", "III"})
-			g.Assert(continuationToken).Equal(uint64(2))
+			g.Assert(continuationToken).Equal(types.DatasetOffset(2))
 
 			it, err = dataset.At(continuationToken)
 			it = it.Inverse()
@@ -241,7 +242,7 @@ func TestDatasetIterator(t *testing.T) {
 			it.Close()
 			g.Assert(it.Error()).IsNil()
 			g.Assert(foundIds).Equal([]string{"II", "I"})
-			g.Assert(continuationToken).Equal(uint64(0))
+			g.Assert(continuationToken).Equal(types.DatasetOffset(0))
 		})
 
 	})

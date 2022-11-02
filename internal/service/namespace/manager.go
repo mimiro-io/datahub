@@ -22,7 +22,7 @@ type (
 	}
 
 	BadgerManager struct {
-		store store.BadgerStore
+		store store.LegacyNamespaceAccess
 	}
 )
 
@@ -42,7 +42,7 @@ func (m BadgerManager) ExtractNamespaceURI(input string) (types.URI, string, boo
 	if strings.HasPrefix(input, "http") {
 		cutPosition := strings.LastIndex(input, "/")
 		ns := input[:cutPosition]
-		value := input[cutPosition:]
+		value := input[cutPosition+1:]
 		return types.URI(ns), value, true
 	}
 	return "", "", false
@@ -52,6 +52,6 @@ func (m BadgerManager) GetNamespacePrefix(input types.URI) (types.Prefix, error)
 	return m.store.LookupExpansionPrefix(input)
 }
 
-func NewManager(s store.BadgerStore) Manager {
+func NewManager(s store.LegacyNamespaceAccess) Manager {
 	return BadgerManager{s}
 }

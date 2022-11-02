@@ -7,11 +7,12 @@ import (
 	"github.com/mimiro-io/datahub/internal/service/store"
 	"github.com/mimiro-io/datahub/internal/service/types"
 	"github.com/pkg/errors"
+	"strings"
 )
 
 func (l Lookup) asCURIE(id string) (types.CURIE, error) {
 
-	if prefix, ok := l.namespaces.ExtractPrefix(id); ok {
+	if prefix, ok := l.namespaces.ExtractPrefix(id); ok && !strings.HasPrefix(id, "http") {
 		if _, err := l.namespaces.ExpandPrefix(prefix); err == nil {
 			return types.CURIE(id), nil
 		} else {
@@ -25,7 +26,7 @@ func (l Lookup) asCURIE(id string) (types.CURIE, error) {
 			return "", err
 		}
 	}
-	return "", fmt.Errorf("input %v is neither in CURIE format (prefix:value) nor a URI")
+	return "", fmt.Errorf("input %v is neither in CURIE format (prefix:value) nor a URI", id)
 }
 
 func (l Lookup) internalIdForCURIE(txn *badger.Txn, curie types.CURIE) (types.InternalID, error) {
