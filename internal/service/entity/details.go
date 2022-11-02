@@ -19,6 +19,29 @@ func NewLookup(s store.BadgerStore) (Lookup, error) {
 	return Lookup{s, ns}, nil
 }
 
+// Details retrieves a nested map structure with information about all datasets that contain entities with the given entity ID
+// The optional datasetNames parameter allows to narrow down in which datasets the function searches
+//
+// The result map has the following shape
+// ```
+//
+//	{
+//	    "dataset1": {
+//	        "changes": [
+//	            "{\"id\":\"ns3:3\",\"internalId\":8,\"recorded\":1662648998417816245,\"refs\":{},\"props\":{\"ns3:name\":\"Frank\"}}"
+//	        ],
+//	        "latest": "{\"id\":\"ns3:3\",\"internalId\":8,\"recorded\":1662648998417816245,\"refs\":{},\"props\":{\"ns3:name\":\"Frank\"}}"
+//	    },
+//	    "dataset2": {
+//	        "changes": [
+//	            "{\"id\":\"ns3:3\",\"internalId\":8,\"recorded\":1663074960494865060,\"refs\":{},\"props\":{\"ns3:name\":\"Frank\"}}",
+//	            "{\"id\":\"ns3:3\",\"internalId\":8,\"recorded\":1663075373488961084,\"refs\":{},\"props\":{\"ns3:name\":\"Frank\",\"ns4:extra\":{\"refs\":{},\"props\":{}}}}"
+//	        ],
+//	        "latest": "{\"id\":\"ns3:3\",\"internalId\":8,\"recorded\":1663075373488961084,\"refs\":{},\"props\":{\"ns3:name\":\"Frank\",\"ns4:extra\":{\"refs\":{},\"props\":{}}}}"
+//	    },
+//	}
+//
+// ```
 func (l Lookup) Details(id string, datasetNames []string) (map[string]interface{}, error) {
 	curie, err := l.asCURIE(id)
 	if err != nil {
@@ -43,13 +66,6 @@ func (l Lookup) Details(id string, datasetNames []string) (map[string]interface{
 
 func (l Lookup) loadDetails(rtxn *badger.Txn, internalEntityId types.InternalID, scope []types.InternalDatasetID) (map[string]interface{}, error) {
 	result := map[string]interface{}{}
-	/*
-		binary.BigEndian.PutUint16(entityIdBuffer, ENTITY_ID_TO_JSON_INDEX_ID)
-		binary.BigEndian.PutUint64(entityIdBuffer[2:], rid)
-		binary.BigEndian.PutUint32(entityIdBuffer[10:], ds.InternalID)
-		binary.BigEndian.PutUint64(entityIdBuffer[14:], uint64(txnTime))
-		binary.BigEndian.PutUint16(entityIdBuffer[22:], uint16(jsonLength))
-	*/
 
 	opts1 := badger.DefaultIteratorOptions
 	opts1.PrefetchValues = false
