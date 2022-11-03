@@ -77,7 +77,7 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 	}
 	syncJobState.ContinuationToken = ""
 
-	tags := []string{"application:datahub", "job:" + job.id}
+	tags := []string{"application:datahub", "job:" + job.title}
 	for keepReading {
 
 		processEntities := func(entities []*server.Entity, continuationToken jobSource.DatasetContinuation) error {
@@ -95,7 +95,7 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 					// apply transform if it exists
 					if pipeline.transform != nil {
 						transformTs := time.Now()
-						entities, err = pipeline.transform.transformEntities(runner, entities, job.id)
+						entities, err = pipeline.transform.transformEntities(runner, entities, job.title)
 						_ = runner.statsdClient.Timing("pipeline.transform.batch", time.Since(transformTs), tags, 1)
 						if err != nil {
 							return err
@@ -187,7 +187,7 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 
 	keepReading := true
 
-	tags := []string{"application:datahub", "job:" + job.id}
+	tags := []string{"application:datahub", "job:" + job.title}
 	for keepReading {
 
 		processEntities := func(entities []*server.Entity, continuationToken jobSource.DatasetContinuation) error {
@@ -219,11 +219,11 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 							if reflect.TypeOf(pipeline.transform) == reflect.TypeOf(&JavascriptTransform{}) {
 								t := pipeline.transform.(*JavascriptTransform)
 								tc, _ := t.Clone()
-								pe, e := tc.transformEntities(runner, lentities, job.id)
+								pe, e := tc.transformEntities(runner, lentities, job.title)
 								res.entities = pe
 								res.err = e
 							} else {
-								pe, e := pipeline.transform.transformEntities(runner, lentities, job.id)
+								pe, e := pipeline.transform.transformEntities(runner, lentities, job.title)
 								res.entities = pe
 								res.err = e
 							}
