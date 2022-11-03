@@ -38,12 +38,16 @@ func (m BadgerManager) ExpandPrefix(input types.Prefix) (types.URI, error) {
 	return m.store.LookupNamespaceExpansion(input)
 }
 
+//ExtractNamespaceURI split given URI into namespace and value
+//  returns (
+//    namespaceURI with trailing slash,
+//    value (last path element),
+//    success flag
+//   )
 func (m BadgerManager) ExtractNamespaceURI(input string) (types.URI, string, bool) {
 	if strings.HasPrefix(input, "http") {
-		cutPosition := strings.LastIndex(input, "/")
-		ns := input[:cutPosition]
-		value := input[cutPosition+1:]
-		return types.URI(ns), value, true
+		cutPosition := strings.LastIndex(input, "/") + 1
+		return types.URI(input[:cutPosition]), input[cutPosition:], true
 	}
 	return "", "", false
 }
