@@ -160,6 +160,7 @@ func TestEvents(t *testing.T) {
 			})
 			sj, err := scheduler.Parse([]byte((`{
 				"id" : "job1",
+				"title" : "job1",
 				"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
 				"paused": true,
 				"source" : {
@@ -200,6 +201,7 @@ func TestEvents(t *testing.T) {
 			//setup job
 			sj, err := scheduler.Parse([]byte((`{
 				"id" : "job1",
+				"title" : "job1",
 				"triggers": [{"triggerType": "onchange", "jobType": "incremental", "monitoredDataset": "people"}],
 				"source" : {
 					"Type" : "DatasetSource",
@@ -233,6 +235,7 @@ func TestEvents(t *testing.T) {
 		g.It("Should deregister an onChange job when it's triggerType is changed", func() {
 			sj, err := scheduler.Parse([]byte((`{
 				"id" : "job1",
+				"title" : "job1",
 				"triggers": [{"triggerType": "onchange", "jobType": "incremental", "monitoredDataset": "people"}],
 				"source" : { "Type" : "SampleSource" },
 				"sink" : { "Type" : "ConsoleSink" }
@@ -247,6 +250,7 @@ func TestEvents(t *testing.T) {
 
 			sj, err = scheduler.Parse([]byte((`{
 				"id" : "job1",
+				"title" : "job1",
 				"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 24h"}],
 				"source" : { "Type" : "SampleSource" },
 				"sink" : { "Type" : "ConsoleSink" }

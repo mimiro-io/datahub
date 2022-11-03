@@ -703,14 +703,20 @@ func TestScheduler(t *testing.T) {
 				g.Assert(err).Eql(errors.New("job configuration needs an id"))
 			})
 
-			g.It("Should fail if source is missing", func() {
+			g.It("Should fail if title is missing", func() {
 				err := scheduler.AddJob(&JobConfiguration{Id: "x"})
+				g.Assert(err).Eql(errors.New("job configuration needs a title"))
+			})
+
+			g.It("Should fail if source is missing", func() {
+				err := scheduler.AddJob(&JobConfiguration{Id: "x", Title: "x"})
 				g.Assert(err).Eql(errors.New("you must configure a source"))
 			})
 
 			g.It("Should fail if sink is missing", func() {
 				err := scheduler.AddJob(&JobConfiguration{
 					Id:     "x",
+					Title:  "x",
 					Source: validSource,
 				})
 				g.Assert(err).Eql(errors.New("you must configure a sink"))
@@ -719,6 +725,7 @@ func TestScheduler(t *testing.T) {
 			g.It("Should fail if TriggerType is missing", func() {
 				err := scheduler.AddJob(&JobConfiguration{
 					Id:       "x",
+					Title:    "x",
 					Triggers: []JobTrigger{{}},
 					Source:   validSource,
 					Sink:     validSink,
@@ -727,7 +734,7 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if JobType is missing", func() {
-				err := scheduler.AddJob(&JobConfiguration{Id: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{Id: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeCron},
 					},
@@ -736,7 +743,7 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if trigger type is unknown", func() {
-				err := scheduler.AddJob(&JobConfiguration{Id: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{Id: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: "foo"},
 					},
@@ -744,7 +751,7 @@ func TestScheduler(t *testing.T) {
 				g.Assert(err).Eql(errors.New("need to set 'triggerType'. must be one of: cron, onchange"))
 			})
 			g.It("Should fail if sync type is unknown", func() {
-				err := scheduler.AddJob(&JobConfiguration{Id: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{Id: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeCron, JobType: "foo"},
 					},
@@ -753,7 +760,7 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if schedule is missing", func() {
-				err := scheduler.AddJob(&JobConfiguration{Id: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{Id: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeCron, JobType: JobTypeIncremental},
 					},
@@ -763,7 +770,7 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if source is unknown type", func() {
-				err := scheduler.AddJob(&JobConfiguration{Id: "x",
+				err := scheduler.AddJob(&JobConfiguration{Id: "x", Title: "x",
 					Source: map[string]interface{}{"Type": "foo"},
 					Sink:   validSink,
 					Triggers: []JobTrigger{
@@ -774,7 +781,7 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if sink is unknown type", func() {
-				err := scheduler.AddJob(&JobConfiguration{Id: "x", Source: validSource,
+				err := scheduler.AddJob(&JobConfiguration{Id: "x", Title: "x", Source: validSource,
 					Sink: map[string]interface{}{"Type": "foo"},
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeCron, JobType: JobTypeIncremental, Schedule: "@midnight"},
@@ -784,7 +791,7 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if transform is unknown type", func() {
-				err := scheduler.AddJob(&JobConfiguration{Id: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{Id: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeOnChange, JobType: JobTypeIncremental, MonitoredDataset: "foo"},
 					},
@@ -794,7 +801,7 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if job type is 'event', but schedule is set", func() {
-				err := scheduler.AddJob(&JobConfiguration{Id: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{Id: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeOnChange, JobType: JobTypeIncremental, Schedule: "@midnight"},
 					},
@@ -803,7 +810,7 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if schedule is not parsable", func() {
-				err := scheduler.AddJob(&JobConfiguration{Id: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{Id: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeCron, JobType: JobTypeIncremental, Schedule: "midnight"},
 					},

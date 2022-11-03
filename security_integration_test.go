@@ -535,6 +535,7 @@ func TestNodeSecurity(t *testing.T) {
 			// upload job to access remote (loopback) dataset
 			jobJson := `{
 			"id" : "sync-from-remote-dataset-with-node-provider",
+			"title" : "sync-from-remote-dataset-with-node-provider",
 			"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
 			"source" : {
 				"Type" : "HttpDatasetSource",
