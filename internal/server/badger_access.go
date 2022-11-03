@@ -14,7 +14,11 @@
 
 package server
 
-import "github.com/dgraph-io/badger/v3"
+import (
+	"fmt"
+	"github.com/dgraph-io/badger/v3"
+	"github.com/mimiro-io/datahub/internal/service/types"
+)
 
 // BadgerAccess implements service/store.BadgerStore and bridges badger access
 // without cyclic dependencies
@@ -23,16 +27,65 @@ type BadgerAccess struct {
 	dsm *DsManager
 }
 
+func (b BadgerAccess) LookupDatasetName(internalDatasetID types.InternalDatasetID) (string, bool) {
+	result := ""
+	b.dsm.store.datasets.Range(func(k interface{}, val interface{}) bool {
+		name := k.(string)
+		ds := val.(*Dataset)
+		if ds.InternalID == uint32(internalDatasetID) {
+			result = name
+			return false
+		}
+		return true
+	})
+	return result, result != ""
+}
+
+func (b BadgerAccess) IsDatasetDeleted(datasetId types.InternalDatasetID) bool {
+	return b.dsm.store.deletedDatasets[uint32(datasetId)]
+}
+
+func (b BadgerAccess) LookupExpansionPrefix(namespaceURI types.URI) (types.Prefix, error) {
+	b.dsm.store.NamespaceManager.lock.Lock()
+	defer b.dsm.store.NamespaceManager.lock.Unlock()
+	if prefix, found := b.dsm.store.NamespaceManager.expansionToPrefixMapping[string(namespaceURI)]; found {
+		return types.Prefix(prefix), nil
+	}
+	return "", fmt.Errorf("prefix mapping for namespace %v not found", namespaceURI)
+}
+
+func (b BadgerAccess) LookupNamespaceExpansion(prefix types.Prefix) (types.URI, error) {
+	b.dsm.store.NamespaceManager.lock.Lock()
+	defer b.dsm.store.NamespaceManager.lock.Unlock()
+	if expansion, found := b.dsm.store.NamespaceManager.prefixToExpansionMapping[string(prefix)]; found {
+		return types.URI(expansion), nil
+	}
+	return "", fmt.Errorf("expansion for prefix %v not found", prefix)
+}
+
+func (b BadgerAccess) LookupDatasetIDs(datasetNames []string) []types.InternalDatasetID {
+	var scopeArray []types.InternalDatasetID
+	if len(datasetNames) > 0 {
+		for _, ds := range datasetNames {
+			dataset, found := b.dsm.store.datasets.Load(ds)
+			if found {
+				scopeArray = append(scopeArray, types.InternalDatasetID(dataset.(*Dataset).InternalID))
+			}
+		}
+	}
+	return scopeArray
+}
+
 func (b BadgerAccess) GetDB() *badger.DB {
 	return b.b
 }
 
-func (b BadgerAccess) LookupDatasetID(datasetName string) (uint32, bool) {
+func (b BadgerAccess) LookupDatasetID(datasetName string) (types.InternalDatasetID, bool) {
 	ds := b.dsm.GetDataset(datasetName)
 	if ds == nil {
 		return 0, false
 	}
-	return ds.InternalID, true
+	return types.InternalDatasetID(ds.InternalID), true
 }
 
 func NewBadgerAccess(s *Store, dsm *DsManager) BadgerAccess {

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"github.com/golang-jwt/jwt"
 	"github.com/mimiro-io/datahub/internal/security"
+	"github.com/mimiro-io/datahub/internal/service/types"
 	"io"
 	"net/http"
 	"net/url"
@@ -404,7 +405,7 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 			if err != nil {
 				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 			}
-			it, err := of.At(sinceNum)
+			it, err := of.At(types.DatasetOffset(sinceNum))
 			if err != nil {
 				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 			}
@@ -430,7 +431,7 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 				_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + encodeSince(continuationToken) + "\"}]"))
 			}
 		} else {
-			continuationToken, err := dataset.ProcessChangesRaw(sinceNum, l, false, func(jsonData []byte) error {
+			continuationToken, err := dataset.ProcessChangesRaw(uint64(sinceNum), l, false, func(jsonData []byte) error {
 				_, _ = c.Response().Write([]byte(","))
 				_, _ = c.Response().Write(jsonData)
 				return nil
@@ -438,7 +439,7 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 			if err != nil {
 				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 			}
-			_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + encodeSince(continuationToken) + "\"}]"))
+			_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + encodeSince(types.DatasetOffset(continuationToken)) + "\"}]"))
 		}
 	}
 	// write the continuation token and end the array of entities
@@ -531,7 +532,7 @@ func (handler *datasetHandler) processEntities(c echo.Context, datasetName strin
 	return c.NoContent(http.StatusOK)
 }
 
-func decodeSince(since string) (uint64, error) {
+func decodeSince(since string) (types.DatasetOffset, error) {
 	if since == "" {
 		return 0, nil
 	} else {
@@ -543,11 +544,11 @@ func decodeSince(since string) (uint64, error) {
 		if err != nil {
 			return 0, err
 		}
-		return sinceNum, nil
+		return types.DatasetOffset(sinceNum), nil
 	}
 }
 
-func encodeSince(since uint64) string {
-	continuationString := strconv.FormatUint(since, 10)
+func encodeSince(since types.DatasetOffset) string {
+	continuationString := strconv.FormatUint(uint64(since), 10)
 	return base64.StdEncoding.EncodeToString([]byte(continuationString))
 }

@@ -16,6 +16,8 @@ package datahub
 
 import (
 	"context"
+	"time"
+
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/conf/secrets"
 	"github.com/mimiro-io/datahub/internal/content"
@@ -24,7 +26,6 @@ import (
 	"github.com/mimiro-io/datahub/internal/server"
 	"github.com/mimiro-io/datahub/internal/web"
 	"go.uber.org/fx"
-	"time"
 )
 
 func wire() *fx.App {

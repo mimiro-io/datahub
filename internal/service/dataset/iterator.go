@@ -17,6 +17,7 @@ package dataset
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/mimiro-io/datahub/internal/service/types"
 	"io"
 
 	"github.com/dgraph-io/badger/v3"
@@ -25,12 +26,12 @@ import (
 )
 
 type IterableDataset interface {
-	At(since uint64) (Iterator, error)
+	At(since types.DatasetOffset) (Iterator, error)
 }
 
 type IterableBadgerDataset struct {
 	db        *badger.DB
-	datasetID uint32
+	datasetID types.InternalDatasetID
 }
 type Iterator interface {
 	io.Closer
@@ -38,7 +39,7 @@ type Iterator interface {
 	LatestOnly() Iterator
 	Next() bool
 	Item() []byte
-	NextOffset() uint64
+	NextOffset() types.DatasetOffset
 	Error() error
 }
 type BadgerDatasetIterator struct {
@@ -46,11 +47,11 @@ type BadgerDatasetIterator struct {
 	err            error
 	txn            *badger.Txn
 	it             *badger.Iterator
-	datasetID      uint32
-	startingOffset uint64
+	datasetID      types.InternalDatasetID
+	startingOffset types.DatasetOffset
 	datasetPrefix  []byte
 	item           []byte
-	offset         uint64
+	offset         types.DatasetOffset
 	inverse        bool
 	latestOnly     bool
 }
@@ -71,7 +72,7 @@ func (b *BadgerDatasetIterator) Inverse() Iterator {
 	}
 	b.inverse = true
 	if b.startingOffset == 0 {
-		b.startingOffset = uint64(18446744073709551615) // max value, 0xFF,0xFF,0xFF,0xFF
+		b.startingOffset = types.DatasetOffset(18446744073709551615) // max value, 0xFF,0xFF,0xFF,0xFF
 	}
 	return b
 }
@@ -93,7 +94,7 @@ func (b *BadgerDatasetIterator) Next() bool {
 	if b.it.ValidForPrefix(b.datasetPrefix) {
 		item := b.it.Item()
 		k := item.Key()
-		b.offset = binary.BigEndian.Uint64(k[6:])
+		b.offset = types.DatasetOffset(binary.BigEndian.Uint64(k[6:]))
 		err := item.Value(func(key []byte) error {
 			entityItem, err := b.txn.Get(key)
 			if err != nil {
@@ -134,7 +135,7 @@ func (b *BadgerDatasetIterator) Item() []byte {
 	return b.item
 }
 
-func (b *BadgerDatasetIterator) NextOffset() uint64 {
+func (b *BadgerDatasetIterator) NextOffset() types.DatasetOffset {
 	if b.item == nil {
 		return b.startingOffset
 	}
@@ -148,7 +149,7 @@ func (b *BadgerDatasetIterator) Error() error {
 	return b.err
 }
 
-func (d IterableBadgerDataset) At(since uint64) (Iterator, error) {
+func (d IterableBadgerDataset) At(since types.DatasetOffset) (Iterator, error) {
 	return &BadgerDatasetIterator{
 		db:             d.db,
 		datasetID:      d.datasetID,
