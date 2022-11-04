@@ -2,10 +2,11 @@ package entity
 
 import (
 	"errors"
+	"testing"
+
 	"github.com/franela/goblin"
 	"github.com/mimiro-io/datahub/internal/service/namespace"
 	"github.com/mimiro-io/datahub/internal/service/types"
-	"testing"
 )
 
 type nsMock struct{}
@@ -18,7 +19,7 @@ func (n nsMock) LookupNamespaceExpansion(prefix types.Prefix) (types.URI, error)
 }
 
 func (n nsMock) LookupExpansionPrefix(input types.URI) (types.Prefix, error) {
-	if input == "http://foo" {
+	if input == "http://foo/" {
 		return "foo", nil
 	}
 
