@@ -86,9 +86,11 @@ func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 		SecurityStorageLocation: viper.GetString("SECURITY_STORAGE_LOCATION"),
 		BackupSourceLocation:    viper.GetString("BACKUP_SOURCE_LOCATION"),
 		RunnerConfig: &RunnerConfig{
-			PoolIncremental: viper.GetInt("JOBS_MAX_INCREMENTAL"),
-			PoolFull:        viper.GetInt("JOBS_MAX_FULLSYNC"),
-			Concurrent:      1,
+			PoolIncremental:      viper.GetInt("JOBS_MAX_INCREMENTAL"),
+			PoolFull:             viper.GetInt("JOBS_MAX_FULLSYNC"),
+			Concurrent:           1,
+			JobQueueConcurrency:  viper.GetInt("JOBS_QUEUE_SIZE"),
+			TaskQueueConcurrency: viper.GetInt("JOBS_TASK_QUEUE_SIZE"),
 		},
 	}, nil
 }
@@ -143,6 +145,8 @@ func parseEnv(basePath *string, logger *zap.SugaredLogger, loadFromHome bool) er
 	viper.SetDefault("SECURITY_STORAGE_LOCATION", fmt.Sprintf("%s/%s", home, "datahubsecurity"))
 	viper.SetDefault("JOBS_MAX_INCREMENTAL", 10)
 	viper.SetDefault("JOBS_MAX_FULLSYNC", 10)
+	viper.SetDefault("JOBS_QUEUE_SIZE", 10)
+	viper.SetDefault("JOBS_TASK_QUEUE_SIZE", 10)
 	viper.AutomaticEnv()
 
 	viper.SetConfigType("env")

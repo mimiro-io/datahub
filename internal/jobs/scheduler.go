@@ -117,8 +117,8 @@ func NewScheduler(lc fx.Lifecycle, env *conf.Env, p SchedulerParams) *Scheduler 
 		OnStart: func(ctx context.Context) error {
 			s.Logger.Infof("Starting the JobScheduler")
 			runnerV2 := scheduler.NewJobRunner(
-				scheduler.NewJobScheduler(env.Logger, "jobs", s.storeV2, 10),
-				scheduler.NewTaskScheduler(env.Logger, "tasks", s.storeV2, 10),
+				scheduler.NewJobScheduler(env.Logger, "jobs", s.storeV2, int32(env.RunnerConfig.JobQueueConcurrency)),
+				scheduler.NewTaskScheduler(env.Logger, "tasks", s.storeV2, int32(env.RunnerConfig.TaskQueueConcurrency)),
 				s.Runner.statsdClient)
 			s.runnerV2 = runnerV2
 			for _, j := range s.loadConfigurations() {
