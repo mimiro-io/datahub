@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -72,19 +73,36 @@ func (d *ProxyDataset) StreamEntitiesRaw(from string, limit int, f func(jsonData
 		q.Add("limit", strconv.Itoa(limit))
 	}
 	uri.RawQuery = q.Encode()
-	fullUri := uri.String()
-	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "GET", fullUri, nil)
-	if err != nil {
-		return "", err
-	}
-	d.auth(req)
-	res, err := http.DefaultClient.Do(req)
+	//fullUri := uri.String()
+
+	// set up our request
+	req, err := http.NewRequest("GET", uri.String(), nil) //
 	if err != nil {
 		return "", err
 	}
 
+	// we add a cancellable context, and makes sure it gets cancelled when we exit
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// set up transport with sane defaults, but with a default content timeout of 0 (infinite)
+	var netTransport = &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout: 5 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout: 5 * time.Second,
+	}
+	var netClient = &http.Client{
+		Transport: netTransport,
+	}
+
+	// do get
+	d.auth(req)
+	res, err := netClient.Do(req.WithContext(ctx))
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
 	if res.StatusCode != 200 {
 		return "", errors.New("Proxy target responded with status " + res.Status)
 	}
@@ -141,18 +159,35 @@ func (d *ProxyDataset) StreamChangesRaw(since string, limit int, reverse bool, f
 		q.Add("reverse", "true")
 	}
 	uri.RawQuery = q.Encode()
-	fullUri := uri.String()
-	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+
+	// set up our request
+	req, err := http.NewRequest("GET", uri.String(), nil) //
+	if err != nil {
+		return "", err
+	}
+
+	// we add a cancellable context, and makes sure it gets cancelled when we exit
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "GET", fullUri, nil)
-	if err != nil {
-		return "", err
+
+	// set up transport with sane defaults, but with a default content timeout of 0 (infinite)
+	var netTransport = &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout: 5 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout: 5 * time.Second,
 	}
+	var netClient = &http.Client{
+		Transport: netTransport,
+	}
+
+	// do get
 	d.auth(req)
-	res, err := http.DefaultClient.Do(req)
+	res, err := netClient.Do(req.WithContext(ctx))
 	if err != nil {
 		return "", err
 	}
+	defer res.Body.Close()
 
 	if res.StatusCode != 200 {
 		return "", errors.New("Proxy target responded with status " + res.Status)
@@ -187,9 +222,25 @@ func (d *ProxyDataset) StreamChangesRaw(since string, limit int, reverse bool, f
 }
 
 func (d *ProxyDataset) ForwardEntities(sourceBody io.ReadCloser, sourceHeader http.Header) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+	req, err := http.NewRequest("POST", d.RemoteEntitiesUrl, sourceBody)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, "POST", d.RemoteEntitiesUrl, sourceBody)
+
+	// set up transport with sane defaults, but with a default content timeout of 0 (infinite)
+	var netTransport = &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout: 5 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout: 5 * time.Second,
+	}
+	var netClient = &http.Client{
+		Transport: netTransport,
+	}
+
 	for k, v := range sourceHeader {
 		if strings.HasPrefix(strings.ToLower(k), "universal-data-api") {
 			for _, val := range v {
@@ -197,7 +248,7 @@ func (d *ProxyDataset) ForwardEntities(sourceBody io.ReadCloser, sourceHeader ht
 			}
 		}
 	}
-	res, err := http.DefaultClient.Do(req)
+	res, err := netClient.Do(req.WithContext(ctx))
 	if err != nil {
 		return err
 	}

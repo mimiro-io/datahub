@@ -45,6 +45,7 @@ func wire() *fx.App {
 			security.NewTokenProviders,
 			jobs.NewRunner,
 			jobs.NewScheduler,
+			jobs.NewDataHubJobStore,
 			content.NewContent,
 			web.NewAuthorizer,
 			web.NewWebServer,

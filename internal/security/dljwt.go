@@ -106,7 +106,7 @@ func (auth0 *JwtBearerProvider) generateOrGetToken() (string, error) {
 }
 
 func (auth0 *JwtBearerProvider) callRemote() (*auth0Response, error) {
-	timeout := 1000 * time.Millisecond
+	timeout := 5000 * time.Millisecond
 	client := httpclient.NewClient(httpclient.WithHTTPTimeout(timeout))
 
 	requestBody, err := json.Marshal(map[string]string{

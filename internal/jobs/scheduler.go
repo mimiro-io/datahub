@@ -19,6 +19,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/lucasepe/codename"
+	"github.com/mimiro-io/internal-go-util/pkg/scheduler"
 	"net/http"
 	"strconv"
 	"strings"
@@ -26,7 +28,6 @@ import (
 
 	"github.com/mimiro-io/datahub/internal/jobs/source"
 
-	"github.com/bamzi/jobrunner"
 	"github.com/robfig/cron/v3"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -44,6 +45,9 @@ type Scheduler struct {
 	Store          *server.Store
 	Runner         *Runner
 	DatasetManager *server.DsManager
+
+	runnerV2 *scheduler.JobRunner
+	storeV2  scheduler.Store
 }
 
 const TriggerTypeCron = "cron"
@@ -88,37 +92,98 @@ type ScheduleEntry struct {
 	Prev     time.Time `json:"prev"`
 }
 
+type SchedulerParams struct {
+	fx.In
+
+	Store    *server.Store
+	Dsm      *server.DsManager
+	Runner   *Runner
+	JobStore scheduler.Store
+}
+
 // NewScheduler returns a new Scheduler. When started, it will load all existing JobConfiguration's from the store,
 // and schedule this with the runner.
-func NewScheduler(lc fx.Lifecycle, env *conf.Env, store *server.Store, dsm *server.DsManager, runner *Runner) *Scheduler {
-	scheduler := &Scheduler{
+func NewScheduler(lc fx.Lifecycle, env *conf.Env, p SchedulerParams) *Scheduler {
+
+	s := &Scheduler{
 		Logger:         env.Logger.Named("scheduler"),
-		Store:          store,
-		Runner:         runner,
-		DatasetManager: dsm,
+		Store:          p.Store,
+		Runner:         p.Runner,
+		DatasetManager: p.Dsm,
+		storeV2:        p.JobStore,
 	}
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			scheduler.Logger.Infof("Starting the JobScheduler")
-
-			for _, j := range scheduler.loadConfigurations() {
-				err := scheduler.AddJob(j)
+			s.Logger.Infof("Starting the JobScheduler")
+			runnerV2 := scheduler.NewJobRunner(
+				scheduler.NewJobScheduler(env.Logger, "jobs", s.storeV2, 10),
+				scheduler.NewTaskScheduler(env.Logger, "tasks", s.storeV2, 10),
+				s.Runner.statsdClient)
+			s.runnerV2 = runnerV2
+			for _, j := range s.loadConfigurations() {
+				err := s.AddJob(j)
 				if err != nil {
-					scheduler.Logger.Warnf("Error loading job with id %s (%s), err: %v", j.Id, j.Title, err)
+					s.Logger.Warnf("Error loading job with id %s (%s), err: %v", j.Id, j.Title, err)
 				}
 			}
 
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
-			scheduler.Logger.Infof("Stopping job runner")
-			runner.Stop()
+			s.Logger.Infof("Stopping job runner")
+			s.Runner.Stop()
 			return nil
 		},
 	})
 
-	return scheduler
+	return s
+}
+
+func (s *Scheduler) toV2(jobConfig *JobConfiguration, jobs []*job) (*scheduler.Job, error) {
+	var runnableJob *job
+	for _, j := range jobs {
+		if !j.isEvent {
+			runnableJob = j
+			break
+		}
+	}
+	if runnableJob == nil {
+		return nil, nil
+	}
+	configV2 := &scheduler.JobConfiguration{
+		Id:              jobConfig.Id,
+		Title:           jobConfig.Title,
+		Version:         scheduler.JobConfigurationVersion2,
+		Description:     jobConfig.Description,
+		Tags:            jobConfig.Tags,
+		Paused:          jobConfig.Paused,
+		BatchSize:       jobConfig.BatchSize,
+		ResumeOnRestart: true, // always resume failed tasks as this is the expected behaviour for now
+		OnError:         []string{"SuccessReport"},
+		OnSuccess:       []string{"SuccessReport"},
+		Schedule:        runnableJob.schedule,
+		Tasks: []*scheduler.TaskConfiguration{
+			{
+				Id:          jobConfig.Id + "-task1",
+				Name:        jobConfig.Title + " Task 1",
+				Description: jobConfig.Description,
+				BatchSize:   jobConfig.BatchSize,
+				DependsOn:   nil,
+			},
+		},
+		DefaultFunc: func(ctx context.Context, task *scheduler.JobTask) error {
+			return runnableJob.pipeline.sync(runnableJob, ctx)
+		},
+	}
+
+	_ = s.storeV2.SaveConfiguration(configV2.Id, configV2)
+	v2job, err := configV2.ToJob()
+	if err != nil {
+		return nil, err
+	}
+
+	return v2job, nil
 }
 
 // AddJob takes an incoming JobConfiguration and stores it in the store
@@ -142,6 +207,14 @@ func (s *Scheduler) AddJob(jobConfig *JobConfiguration) error {
 		return err
 	}
 
+	v2job, err := s.toV2(jobConfig, triggeredJobs)
+	if err != nil {
+		return err
+	}
+	if v2job != nil { // need to deal with cancelling
+		_, _ = s.runnerV2.Schedule(v2job.Schedule, false, v2job)
+	}
+
 	g, _ := errgroup.WithContext(context.Background())
 	g.Go(func() error {
 		// make sure we clear up before adding
@@ -149,12 +222,15 @@ func (s *Scheduler) AddJob(jobConfig *JobConfiguration) error {
 		s.Runner.eventBus.UnsubscribeToDataset(jobConfig.Id)
 		for _, job := range triggeredJobs {
 			if !jobConfig.Paused { // only add the job if it is not paused
-				err := s.Runner.addJob(job)
-				if err != nil {
-					return err
+				if job.isEvent {
+					err := s.Runner.addJob(job)
+					if err != nil {
+						return err
+					}
 				}
+
 			} else {
-				s.Logger.Infof("Job '%s' is currently paused, it will not be started automatically", jobConfig.Title)
+				s.Logger.Infof("Job '%s' is currently paused, it will not be started automatically", jobConfig.Id)
 			}
 		}
 		return nil
@@ -210,6 +286,8 @@ func (s *Scheduler) DeleteJob(jobId string) error {
 		return err
 	}
 
+	err = s.runnerV2.RemoveJob(scheduler.JobId(jobId))
+
 	return nil
 }
 
@@ -250,14 +328,13 @@ func (s *Scheduler) GetScheduleEntries() ScheduleEntries {
 		}
 	}
 
-	se := []ScheduleEntry{}
-	for _, e := range jobrunner.Entries() {
-		jobId := lookup[int(e.ID)]
-		jobTitle := s.resolveJobTitle(jobId)
+	se := make([]ScheduleEntry, 0)
+
+	for _, e := range s.runnerV2.Schedules() {
 		se = append(se, ScheduleEntry{
-			Id:       int(e.ID),
-			JobId:    jobId,
-			JobTitle: jobTitle,
+			Id:       int(e.EntryID),
+			JobId:    string(e.Job.Id),
+			JobTitle: e.Job.Title,
 			Next:     e.Next,
 			Prev:     e.Prev,
 		})
@@ -296,14 +373,17 @@ func (s *Scheduler) GetRunningJobs() []JobStatus {
 // to see if a job is still running, and is currently used by the cli to follow
 // a job run operation.
 func (s *Scheduler) GetRunningJob(jobid string) *JobStatus {
-	runningJob := s.Runner.raffle.runningJob(jobid)
+	runningJob := s.runnerV2.RunningState(scheduler.JobId(jobid))
 	if runningJob == nil {
+		return nil
+	}
+	if runningJob.State != scheduler.WorkerStateRunning {
 		return nil
 	}
 	return &JobStatus{
 		JobId:    jobid,
-		JobTitle: runningJob.title,
-		Started:  runningJob.started,
+		JobTitle: runningJob.JobTitle,
+		Started:  runningJob.Started,
 	}
 
 }
@@ -312,8 +392,20 @@ func (s *Scheduler) GetRunningJob(jobid string) *JobStatus {
 // future this will only return the history of the currently registered jobs.
 // Each job stores its Start and End time, together with the last error if any.
 func (s *Scheduler) GetJobHistory() []*jobResult {
+	items, _ := s.storeV2.ListJobHistory(-1)
 	results := make([]*jobResult, 0)
-	_ = s.Store.IterateObjectsRaw(server.JOB_RESULT_INDEX_BYTES, func(jsonData []byte) error {
+
+	for _, item := range items {
+		results = append(results, &jobResult{
+			Id:        string(item.JobId),
+			Title:     item.Title,
+			Start:     item.Start,
+			End:       item.End,
+			LastError: item.LastError,
+		})
+	}
+
+	/*_ = s.Store.IterateObjectsRaw(server.JOB_RESULT_INDEX_BYTES, func(jsonData []byte) error {
 		jobResult := &jobResult{}
 		err := json.Unmarshal(jsonData, jobResult)
 
@@ -324,7 +416,7 @@ func (s *Scheduler) GetJobHistory() []*jobResult {
 		results = append(results, jobResult)
 
 		return nil
-	})
+	})*/
 	return results
 }
 
@@ -349,6 +441,7 @@ func (s *Scheduler) UnpauseJob(jobid string) error {
 func (s *Scheduler) KillJob(jobid string) {
 	jobTitle := s.resolveJobTitle(jobid)
 	s.Logger.Infof("Attempting to stop job with id %s (%s)", jobid, jobTitle)
+	s.runnerV2.CancelJob(scheduler.JobId(jobid))
 	s.Runner.killJob(jobid)
 }
 
@@ -389,26 +482,42 @@ func (s *Scheduler) RunJob(jobid string, jobType string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	pipeline, err := s.toPipeline(jobConfig, jobType) // this also verifies that it can be parsed, so do this first
 	if err != nil {
 		return "", err
 	}
 
-	job := &job{
+	jobSpec := &job{
 		id:       jobConfig.Id,
 		title:    jobConfig.Title,
 		pipeline: pipeline,
 		runner:   s.Runner,
 	}
+	jobs := make([]*job, 1)
+	jobs[0] = jobSpec
 
-	// is the job running?
-	running := s.Runner.raffle.runningJob(jobConfig.Id)
-	if running != nil {
-		return "", errors.New(fmt.Sprintf("job with id '%s' (%s) already running", jobid, jobConfig.Title))
+	v2job, err := s.toV2(jobConfig, jobs)
+	if err != nil {
+		return "", err
+	}
+	if v2job != nil {
+		err := s.runnerV2.RunJob(context.Background(), v2job)
+		if err != nil {
+			return "", err
+		}
 	}
 
-	// start the job run
-	s.Runner.startJob(job)
+	/*
+
+		// is the job running?
+		running := s.Runner.raffle.runningJob(jobConfig.Id)
+		if running != nil {
+			return "", errors.New(fmt.Sprintf("job with id '%s' (%s) already running", jobid, jobConfig.Title))
+		}
+
+		// start the job run
+		s.Runner.startJob(job)*/
 
 	return jobConfig.Id, nil
 }
@@ -450,7 +559,9 @@ func (s *Scheduler) verify(jobConfiguration *JobConfiguration) error {
 		return errors.New("job configuration needs an id")
 	}
 	if len(jobConfiguration.Title) <= 0 {
-		return errors.New("job configuration needs a title")
+		rng, _ := codename.DefaultRNG()
+		jobConfiguration.Title = codename.Generate(rng, 0)
+		//return errors.New("job configuration needs a title")
 	}
 	for _, config := range s.ListJobs() {
 		if config.Title == jobConfiguration.Title {

@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/mimiro-io/datahub/internal"
+	"github.com/mimiro-io/internal-go-util/pkg/scheduler"
 	"net/http"
 	"os"
 	"reflect"
@@ -52,7 +53,7 @@ func TestEvents(t *testing.T) {
 		var eventBus *server.MEventBus
 		var store *server.Store
 		var dsm *server.DsManager
-		var scheduler *jobs.Scheduler
+		var jobScheduler *jobs.Scheduler
 		var runner *jobs.Runner
 		var mockServer *echo.Echo
 		var peopleDs *server.Dataset
@@ -83,9 +84,14 @@ func TestEvents(t *testing.T) {
 			eventBus = newBus.(*server.MEventBus)
 			dsm = server.NewDsManager(lc, e, store, newBus)
 
-			runner = jobs.NewRunner(
-				e, store, nil, eventBus, &statsd.NoOpClient{})
-			scheduler = jobs.NewScheduler(lc, e, store, dsm, runner)
+			runner = jobs.NewRunner(e, store, nil, eventBus, &statsd.NoOpClient{})
+			p := jobs.SchedulerParams{
+				Store:    store,
+				Dsm:      dsm,
+				Runner:   runner,
+				JobStore: scheduler.NewInMemoryStore(),
+			}
+			jobScheduler = jobs.NewScheduler(lc, e, p)
 
 			var webHander *web.WebHandler
 			webHander, mockServer = web.NewWebServer(lc, e, e.Logger, &statsd.NoOpClient{})
@@ -158,7 +164,7 @@ func TestEvents(t *testing.T) {
 				}
 				wg.Done()
 			})
-			sj, err := scheduler.Parse([]byte((`{
+			sj, err := jobScheduler.Parse([]byte((`{
 				"id" : "job1",
 				"title" : "job1",
 				"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
@@ -173,10 +179,10 @@ func TestEvents(t *testing.T) {
 				}
 			}`)))
 			g.Assert(err).IsNil()
-			err = scheduler.AddJob(sj)
+			err = jobScheduler.AddJob(sj)
 			g.Assert(err).IsNil()
 
-			_, err = scheduler.RunJob(sj.Id, jobs.JobTypeIncremental)
+			_, err = jobScheduler.RunJob(sj.Id, jobs.JobTypeIncremental)
 			g.Assert(err).IsNil()
 			wg.Wait()
 			g.Assert(eventReceived).IsTrue("Should have observed event for people dataset")
@@ -199,7 +205,7 @@ func TestEvents(t *testing.T) {
 			g.Assert(err).IsNil()
 
 			//setup job
-			sj, err := scheduler.Parse([]byte((`{
+			sj, err := jobScheduler.Parse([]byte((`{
 				"id" : "job1",
 				"title" : "job1",
 				"triggers": [{"triggerType": "onchange", "jobType": "incremental", "monitoredDataset": "people"}],
@@ -213,7 +219,7 @@ func TestEvents(t *testing.T) {
 				}
 			}`)))
 			g.Assert(err).IsNil()
-			err = scheduler.AddJob(sj)
+			err = jobScheduler.AddJob(sj)
 			g.Assert(err).IsNil()
 
 			//verify that target is empty before event
@@ -233,7 +239,7 @@ func TestEvents(t *testing.T) {
 		})
 
 		g.It("Should deregister an onChange job when it's triggerType is changed", func() {
-			sj, err := scheduler.Parse([]byte((`{
+			sj, err := jobScheduler.Parse([]byte((`{
 				"id" : "job1",
 				"title" : "job1",
 				"triggers": [{"triggerType": "onchange", "jobType": "incremental", "monitoredDataset": "people"}],
@@ -242,13 +248,13 @@ func TestEvents(t *testing.T) {
 			}`)))
 
 			g.Assert(err).IsNil()
-			err = scheduler.AddJob(sj)
+			err = jobScheduler.AddJob(sj)
 			g.Assert(err).IsNil()
 
 			g.Assert(eventBus.Bus.HandlerKeys()).Eql([]string{"job1"}, "job1 should have a subscription now")
-			g.Assert(len(scheduler.GetScheduleEntries().Entries)).IsZero("there should not be any cron jobs")
+			g.Assert(len(jobScheduler.GetScheduleEntries().Entries)).IsZero("there should not be any cron jobs")
 
-			sj, err = scheduler.Parse([]byte((`{
+			sj, err = jobScheduler.Parse([]byte((`{
 				"id" : "job1",
 				"title" : "job1",
 				"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 24h"}],
@@ -256,11 +262,11 @@ func TestEvents(t *testing.T) {
 				"sink" : { "Type" : "ConsoleSink" }
 			}`)))
 			g.Assert(err).IsNil()
-			err = scheduler.AddJob(sj)
+			err = jobScheduler.AddJob(sj)
 			g.Assert(err).IsNil()
 
 			g.Assert(len(eventBus.Bus.HandlerKeys())).IsZero("job1 should be deregistered")
-			g.Assert(len(scheduler.GetScheduleEntries().Entries)).IsNotZero("there should be a cron job now")
+			g.Assert(len(jobScheduler.GetScheduleEntries().Entries)).IsNotZero("there should be a cron job now")
 		})
 	})
 }

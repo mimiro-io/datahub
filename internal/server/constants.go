@@ -38,6 +38,10 @@ const (
 	CONTENT_INDEX         CollectionIndex = 15
 	STORE_NEXT_DATASET_ID CollectionIndex = 16
 	LOGIN_PROVIDER_INDEX  CollectionIndex = 17
+
+	SCHEDULER_JOB_CONFIG_INDEX CollectionIndex = 18 // we are needing 3 new indexes for the upgraded scheduler
+	SCHEDULER_JOB_STATE_INDEX  CollectionIndex = 19
+	SCHEDULER_JOB_LOG_INDEX    CollectionIndex = 20
 )
 
 var (
@@ -46,6 +50,10 @@ var (
 	CONTENT_INDEX_BYTES         = uint16ToBytes(CONTENT_INDEX)
 	STORE_NEXT_DATASET_ID_BYTES = uint16ToBytes(STORE_NEXT_DATASET_ID)
 	LOGIN_PROVIDER_INDEX_BYTES  = uint16ToBytes(LOGIN_PROVIDER_INDEX)
+
+	SCHEDULER_JOB_CONFIG_INDEX_BYTES = uint16ToBytes(SCHEDULER_JOB_CONFIG_INDEX)
+	SCHEDULER_JOB_STATE_INDEX_BYTES  = uint16ToBytes(SCHEDULER_JOB_STATE_INDEX)
+	SCHEDULER_JOB_LOG_INDEX_BYTES    = uint16ToBytes(SCHEDULER_JOB_LOG_INDEX)
 )
 
 func uint16ToBytes(i CollectionIndex) []byte {
