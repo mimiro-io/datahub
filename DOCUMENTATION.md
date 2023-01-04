@@ -1227,6 +1227,47 @@ function transform_entities(entities) {
     return newEntities;
 }
 ```
+#### ConstructDeleted
+
+When creating new entities, we need to track if the entity in the upstream dataset is marked as deleted or not. To simplify the process the function `ConstructDeleted` is needed.
+Below is an idiomatic use of the `ConstructDeleted`.
+
+```javascript
+function transform_entities(entities) {
+    var entityNS = GetNamespacePrefix("http://data.mimiro.io/data/");
+    var newEntities = [];
+
+    for (e of entities) {
+        var newEntity = NewEntity()
+        newEntity["ID"] = "some_id_1";
+        // for each existing entity check if the entity is deleted
+        if (GetDeleted(e)) {
+            ConstructDeleted(newEntity, rdf, "type", entityNs + ":MyEntityType");
+            results.push(newEntity);
+            continue;
+        }
+        //other code to transform entity if not deleted
+        // add the new entity to the array
+        newEntities.push(newEntity);
+    }
+
+    // return the array of new entities
+    return newEntities;
+}
+```
+
+this will emit an entity with the deleted flag set:
+```json
+{
+  "id": "ns1:some_id_1",
+  "recorded": 0,
+  "deleted": true,
+  "refs": {
+    "ns1:type": "ns2:MyEntityType"
+  },
+  "props": {}
+}
+```
 
 #### AsEntity
 
@@ -1524,7 +1565,7 @@ This can be done with the following:
 ```
 mim provider add -f remote-provider.json
 ```
-Or 
+Or
 a POST to /provider/logins
 ```json
 {
