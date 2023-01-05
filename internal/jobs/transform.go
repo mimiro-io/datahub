@@ -145,10 +145,6 @@ function NewEntityFrom(entity, addType, copyProps, copyRefs){
 	if (addType){
 		let rdf = GetNamespacePrefix("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
 		let type = GetReference(entity, rdf, "type");
-		if (type == null){
-			rdf = GetNamespacePrefix("http://www.w3.org/2000/01/rdf-schema#");
-			type = GetReference(entity, rdf, "type");
-		}
 		if (type != null){
 			AddReference(newEntity, rdf, "type", type)
 		}
