@@ -785,7 +785,7 @@ The following example shows how to configure a job to use an HTTP transform:
 
 ```json
 {
-    "title" : "test-http-transform", 
+    "title" : "test-http-transform",
     "id" : "sync-datasetsource-to-datasetsink-with-js",
     "runOnce" : true,
     "source" : {
@@ -1227,26 +1227,26 @@ function transform_entities(entities) {
     return newEntities;
 }
 ```
-#### ConstructDeleted
+#### NewEntityFrom
 
 When creating new entities, we need to track if the entity in the upstream dataset is marked as deleted or not. To simplify the process the function `ConstructDeleted` is needed.
-Below is an idiomatic use of the `ConstructDeleted`.
+Below is an idiomatic use of the `NewEntityFrom`. We should primarily use `NewEntityFrom` when we create entities in a transform.
+This Function takes 4 parameters:
 
+`NewEntityFrom(originalEntity, addType, addProps, addRefs)` where addType, addProps, addRefs are boolean.
 ```javascript
 function transform_entities(entities) {
     var entityNS = GetNamespacePrefix("http://data.mimiro.io/data/");
     var newEntities = [];
 
     for (e of entities) {
-        var newEntity = NewEntity()
-        newEntity["ID"] = "some_id_1";
+        var newEntity = NewEntityFrom(e, true, false, false)
+        //this will generate a new entity with the id and deleted flag from the original entity (e).
+
         // for each existing entity check if the entity is deleted
-        if (GetDeleted(e)) {
-            ConstructDeleted(newEntity, rdf, "type", entityNs + ":MyEntityType");
-            results.push(newEntity);
-            continue;
+        if (!GetDeleted(newEntity)) {
+            // add your transform code
         }
-        //other code to transform entity if not deleted
         // add the new entity to the array
         newEntities.push(newEntity);
     }
@@ -1256,7 +1256,7 @@ function transform_entities(entities) {
 }
 ```
 
-this will emit an entity with the deleted flag set:
+this will emit an entity with the deleted flag set and type copied:
 ```json
 {
   "id": "ns1:some_id_1",

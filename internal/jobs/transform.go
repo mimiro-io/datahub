@@ -134,12 +134,36 @@ function RemoveProperty(entity, prefix, name){
 	delete entity["Properties"][prefix+":"+name];
 }
 
-function ConstructDeleted(entity, prefix, name, value){
+function NewEntityFrom(entity, addType, copyProps, copyRefs){
 	if (entity === null || entity === undefined) {
 		return;
 	}
-	SetDeleted(entity, true)
-	AddReference(entity, prefix, name, value)
+
+	let newEntity = NewEntity();
+	SetId(newEntity, GetId(entity));
+	SetDeleted(newEntity, GetDeleted(entity));
+	if (addType){
+		let rdf = GetNamespacePrefix("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+		let type = GetReference(entity, rdf, "type");
+		if (type == null){
+			rdf = GetNamespacePrefix("http://www.w3.org/2000/01/rdf-schema#");
+			type = GetReference(entity, rdf, "type");
+		}
+		if (type != null){
+			AddReference(newEntity, rdf, "type", type)
+		}
+	}
+	if (copyProps) {
+		for (const [key, value] of Object.entries(e["Properties"])) {
+			newEntity["Properties"][key] = value;
+		}
+	}
+	if (copyRefs) {
+		for (const [key, value] of Object.entries(e["References"])) {
+			newEntity["References"][key] = value;
+		}
+	}
+	return newEntity;
 }
 `
 
