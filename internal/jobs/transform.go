@@ -150,12 +150,12 @@ function NewEntityFrom(entity, addType, copyProps, copyRefs){
 		}
 	}
 	if (copyProps) {
-		for (const [key, value] of Object.entries(e["Properties"])) {
+		for (const [key, value] of Object.entries(entity["Properties"])) {
 			newEntity["Properties"][key] = value;
 		}
 	}
 	if (copyRefs) {
-		for (const [key, value] of Object.entries(e["References"])) {
+		for (const [key, value] of Object.entries(entity["References"])) {
 			newEntity["References"][key] = value;
 		}
 	}
