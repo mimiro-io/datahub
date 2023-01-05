@@ -1229,7 +1229,7 @@ function transform_entities(entities) {
 ```
 #### NewEntityFrom
 
-When creating new entities, we need to track if the entity in the upstream dataset is marked as deleted or not. To simplify the process the function `ConstructDeleted` is needed.
+When creating new entities, we need to track if the entity in the upstream dataset is marked as deleted or not. To simplify the process the function `NewEntityFrom` is needed.
 Below is an idiomatic use of the `NewEntityFrom`. We should primarily use `NewEntityFrom` when we create entities in a transform.
 This Function takes 4 parameters:
 
