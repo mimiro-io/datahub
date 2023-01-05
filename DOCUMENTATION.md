@@ -1233,10 +1233,9 @@ When creating new entities, we need to track if the entity in the upstream datas
 Below is an idiomatic use of the `NewEntityFrom`. We should primarily use `NewEntityFrom` when we create entities in a transform.
 This Function takes 4 parameters:
 
-`NewEntityFrom(originalEntity, addType, addProps, addRefs)` where addType, addProps, addRefs are boolean.
+`NewEntityFrom(originalEntity, addType, copyProps, copyRefs)` where addType, copyProps, copyRefs are boolean.
 ```javascript
 function transform_entities(entities) {
-    var entityNS = GetNamespacePrefix("http://data.mimiro.io/data/");
     var newEntities = [];
 
     for (e of entities) {
