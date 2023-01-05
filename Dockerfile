@@ -32,6 +32,7 @@ FROM alpine:latest
 RUN apk update
 RUN apk add --upgrade rsync
 RUN apk --no-cache add ca-certificates rsync
+RUN apk upgrade libssl3 libcrypto3
 
 WORKDIR /root/
 
