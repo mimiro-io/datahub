@@ -976,7 +976,7 @@ func (ds *Dataset) ProcessChanges(since uint64, count int, latestOnly bool, proc
 	})
 }
 
-func (ds *Dataset) ProcessChangesRaw(since uint64, count int, latestOnly bool, processChangedEntity func(entityJson []byte) error) (uint64, error) {
+func (ds *Dataset) ProcessChangesRaw(since uint64, limit int, latestOnly bool, processChangedEntity func(entityJson []byte) error) (uint64, error) {
 
 	lastSeen := since
 	foundChanges := false
@@ -1017,7 +1017,7 @@ func (ds *Dataset) ProcessChangesRaw(since uint64, count int, latestOnly bool, p
 				return err
 			}
 
-			if int(processed) == count {
+			if int(processed) == limit {
 				break
 			}
 		}
