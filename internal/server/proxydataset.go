@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package server
 
 import (
@@ -125,7 +126,7 @@ func (d *ProxyDataset) StreamEntitiesRaw(from string, limit int, f func(jsonData
 // a `preStream` function can be provided if StreamChangesRaw is used in a web handler. It allows
 // to leave the http response uncommitted until `f` is called, so that an http error handler
 // still can modify status code while the response is uncommitted
-func (d *ProxyDataset) StreamChangesRaw(since string, limit int, reverse bool, f func(jsonData []byte) error, preStream func()) (string, error) {
+func (d *ProxyDataset) StreamChangesRaw(since string, limit int, latestOnly bool, reverse bool, f func(jsonData []byte) error, preStream func()) (string, error) {
 	uri, err := url.Parse(d.RemoteChangesUrl)
 	if err != nil {
 		return "", err
@@ -140,6 +141,10 @@ func (d *ProxyDataset) StreamChangesRaw(since string, limit int, reverse bool, f
 	if reverse {
 		q.Add("reverse", "true")
 	}
+	if latestOnly {
+		q.Add("latestOnly", "true")
+	}
+
 	uri.RawQuery = q.Encode()
 	fullUri := uri.String()
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)

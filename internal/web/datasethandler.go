@@ -347,6 +347,7 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 	limit := c.QueryParam("limit")
 	since := c.QueryParam("since")
 	reverse := c.QueryParam("reverse") == "true"
+	latestOnly := c.QueryParam("latestOnly") == "true"
 
 	var (
 		l int
@@ -378,7 +379,7 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 	if dataset.IsProxy() {
 		continuationToken, err := dataset.AsProxy(
 			handler.lookupAuth(dataset.ProxyConfig.AuthProviderName),
-		).StreamChangesRaw(since, l, reverse, func(jsonData []byte) error {
+		).StreamChangesRaw(since, l, latestOnly, reverse, func(jsonData []byte) error {
 			_, _ = c.Response().Write([]byte(","))
 			_, _ = c.Response().Write(jsonData)
 			return nil
@@ -431,7 +432,7 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 				_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + encodeSince(continuationToken) + "\"}]"))
 			}
 		} else {
-			continuationToken, err := dataset.ProcessChangesRaw(uint64(sinceNum), l, false, func(jsonData []byte) error {
+			continuationToken, err := dataset.ProcessChangesRaw(uint64(sinceNum), l, latestOnly, func(jsonData []byte) error {
 				_, _ = c.Response().Write([]byte(","))
 				_, _ = c.Response().Write(jsonData)
 				return nil
