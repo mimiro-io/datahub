@@ -150,7 +150,9 @@ type Context struct {
 //
 //	containing namespace mappings for the given list of namespace prefixes
 //	if the give list of given namespace prefixes is empty, all namespace mappings are returned
-func (namespaceManager *NamespaceManager) GetContext(includedNamespaces []string) (context *Context) {
+func (namespaceManager *NamespaceManager) GetContext(
+	includedNamespaces []string,
+) (context *Context) {
 	if len(includedNamespaces) > 0 {
 		filteredPrefixMapping := map[string]string{}
 		for _, expansionURI := range includedNamespaces {
@@ -180,7 +182,9 @@ func (namespaceManager *NamespaceManager) ExpandCurie(curie string) (string, err
 	return "", errors.New("Could not expand curie, unable to find expansion for prefix : " + prefix)
 }
 
-func (namespaceManager *NamespaceManager) GetPrefixMappingForExpansion(uriExpansion string) (string, error) {
+func (namespaceManager *NamespaceManager) GetPrefixMappingForExpansion(
+	uriExpansion string,
+) (string, error) {
 	namespaceManager.lock.Lock()
 	prefix, ok := namespaceManager.expansionToPrefixMapping[uriExpansion]
 	namespaceManager.lock.Unlock()
@@ -197,7 +201,9 @@ func (namespaceManager *NamespaceManager) GetPrefixToExpansionMap() (result map[
 	return
 }
 
-func (namespaceManager *NamespaceManager) AssertPrefixMappingForExpansion(uriExpansion string) (string, error) {
+func (namespaceManager *NamespaceManager) AssertPrefixMappingForExpansion(
+	uriExpansion string,
+) (string, error) {
 	namespaceManager.lock.Lock()
 	defer namespaceManager.lock.Unlock()
 
@@ -225,17 +231,20 @@ type DsNsInfo struct {
 }
 
 func (namespaceManager *NamespaceManager) GetDatasetNamespaceInfo() (DsNsInfo, error) {
-	prefix, err := namespaceManager.GetPrefixMappingForExpansion("http://data.mimiro.io/core/dataset/")
+	prefix, err := namespaceManager.GetPrefixMappingForExpansion(
+		"http://data.mimiro.io/core/dataset/",
+	)
 	if err != nil {
 		return DsNsInfo{}, err
 	}
 
-	return DsNsInfo{DatasetPrefix: prefix, PublicNamespacesKey: prefix + ":publicNamespaces",
-		NameKey: prefix + ":name", ItemsKey: prefix + ":items"}, nil
+	return DsNsInfo{
+		DatasetPrefix: prefix, PublicNamespacesKey: prefix + ":publicNamespaces",
+		NameKey: prefix + ":name", ItemsKey: prefix + ":items",
+	}, nil
 }
 
 func getUrlParts(url string) (string, string, error) {
-
 	index := strings.LastIndex(url, "#")
 	if index > -1 {
 		return url[:index+1], url[index+1:], nil
@@ -269,8 +278,10 @@ func (s *Store) GetNamespacedIdentifierFromUri(val string) (string, error) {
 	return "", errors.New("unable to create namespaced identifier from uri")
 }
 
-func (s *Store) GetNamespacedIdentifier(val string, localNamespaces map[string]string) (string, error) {
-
+func (s *Store) GetNamespacedIdentifier(
+	val string,
+	localNamespaces map[string]string,
+) (string, error) {
 	if val == "" {
 		return "", errors.New("empty value not allowed")
 	}
@@ -342,14 +353,14 @@ func (s *Store) GetGlobalContext() *Context {
 func (s *Store) Open() error {
 	s.logger.Info("Open database")
 	opts := badger.DefaultOptions(s.storeLocation)
-
+	opts.MaxLevels = 8 // make badger run on databases larger than 1.1TB
 	if s.blockCacheSize > 0 {
 		opts.BlockCacheSize = s.blockCacheSize
 	} else {
 		opts.BlockCacheSize = int64(opts.BlockSize) * 1024 * 1024
 	}
 
-	//override default of 2GB (Int.Max)
+	// override default of 2GB (Int.Max)
 	if s.valueLogFileSize > 0 {
 		opts.ValueLogFileSize = s.valueLogFileSize
 	}
@@ -563,7 +574,11 @@ func (s *Store) GetEntityAtPointInTime(uri string, at int64) *Entity {
 	return nil
 }
 
-func (s *Store) GetEntityAtPointInTimeWithInternalID(internalId uint64, at int64, targetDatasetIds []uint32) (*Entity, error) {
+func (s *Store) GetEntityAtPointInTimeWithInternalID(
+	internalId uint64,
+	at int64,
+	targetDatasetIds []uint32,
+) (*Entity, error) {
 	/*
 		binary.BigEndian.PutUint16(entityIdBuffer, ENTITY_ID_TO_JSON_INDEX_ID)
 		binary.BigEndian.PutUint64(entityIdBuffer[2:], rid)
@@ -604,7 +619,9 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(internalId uint64, at int64
 
 		// check if dataset has been deleted, or must be excluded
 		datasetDeleted := s.deletedDatasets[currentDatasetId]
-		datasetIncluded := len(targetDatasetIds) == 0 // no specified datasets means no restriction - all datasets are allowed
+		datasetIncluded := len(
+			targetDatasetIds,
+		) == 0 // no specified datasets means no restriction - all datasets are allowed
 		if !datasetIncluded {
 			for _, id := range targetDatasetIds {
 				if id == currentDatasetId {
@@ -667,8 +684,15 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(internalId uint64, at int64
 	return mergedEntity, nil
 }
 
-func (s *Store) GetEntityWithInternalId(internalId uint64, targetDatasetIds []uint32) (*Entity, error) {
-	return s.GetEntityAtPointInTimeWithInternalID(internalId, time.Now().UnixNano(), targetDatasetIds)
+func (s *Store) GetEntityWithInternalId(
+	internalId uint64,
+	targetDatasetIds []uint32,
+) (*Entity, error) {
+	return s.GetEntityAtPointInTimeWithInternalID(
+		internalId,
+		time.Now().UnixNano(),
+		targetDatasetIds,
+	)
 }
 
 type QueryResult struct {
@@ -679,12 +703,23 @@ type QueryResult struct {
 
 // type RelatedEntitiesQueryResult [][]interface{}
 
-func (s *Store) GetManyRelatedEntities(startFromUris []string, predicate string, inverse bool, datasets []string) ([][]interface{}, error) {
+func (s *Store) GetManyRelatedEntities(
+	startFromUris []string,
+	predicate string,
+	inverse bool,
+	datasets []string,
+) ([][]interface{}, error) {
 	queryTime := time.Now().UnixNano()
 	return s.GetManyRelatedEntitiesAtTime(startFromUris, predicate, inverse, datasets, queryTime)
 }
 
-func (s *Store) GetManyRelatedEntitiesAtTime(startFromUris []string, predicate string, inverse bool, datasets []string, at int64) ([][]interface{}, error) {
+func (s *Store) GetManyRelatedEntitiesAtTime(
+	startFromUris []string,
+	predicate string,
+	inverse bool,
+	datasets []string,
+	at int64,
+) ([][]interface{}, error) {
 	result := make([][]interface{}, 0)
 	for _, uri := range startFromUris {
 		relatedEntities, err := s.GetRelatedEntitiesAtTime(uri, predicate, inverse, datasets, at)
@@ -697,7 +732,13 @@ func (s *Store) GetManyRelatedEntitiesAtTime(startFromUris []string, predicate s
 	return result, nil
 }
 
-func (s *Store) GetRelatedEntitiesAtTime(uri string, predicate string, inverse bool, datasets []string, at int64) ([][]interface{}, error) {
+func (s *Store) GetRelatedEntitiesAtTime(
+	uri string,
+	predicate string,
+	inverse bool,
+	datasets []string,
+	at int64,
+) ([][]interface{}, error) {
 	targetDatasetIds := s.datasetsToInternalIDs(datasets)
 
 	results, err := s.GetRelatedAtTime(uri, predicate, inverse, targetDatasetIds, at)
@@ -740,18 +781,34 @@ func (s *Store) datasetsToInternalIDs(datasets []string) []uint32 {
 	return scopeArray
 }
 
-func (s *Store) GetRelatedEntities(uri string, predicate string, inverse bool, datasets []string) ([][]interface{}, error) {
+func (s *Store) GetRelatedEntities(
+	uri string,
+	predicate string,
+	inverse bool,
+	datasets []string,
+) ([][]interface{}, error) {
 	queryTime := time.Now().UnixNano()
 	return s.GetRelatedEntitiesAtTime(uri, predicate, inverse, datasets, queryTime)
 }
 
-func (s *Store) GetRelated(uri string, predicate string, inverse bool, datasets []string) ([]result, error) {
+func (s *Store) GetRelated(
+	uri string,
+	predicate string,
+	inverse bool,
+	datasets []string,
+) ([]result, error) {
 	queryTime := time.Now().UnixNano()
 	targetDatasetIds := s.datasetsToInternalIDs(datasets)
 	return s.GetRelatedAtTime(uri, predicate, inverse, targetDatasetIds, queryTime)
 }
 
-func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, targetDatasetIds []uint32, queryTime int64) ([]result, error) {
+func (s *Store) GetRelatedAtTime(
+	uri string,
+	predicate string,
+	inverse bool,
+	targetDatasetIds []uint32,
+	queryTime int64,
+) ([]result, error) {
 	var resourceCurie, predCurie string
 	var err error
 
@@ -779,7 +836,6 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 
 	// lookup pred and id
 	err = s.database.View(func(txn *badger.Txn) error {
-
 		rid, ridExists, err := s.getIDForURI(txn, resourceCurie)
 		if err != nil {
 			return err
@@ -825,7 +881,9 @@ func (s *Store) GetRelatedAtTime(uri string, predicate string, inverse bool, tar
 				// check dataset if deleted, or if excluded from search
 				datasetId := binary.BigEndian.Uint32(k[36:])
 
-				datasetIncluded := len(targetDatasetIds) == 0 // no specified datasets means no restriction - all datasets are allowed
+				datasetIncluded := len(
+					targetDatasetIds,
+				) == 0 // no specified datasets means no restriction - all datasets are allowed
 				if !datasetIncluded {
 					for _, id := range targetDatasetIds {
 						if id == datasetId {
@@ -1008,7 +1066,6 @@ func (s *Store) getIDForURI(txn *badger.Txn, uri string) (uint64, bool, error) {
 			exists = true
 			return nil
 		})
-
 		if err != nil {
 			return 0, false, err
 		}
@@ -1141,7 +1198,12 @@ func (s *Store) storeValue(key []byte, value []byte) error {
 	}
 	err := s.database.Update(func(txn *badger.Txn) error {
 		err := txn.Set(key, value)
-		_ = s.statsdClient.Count("store.added.bytes", int64(len(value)), tags, 1) // don't care about errors here
+		_ = s.statsdClient.Count(
+			"store.added.bytes",
+			int64(len(value)),
+			tags,
+			1,
+		) // don't care about errors here
 		return err
 	})
 	return err
@@ -1165,7 +1227,12 @@ func (s *Store) moveValue(oldKey, newKey, newValue []byte) error {
 			return err
 		}
 		err = txn.Set(newKey, newValue)
-		_ = s.statsdClient.Count("store.added.bytes", int64(len(newValue)), tags, 1) // don't care about errors here
+		_ = s.statsdClient.Count(
+			"store.added.bytes",
+			int64(len(newValue)),
+			tags,
+			1,
+		) // don't care about errors here
 		return err
 	})
 	return err
@@ -1189,7 +1256,6 @@ func (s *Store) readValue(key []byte) []byte {
 		val, err = item.ValueCopy(nil)
 		return nil
 	})
-
 	if err != nil {
 		panic(err.Error())
 	}
@@ -1199,7 +1265,12 @@ func (s *Store) readValue(key []byte) []byte {
 	}
 
 	if len(val) > 0 {
-		_ = s.statsdClient.Count("store.read.bytes", int64(len(val)), tags, 1) // don't care about errors here
+		_ = s.statsdClient.Count(
+			"store.read.bytes",
+			int64(len(val)),
+			tags,
+			1,
+		) // don't care about errors here
 	}
 
 	return val
@@ -1254,7 +1325,11 @@ func (s *Store) DeleteObject(collection CollectionIndex, id string) error {
 	return s.deleteValue(key)
 }
 
-func (s *Store) iterateObjects(prefix []byte, t reflect.Type, visitFunc func(interface{}) error) error {
+func (s *Store) iterateObjects(
+	prefix []byte,
+	t reflect.Type,
+	visitFunc func(interface{}) error,
+) error {
 	err := s.database.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchSize = 10
@@ -1309,7 +1384,7 @@ type Transaction struct {
 func (s *Store) ExecuteTransaction(transaction *Transaction) error {
 	datasets := make(map[string]*Dataset)
 
-	for k, _ := range transaction.DatasetEntities {
+	for k := range transaction.DatasetEntities {
 		dataset, ok := s.datasets.Load(k)
 		if !ok {
 			return errors.New("no dataset " + k)
