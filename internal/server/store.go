@@ -342,7 +342,7 @@ func (s *Store) GetGlobalContext() *Context {
 func (s *Store) Open() error {
 	s.logger.Info("Open database")
 	opts := badger.DefaultOptions(s.storeLocation)
-
+	opts.MaxLevels = 8 // make badger accept data larger than 1.1TB
 	if s.blockCacheSize > 0 {
 		opts.BlockCacheSize = s.blockCacheSize
 	} else {
