@@ -1058,14 +1058,20 @@ type StatsDRecorder struct {
 	CountCallback  func(map[string]interface{})
 }
 
+func (r *StatsDRecorder) GaugeWithTimestamp(name string, value float64, tags []string, rate float64, timestamp time.Time) error {
+	return nil
+}
+
+func (r *StatsDRecorder) CountWithTimestamp(name string, value int64, tags []string, rate float64, timestamp time.Time) error {
+	return nil
+}
+
 func (r *StatsDRecorder) IsClosed() bool {
-	//TODO implement me
-	panic("implement me")
+	return false
 }
 
 func (r *StatsDRecorder) GetTelemetry() statsd.Telemetry {
-	//TODO implement me
-	panic("implement me")
+	return statsd.Telemetry{}
 }
 
 func (r *StatsDRecorder) Reset() {
