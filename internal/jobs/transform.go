@@ -427,18 +427,46 @@ func (javascriptTransform *JavascriptTransform) transformEntities(runner *Runner
 		resultEntities = make([]*server.Entity, 0)
 		for _, e := range v {
 			if entity, ok := e.(*server.Entity); ok {
+				typeFix(entity)
 				resultEntities = append(resultEntities, entity)
 			} else {
 				return nil, fmt.Errorf("transform emitted invalid entity: %v", e)
 			}
 		}
 	case []*server.Entity:
+		for _, entity := range v {
+			typeFix(entity)
+		}
+
 		resultEntities = v
 	default:
 		return nil, errors.New("bad result from transform")
 	}
 
 	return resultEntities, nil
+}
+
+// if a number property is set from javascript, goja's js->golang bridge updates
+// the go entity instance with int64 if the number has no decimals.
+//
+// in json deserialized entities, all numbers are float64.
+//
+// so to make goja modified entities comparable to entities produced by
+// json-deserialization, we need to fix all numbers to float64.
+func typeFix(entity *server.Entity) {
+	for k, v := range entity.Properties {
+		if i, ok := v.(int64); ok {
+			entity.Properties[k] = float64(i)
+		} else if i, ok := v.([]interface{}); ok {
+			for c, val := range i {
+				if i2, ok2 := val.(int64); ok2 {
+					i[c] = float64(i2)
+				}
+			}
+		} else if i, ok := v.(*server.Entity); ok {
+			typeFix(i)
+		}
+	}
 }
 
 func (javascriptTransform *JavascriptTransform) GetConfig() map[string]interface{} {
