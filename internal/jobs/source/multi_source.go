@@ -210,7 +210,30 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 				e := r[2].(*server.Entity)
 				if _, ok := dedupCache[e.InternalID]; !ok {
 					dedupCache[e.InternalID] = true
-					entities = append(entities, e)
+					// we need to load the target entity only with target dataset scope, else we risk merged entities as result.
+					//
+					// normally this is rather costy, since GetEntity creates a new read transacton per call.
+					// But multiSource is a slow source to begin with, so it's not that noticable in the sum of things going on.
+					//
+					// To make the whole source more performant, we could consider performing all read operations
+					// in a single read transaction while also accessing badger indexes with more specific read keys.
+					// (minimize the number of badger keys we iterate over in store.GetX operations for this source).
+					//
+					// For example:
+					// GetEntity here goes through all datasets containing the desired entity ID. If we create
+					// a new API function which includes the target dataset in the bagder search key this would be more performant in
+					// cases where the ID exists in many datasets. Even better if we can have an API function version that allows
+					// reuse of a common read transaction.
+					mainEntity, err := multiSource.Store.GetEntity(e.ID, []string{multiSource.DatasetName})
+					if err != nil {
+						return fmt.Errorf("Could not load entity %+v from dataset %v", e, multiSource.DatasetName)
+					}
+					// GetEntity is a Query Function. As such it returns skeleton Entities which only contain an ID for
+					// references to non-existing entities. Checking for recorded tells us whether this is a real entity hit
+					// on an "open graph" reference.
+					if mainEntity.Recorded > 0 {
+						entities = append(entities, mainEntity)
+					}
 				}
 			}
 		} else {
