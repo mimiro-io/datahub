@@ -331,6 +331,11 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 	return nil
 }
 
+// Convert Entity JSON to JSON-LD representation
+func (handler *datasetHandler) toJSONLD(jsonData []byte) ([]byte, error) {
+
+}
+
 func (handler *datasetHandler) lookupAuth(authProviderName string) func(req *http.Request) {
 	if provider, ok := handler.tokenProviders.Get(strings.ToLower(authProviderName)); ok {
 		return provider.Authorize
