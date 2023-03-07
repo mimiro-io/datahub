@@ -19,13 +19,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/DataDog/datadog-go/v5/statsd"
-	"github.com/mimiro-io/datahub/internal"
-	"os"
-	"testing"
-
 	"github.com/franela/goblin"
+	"github.com/mimiro-io/datahub/internal"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
+	"os"
+	"testing"
 
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/jobs/source"
@@ -1010,6 +1009,70 @@ func TestMultiSource(t *testing.T) {
 			g.Assert(m["Alice"]).IsTrue()
 			g.Assert(m["Hank"]).IsTrue()
 			g.Assert(m["Lisa"]).IsTrue()
+		})
+		g.It("Should only emit main entities that exist in main dataset", func() {
+			// people <- employment
+			_, peoplePrefix := createTestDataset("people", []string{"Bob", "Alice"}, nil, dsm, g, store)
+			copyDs, _ := dsm.CreateDataset("peopleTwo", nil)
+			copyDs.StoreEntities([]*server.Entity{
+				server.NewEntityFromMap(map[string]interface{}{
+					"id":    peoplePrefix + ":Bob",
+					"props": map[string]interface{}{"name": "Bob"},
+					"refs":  map[string]interface{}{},
+				}),
+			})
+			employmentDs, employmentPrefix := createTestDataset("employment",
+				[]string{"MediumCorp", "LittleSweatshop", "YardSale"}, map[string]map[string]interface{}{
+					"MediumCorp":      {peoplePrefix + ":employment": peoplePrefix + ":Bob"},
+					"LittleSweatshop": {peoplePrefix + ":employment": peoplePrefix + ":Alice"},
+				}, dsm, g, store)
+
+			testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
+			srcJSON := `{ "Type" : "MultiSource", "Name" : "people", "Dependencies": [ {
+							"dataset": "employment",
+							"joins": [ { "dataset": "people", "predicate": "http://people/employment", "inverse": false } ]
+						} ] }`
+
+			srcConfig := map[string]interface{}{}
+			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
+			_ = testSource.ParseDependencies(srcConfig["Dependencies"])
+
+			//fullsync
+			var recordedEntities []server.Entity
+			token := &source.MultiDatasetContinuation{}
+			var lastToken source.DatasetContinuation
+			testSource.StartFullSync()
+			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			testSource.EndFullSync()
+
+			//now, add new Employment with refs to Bob (exists) and Franz (non-exists)
+			err = employmentDs.StoreEntities([]*server.Entity{
+				server.NewEntityFromMap(map[string]interface{}{
+					"id":    employmentPrefix + ":YardSale",
+					"props": map[string]interface{}{"name": "YardSale"},
+					"refs":  map[string]interface{}{peoplePrefix + ":employment": []string{peoplePrefix + ":Franz", peoplePrefix + ":Bob"}},
+				}),
+			})
+
+			recordedEntities = []server.Entity{}
+			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				lastToken = token
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				return nil
+			})
+			g.Assert(err).IsNil()
+			g.Assert(len(recordedEntities)).Eql(1, "YardSale change points to non-existing entity 'Franz' in people, therefore only Bob should be emitted")
+			g.Assert(recordedEntities[0].ID).Eql(peoplePrefix + ":Bob")
+			g.Assert(recordedEntities[0].Properties["name"]).Eql("Bob", "Bob exists in two datasets. making sure we dont get a merged result")
 		})
 
 		g.Describe("parseDependencies", func() {
