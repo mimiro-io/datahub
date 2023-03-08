@@ -1017,7 +1017,7 @@ func (ds *Dataset) ProcessChangesRaw(since uint64, limit int, latestOnly bool, p
 				return err
 			}
 
-			if int(processed) == limit {
+			if limit > 0 && int(processed) == limit {
 				break
 			}
 		}
