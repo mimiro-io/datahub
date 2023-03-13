@@ -1385,6 +1385,10 @@ You can tune the LOG_LEVEL of the Datahub. The supported values are DEBUG and IN
 
 The Datahub supports reporting metrics trough a StatsD server. This is turned off if left empty, and you can turn it on by giving it an ip-address and a port combination.
 
+```MAX_COMPACTION_LEVELS```
+
+Can be used to override Badger's default 7 LSM levels. When more that 1.1TB disk space usage are exceeded or expected to be exceeded, 8 compaction levels are needed.
+
 #### Securing the Data Hub
 
 There are four main security models for the data hub.
