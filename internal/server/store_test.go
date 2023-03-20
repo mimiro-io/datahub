@@ -589,6 +589,14 @@ func TestStore(test *testing.T) {
 			changes, _ = ds.GetChanges(3, 10, false)
 			g.Assert(len(changes.Entities)).Eql(0)
 			g.Assert(changes.NextToken).Eql(uint64(3))
+
+			// store modified entities again and then get changes latest true
+			entity1.Properties = map[string]interface{}{"http://test.org/name": "homer"}
+			err = ds.StoreEntities(entities)
+
+			changes, _ = ds.GetChanges(0, 0, true)
+			g.Assert(len(changes.Entities)).Eql(3)
+			g.Assert(changes.NextToken).Eql(uint64(4))
 		})
 
 		g.It("Should paginate entities with continuation tokens", func() {
