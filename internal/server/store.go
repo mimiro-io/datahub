@@ -59,6 +59,7 @@ type Store struct {
 	fullsyncLeaseTimeout time.Duration
 	blockCacheSize       int64
 	valueLogFileSize     int64
+	maxCompactionLevels  int
 }
 
 type BadgerLogger struct { // we use this to implement the Badger Logger interface
@@ -86,6 +87,7 @@ func NewStore(lc fx.Lifecycle, env *conf.Env, statsdClient statsd.ClientInterfac
 		fullsyncLeaseTimeout: fsTimeout,
 		blockCacheSize:       env.BlockCacheSize,
 		valueLogFileSize:     env.ValueLogFileSize,
+		maxCompactionLevels:  env.MaxCompactionLevels,
 	}
 	store.NamespaceManager = NewNamespaceManager(store)
 
@@ -342,7 +344,13 @@ func (s *Store) GetGlobalContext() *Context {
 func (s *Store) Open() error {
 	s.logger.Info("Open database")
 	opts := badger.DefaultOptions(s.storeLocation)
-	opts.MaxLevels = 8 // make badger accept data larger than 1.1TB
+
+	if s.maxCompactionLevels > 0 {
+		// default is 7, set to 8 to make badger accept data larger than 1.1TB at the cost of larger compactions
+		opts.MaxLevels = s.maxCompactionLevels
+	}
+	s.logger.Infof("Max Compaction Levels: %v", opts.MaxLevels)
+
 	if s.blockCacheSize > 0 {
 		opts.BlockCacheSize = s.blockCacheSize
 	} else {

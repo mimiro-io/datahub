@@ -36,6 +36,7 @@ type Env struct {
 	FullsyncLeaseTimeout    time.Duration
 	BlockCacheSize          int64
 	ValueLogFileSize        int64
+	MaxCompactionLevels     int
 	AdminUserName           string
 	AdminPassword           string
 	NodeId                  string
