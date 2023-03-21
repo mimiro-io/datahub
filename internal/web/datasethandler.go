@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/mimiro-io/datahub/internal/security"
 	"github.com/mimiro-io/datahub/internal/service/types"
 	"io"
