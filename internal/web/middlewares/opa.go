@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/gojektech/heimdall/v6/httpclient"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"

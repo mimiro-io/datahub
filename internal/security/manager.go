@@ -27,7 +27,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/server"
@@ -311,11 +311,11 @@ func (serviceCore *ServiceCore) loadAcls() error {
 func CreateJWTForTokenRequest(subject string, audience string, privateKey *rsa.PrivateKey) (string, error) {
 	uniqueId := uuid.New()
 
-	claims := jwt.StandardClaims{
-		ExpiresAt: time.Now().Add(time.Minute * 1).Unix(),
-		Id:        uniqueId.String(),
+	claims := jwt.RegisteredClaims{
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 1)),
+		ID:        uniqueId.String(),
 		Subject:   subject,
-		Audience:  audience,
+		Audience:  jwt.ClaimStrings{audience},
 	}
 
 	token, err := jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(privateKey)
@@ -412,11 +412,11 @@ func (serviceCore *ServiceCore) MakeAdminJWT(clientKey string, clientSecret stri
 
 	claims := CustomClaims{}
 	claims.Roles = roles
-	claims.StandardClaims =
-		jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(time.Minute * 15).Unix(),
+	claims.RegisteredClaims =
+		jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 15)),
 			Issuer:    "node:" + serviceCore.NodeInfo.NodeId,
-			Audience:  "node:" + serviceCore.NodeInfo.NodeId,
+			Audience:  jwt.ClaimStrings{"node:" + serviceCore.NodeInfo.NodeId},
 			Subject:   clientKey,
 		}
 
@@ -430,18 +430,18 @@ func (serviceCore *ServiceCore) MakeAdminJWT(clientKey string, clientSecret stri
 
 func (serviceCore *ServiceCore) ValidateClientJWTMakeJWTAccessToken(clientJWT string) (string, error) {
 	// parse without key to get subject
-	token, err := jwt.ParseWithClaims(clientJWT, &jwt.StandardClaims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(clientJWT, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(""), nil
 	})
 
-	clientClaims := token.Claims.(*jwt.StandardClaims)
+	clientClaims := token.Claims.(*jwt.RegisteredClaims)
 	var clientId = clientClaims.Subject
 
 	client, _ := serviceCore.clients.Load(clientId)
 	clientPublicKey, err := ParseRsaPublicKeyFromPem(client.(*ClientInfo).PublicKey)
 
 	// parse again with key
-	token, err = jwt.ParseWithClaims(clientJWT, &jwt.StandardClaims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err = jwt.ParseWithClaims(clientJWT, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return clientPublicKey, nil
 	})
 
@@ -460,11 +460,11 @@ func (serviceCore *ServiceCore) ValidateClientJWTMakeJWTAccessToken(clientJWT st
 	// add in roles in config
 	claims := CustomClaims{}
 	claims.Roles = roles
-	claims.StandardClaims =
-		jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(time.Minute * 15).Unix(),
+	claims.RegisteredClaims =
+		jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 15)),
 			Issuer:    "node:" + serviceCore.NodeInfo.NodeId,
-			Audience:  "node:" + serviceCore.NodeInfo.NodeId,
+			Audience:  jwt.ClaimStrings{"node:" + serviceCore.NodeInfo.NodeId},
 			Subject:   clientId,
 		}
 

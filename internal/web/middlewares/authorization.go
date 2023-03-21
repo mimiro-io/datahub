@@ -19,7 +19,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/juliangruber/go-intersect"
 	"github.com/labstack/echo/v4"
 	"go.uber.org/zap"
@@ -35,7 +35,8 @@ func JwtAuthorizer(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareF
 			token := c.Get("user").(*jwt.Token)
 
 			claims := token.Claims.(*security.CustomClaims)
-			if claims.Gty == "client-credentials" { // this is a machine or an application token
+			if claims.Gty == "client-credentials" ||
+				claims.Subject == claims.ClientId { // this is a machine or an application token
 				var claimScopes []string
 				if len(claims.Scopes()) > 0 {
 					claimScopes = strings.Split(claims.Scopes()[0], " ")

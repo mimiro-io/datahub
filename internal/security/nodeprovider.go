@@ -17,7 +17,7 @@ package security
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v4"
 	"go.uber.org/zap"
 	"io/ioutil"
 	"net/http"
@@ -61,7 +61,7 @@ func (nodeTokenProvider *NodeJwtBearerProvider) getToken() (string, error) {
 			return "", err
 		}
 		nodeTokenProvider.cache = &cache{
-			until: time.Unix(0, token.Claims.(*CustomClaims).ExpiresAt),
+			until: token.Claims.(*CustomClaims).ExpiresAt.Time,
 			token: token.Raw,
 		}
 	}
