@@ -210,6 +210,7 @@ func (garbageCollector *GarbageCollector) deleteByPrefixAndSelectorFunction(pref
 		opts := badger.DefaultIteratorOptions
 		opts.AllVersions = false
 		opts.PrefetchValues = false
+		opts.Prefix = prefix
 		it := txn.NewIterator(opts)
 		defer it.Close()
 

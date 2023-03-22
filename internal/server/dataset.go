@@ -880,10 +880,6 @@ func (ds *Dataset) MapEntitiesRaw(from string, count int, processEntity func(jso
 	lastKeyAsContinuationToken := ""
 
 	err := ds.store.database.View(func(txn *badger.Txn) error {
-		opts1 := badger.DefaultIteratorOptions
-		entityIterator := txn.NewIterator(opts1)
-		defer entityIterator.Close()
-
 		searchBufferPrefix := make([]byte, 10)
 		binary.BigEndian.PutUint16(searchBufferPrefix, DATASET_LATEST_ENTITIES)
 		binary.BigEndian.PutUint32(searchBufferPrefix[2:], ds.InternalID)
@@ -893,6 +889,12 @@ func (ds *Dataset) MapEntitiesRaw(from string, count int, processEntity func(jso
 		} else {
 			searchBuffer, _ = b64.StdEncoding.DecodeString(from)
 		}
+
+		opts1 := badger.DefaultIteratorOptions
+		opts1.Prefix = searchBufferPrefix
+		entityIterator := txn.NewIterator(opts1)
+		defer entityIterator.Close()
+
 		taken := 0
 
 		entityIterator.Seek(searchBuffer)
@@ -982,15 +984,15 @@ func (ds *Dataset) ProcessChangesRaw(since uint64, limit int, latestOnly bool, p
 	foundChanges := false
 
 	err := ds.store.database.View(func(txn *badger.Txn) error {
-
-		opts1 := badger.DefaultIteratorOptions
-		changesIterator := txn.NewIterator(opts1)
-		defer changesIterator.Close()
-
 		searchBuffer := make([]byte, 14)
 		binary.BigEndian.PutUint16(searchBuffer, DATASET_ENTITY_CHANGE_LOG)
 		binary.BigEndian.PutUint32(searchBuffer[2:], ds.InternalID)
 		binary.BigEndian.PutUint64(searchBuffer[6:], since)
+
+		opts1 := badger.DefaultIteratorOptions
+		opts1.Prefix = searchBuffer[:6]
+		changesIterator := txn.NewIterator(opts1)
+		defer changesIterator.Close()
 
 		processed := int64(0)
 		for changesIterator.Seek(searchBuffer); changesIterator.ValidForPrefix(searchBuffer[:6]); changesIterator.Next() {
