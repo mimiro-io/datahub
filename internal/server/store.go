@@ -584,15 +584,16 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(internalId uint64, at int64
 	rtxn := s.database.NewTransaction(false)
 	defer rtxn.Discard()
 
-	opts1 := badger.DefaultIteratorOptions
-	// opts1.PrefetchSize = 1
-	opts1.PrefetchValues = false
-	entityLocatorIterator := rtxn.NewIterator(opts1)
-	defer entityLocatorIterator.Close()
-
 	entityLocatorPrefixBuffer := make([]byte, 10)
 	binary.BigEndian.PutUint16(entityLocatorPrefixBuffer, ENTITY_ID_TO_JSON_INDEX_ID)
 	binary.BigEndian.PutUint64(entityLocatorPrefixBuffer[2:], internalId)
+
+	opts1 := badger.DefaultIteratorOptions
+	// opts1.PrefetchSize = 1
+	opts1.PrefetchValues = false
+	opts1.Prefix = entityLocatorPrefixBuffer
+	entityLocatorIterator := rtxn.NewIterator(opts1)
+	defer entityLocatorIterator.Close()
 
 	partials := make([]*Entity, 0) // there may be more one representation that is valid
 
@@ -607,7 +608,6 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(internalId uint64, at int64
 		if at < recordedTime {
 			continue
 		}
-
 		currentDatasetId = binary.BigEndian.Uint32(key[10:])
 
 		// check if dataset has been deleted, or must be excluded
@@ -646,15 +646,18 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(internalId uint64, at int64
 
 	if previousDatasetId != 0 {
 		e := &Entity{}
-		e.Properties = make(map[string]interface{})
-		e.References = make(map[string]interface{})
 		err := json.Unmarshal(prevValueBytes, e)
 		if err != nil {
 			return nil, err
 		}
+		if e.Properties == nil {
+			e.Properties = make(map[string]interface{})
+		}
+		if e.References == nil {
+			e.References = make(map[string]interface{})
+		}
 		partials = append(partials, e)
 	}
-
 	// merge partials
 	mergedEntity := s.MergePartials(partials)
 
@@ -1266,6 +1269,7 @@ func (s *Store) iterateObjects(prefix []byte, t reflect.Type, visitFunc func(int
 	err := s.database.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchSize = 10
+		opts.Prefix = prefix
 		it := txn.NewIterator(opts)
 		defer it.Close()
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
@@ -1292,6 +1296,7 @@ func (s *Store) IterateObjectsRaw(prefix []byte, processJSON func([]byte) error)
 	err := s.database.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchSize = 10
+		opts.Prefix = prefix
 		it := txn.NewIterator(opts)
 		defer it.Close()
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {

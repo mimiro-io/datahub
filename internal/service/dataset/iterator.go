@@ -122,6 +122,7 @@ func (b *BadgerDatasetIterator) ensureTxn() error {
 		b.datasetPrefix = store.SeekDataset(b.datasetID)
 		opts := badger.DefaultIteratorOptions
 		searchBuffer := store.SeekChanges(b.datasetID, b.startingOffset)
+		opts.Prefix = searchBuffer[:6]
 		if b.inverse {
 			opts.Reverse = true
 		}
