@@ -1,6 +1,6 @@
 module github.com/mimiro-io/datahub
 
-go 1.19
+go 1.20
 
 require (
 	github.com/DataDog/datadog-go/v5 v5.2.0
