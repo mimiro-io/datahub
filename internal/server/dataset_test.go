@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/DataDog/datadog-go/v5/statsd"
+	"github.com/franela/goblin"
 	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx/fxtest"
@@ -26,8 +27,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/franela/goblin"
 )
 
 type testEnv struct {
@@ -87,10 +86,9 @@ func TestDataset(t *testing.T) {
 			}
 			err := env.ds.StoreEntities([]*Entity{person})
 			g.Assert(err).IsNil("Expected entity to be stored without error")
-
 			// query
 			queryIds := []string{"http://data.mimiro.io/people/person-1"}
-			result, err := env.store.GetManyRelatedEntities(queryIds, "*", false, []string{}, 0)
+			result, err := env.store.GetManyRelatedEntities(queryIds, "*", false, []string{})
 			g.Assert(err).IsNil("Expected query to succeed")
 
 			var company2Seen, company1Seen bool
@@ -122,7 +120,7 @@ func TestDataset(t *testing.T) {
 			g.Assert(err).IsNil("Expected entity to be stored without error")
 
 			// query
-			result, err = env.store.GetManyRelatedEntities(queryIds, "*", false, []string{}, 0)
+			result, err = env.store.GetManyRelatedEntities(queryIds, "*", false, []string{})
 			g.Assert(err).IsNil("Expected query to succeed")
 
 			company3Seen := false

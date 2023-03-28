@@ -20,7 +20,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/labstack/echo/v4"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -31,6 +30,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/labstack/echo/v4"
 
 	"github.com/franela/goblin"
 	"go.uber.org/fx"

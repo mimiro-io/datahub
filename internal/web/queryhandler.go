@@ -51,7 +51,6 @@ type Query struct {
 	Datasets         []string `json:"datasets"`
 	Details          bool     `json:"details"`
 	Limit            int      `json:"limit"`
-	Since            string   `json:"since"`
 }
 
 type NamespacePrefix struct {
@@ -221,8 +220,11 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 		return c.JSON(http.StatusOK, result)
 	} else {
 		// do query
-		startingPoints := toStartingPoints(query.StartingEntities, query.Since)
-		queryresult, err := handler.store.GetManyRelatedEntities(startingPoints, query.Predicate, query.Inverse, query.Datasets, query.Limit)
+		startingPoints := make([]server.RelatedEntitiesContinuation, len(query.StartingEntities))
+		for i, uri := range query.StartingEntities {
+			startingPoints[i] = server.RelatedEntitiesContinuation{StartUri: uri}
+		}
+		queryresult, err := handler.store.GetManyRelatedEntitiesBatch(startingPoints, query.Predicate, query.Inverse, query.Datasets, query.Limit)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
@@ -236,8 +238,4 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 		// return result as JSON
 		return c.JSON(http.StatusOK, result)
 	}
-}
-
-func toStartingPoints(entityUris []string, since string) []server.RelatedEntitiesContinuation {
-
 }

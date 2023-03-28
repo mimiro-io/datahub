@@ -162,7 +162,7 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 		depSince = &StringDatasetContinuation{}
 	}
 
-	uris, continuation, err := multiSource.findChangeURIs(depDataset, depSince, batchSize)
+	startPoints, continuation, err := multiSource.findChangeURIs(depDataset, depSince, batchSize)
 
 	if err != nil {
 		return fmt.Errorf("detecting changes in dependency dataset %+v failed, %w", dep, err)
@@ -172,7 +172,7 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 	//go through joins in sequence
 	for idx, join := range dep.Joins {
 		// TODO: create GetManyRelated variant that takes internal ids as "startUris" ?
-		relatedEntities, err := multiSource.Store.GetManyRelatedEntities(uris, join.Predicate, join.Inverse, nil, 0)
+		relatedEntities, err := multiSource.Store.GetManyRelatedEntitiesBatch(startPoints, join.Predicate, join.Inverse, nil, 0)
 		if err != nil {
 			return fmt.Errorf("GetManyRelatedEntities failed for Join %+v, %w", join, err)
 		}
@@ -193,7 +193,7 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 
 				timestamp := int64(changes.Entities[0].Recorded)
 
-				prevRelatedEntities, _, err := multiSource.Store.GetManyRelatedEntitiesAtTime(uris, join.Predicate, join.Inverse, nil, timestamp, 0)
+				prevRelatedEntities, err := multiSource.Store.GetManyRelatedEntitiesAtTime(startPoints, join.Predicate, join.Inverse, nil, timestamp, 0)
 				if err != nil {
 					return fmt.Errorf("previous GetManyRelatedEntities failed for Join %+v at timestamp %v, %w", join, timestamp, err)
 				}
@@ -205,44 +205,48 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 		dedupCache := map[uint64]bool{}
 		if idx == len(dep.Joins)-1 {
 			//we reached the end
-			for _, r := range relatedEntities {
-				e := r[2].(*server.Entity)
-				if _, ok := dedupCache[e.InternalID]; !ok {
-					dedupCache[e.InternalID] = true
-					// we need to load the target entity only with target dataset scope, else we risk merged entities as result.
-					//
-					// normally this is rather costy, since GetEntity creates a new read transacton per call.
-					// But multiSource is a slow source to begin with, so it's not that noticable in the sum of things going on.
-					//
-					// To make the whole source more performant, we could consider performing all read operations
-					// in a single read transaction while also accessing badger indexes with more specific read keys.
-					// (minimize the number of badger keys we iterate over in store.GetX operations for this source).
-					//
-					// For example:
-					// GetEntity here goes through all datasets containing the desired entity ID. If we create
-					// a new API function which includes the target dataset in the bagder search key this would be more performant in
-					// cases where the ID exists in many datasets. Even better if we can have an API function version that allows
-					// reuse of a common read transaction.
-					mainEntity, err := multiSource.Store.GetEntity(e.ID, []string{multiSource.DatasetName})
-					if err != nil {
-						return fmt.Errorf("Could not load entity %+v from dataset %v", e, multiSource.DatasetName)
-					}
-					// GetEntity is a Query Function. As such it returns skeleton Entities which only contain an ID for
-					// references to non-existing entities. Checking for recorded tells us whether this is a real entity hit
-					// on an "open graph" reference.
-					if mainEntity.Recorded > 0 {
-						entities = append(entities, mainEntity)
+			for _, rs := range relatedEntities {
+				for _, r := range rs.Relations {
+					e := r.RelatedEntity
+					if _, ok := dedupCache[e.InternalID]; !ok {
+						dedupCache[e.InternalID] = true
+						// we need to load the target entity only with target dataset scope, else we risk merged entities as result.
+						//
+						// normally this is rather costy, since GetEntity creates a new read transacton per call.
+						// But multiSource is a slow source to begin with, so it's not that noticable in the sum of things going on.
+						//
+						// To make the whole source more performant, we could consider performing all read operations
+						// in a single read transaction while also accessing badger indexes with more specific read keys.
+						// (minimize the number of badger keys we iterate over in store.GetX operations for this source).
+						//
+						// For example:
+						// GetEntity here goes through all datasets containing the desired entity ID. If we create
+						// a new API function which includes the target dataset in the bagder search key this would be more performant in
+						// cases where the ID exists in many datasets. Even better if we can have an API function version that allows
+						// reuse of a common read transaction.
+						mainEntity, err := multiSource.Store.GetEntity(e.ID, []string{multiSource.DatasetName})
+						if err != nil {
+							return fmt.Errorf("Could not load entity %+v from dataset %v", e, multiSource.DatasetName)
+						}
+						// GetEntity is a Query Function. As such it returns skeleton Entities which only contain an ID for
+						// references to non-existing entities. Checking for recorded tells us whether this is a real entity hit
+						// on an "open graph" reference.
+						if mainEntity.Recorded > 0 {
+							entities = append(entities, mainEntity)
+						}
 					}
 				}
 			}
 		} else {
 			//prepare uris list for next join
-			uris = make([]string, 0)
-			for _, r := range relatedEntities {
-				e := r[2].(*server.Entity)
-				if _, ok := dedupCache[e.InternalID]; !ok {
-					dedupCache[e.InternalID] = true
-					uris = append(uris, e.ID)
+			startPoints = make([]server.RelatedEntitiesContinuation, 0)
+			for _, rs := range relatedEntities {
+				for _, r := range rs.Relations {
+					e := r.RelatedEntity
+					if _, ok := dedupCache[e.InternalID]; !ok {
+						dedupCache[e.InternalID] = true
+						startPoints = append(startPoints, server.RelatedEntitiesContinuation{StartUri: e.ID})
+					}
 				}
 			}
 		}
@@ -267,10 +271,15 @@ type changeURIData struct {
 	continuation uint64
 }
 
+// TODO: optimize. wasnt sure if we can change cached values or if its part of continuation token
 func (multiSource *MultiSource) findChangeURIs(depDataset *server.Dataset, depSince *StringDatasetContinuation,
-	batchSize int) ([]string, uint64, error) {
+	batchSize int) ([]server.RelatedEntitiesContinuation, uint64, error) {
 	if changes, ok := multiSource.changesCache[depDataset.ID]; ok {
-		return changes.URIs, changes.continuation, nil
+		startPoints := make([]server.RelatedEntitiesContinuation, len(changes.URIs))
+		for i, u := range changes.URIs {
+			startPoints[i] = server.RelatedEntitiesContinuation{StartUri: u}
+		}
+		return startPoints, changes.continuation, nil
 	}
 
 	uris := make([]string, 0)
@@ -280,7 +289,11 @@ func (multiSource *MultiSource) findChangeURIs(depDataset *server.Dataset, depSi
 		})
 	multiSource.changesCache[depDataset.ID] = changeURIData{uris, continuation}
 
-	return uris, continuation, err
+	startPoints := make([]server.RelatedEntitiesContinuation, len(uris))
+	for i, u := range uris {
+		startPoints[i] = server.RelatedEntitiesContinuation{StartUri: u}
+	}
+	return startPoints, continuation, err
 }
 
 func (multiSource *MultiSource) getDatasetFor(dep Dependency) (*server.Dataset, error) {
