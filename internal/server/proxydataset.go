@@ -122,6 +122,64 @@ func (d *ProxyDataset) StreamEntitiesRaw(from string, limit int, f func(jsonData
 
 }
 
+func (d *ProxyDataset) StreamEntities(from string, limit int, f func(*Entity) error, preStream func() error) (string, error) {
+	uri, err := url.Parse(d.RemoteEntitiesUrl)
+	if err != nil {
+		return "", err
+	}
+	q := uri.Query()
+	if from != "" {
+		q.Add("from", from)
+	}
+	if limit > 0 {
+		q.Add("limit", strconv.Itoa(limit))
+	}
+	uri.RawQuery = q.Encode()
+	fullUri := uri.String()
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", fullUri, nil)
+	if err != nil {
+		return "", err
+	}
+	d.auth(req)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+
+	if res.StatusCode != 200 {
+		return "", errors.New("Proxy target responded with status " + res.Status)
+	}
+
+	if preStream != nil {
+		err = preStream()
+		if err != nil {
+			return "", err
+		}
+	}
+
+	p := NewEntityStreamParser(d.badgerDataset.store)
+	var cont *Entity
+	err = p.ParseStream(res.Body, func(entity *Entity) error {
+		if entity.ID == "@continuation" {
+			cont = entity
+			return nil
+		} else {
+			return f(entity)
+		}
+	})
+	if err != nil {
+		return "", err
+	}
+
+	if cont == nil {
+		return "", nil
+	}
+	return cont.Properties["token"].(string), nil
+
+}
+
 // StreamChangesRaw stream through the dataset's changes and call `f` for each entity.
 // a `preStream` function can be provided if StreamChangesRaw is used in a web handler. It allows
 // to leave the http response uncommitted until `f` is called, so that an http error handler
@@ -178,6 +236,71 @@ func (d *ProxyDataset) StreamChangesRaw(since string, limit int, latestOnly bool
 				return err2
 			}
 			return f(jsonEntity)
+		}
+	})
+	if err != nil {
+		return "", err
+	}
+
+	if cont == nil {
+		return "", nil
+	}
+	return cont.Properties["token"].(string), nil
+
+}
+
+// StreamChangesRaw stream through the dataset's changes and call `f` for each entity.
+// a `preStream` function can be provided if StreamChanges is used in a web handler. It allows
+// to leave the http response uncommitted until `f` is called, so that an http error handler
+// still can modify status code while the response is uncommitted
+func (d *ProxyDataset) StreamChanges(since string, limit int, latestOnly bool, reverse bool, f func(*Entity) error, preStream func()) (string, error) {
+	uri, err := url.Parse(d.RemoteChangesUrl)
+	if err != nil {
+		return "", err
+	}
+	q := uri.Query()
+	if since != "" {
+		q.Add("since", since)
+	}
+	if limit > 0 {
+		q.Add("limit", strconv.Itoa(limit))
+	}
+	if reverse {
+		q.Add("reverse", "true")
+	}
+	if latestOnly {
+		q.Add("latestOnly", "true")
+	}
+
+	uri.RawQuery = q.Encode()
+	fullUri := uri.String()
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", fullUri, nil)
+	if err != nil {
+		return "", err
+	}
+	d.auth(req)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+
+	if res.StatusCode != 200 {
+		return "", errors.New("Proxy target responded with status " + res.Status)
+	}
+
+	if preStream != nil {
+		preStream()
+	}
+	p := NewEntityStreamParser(d.badgerDataset.store)
+	var cont *Entity
+	err = p.ParseStream(res.Body, func(entity *Entity) error {
+		if entity.ID == "@continuation" {
+			cont = entity
+			return nil
+		} else {
+			return f(entity)
 		}
 	})
 	if err != nil {

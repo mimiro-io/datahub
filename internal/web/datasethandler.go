@@ -231,6 +231,13 @@ func (handler *datasetHandler) deleteAllDatasets(c echo.Context) error {
 	return c.NoContent(http.StatusOK)
 }
 
+// convert context to JSON-LD context
+func convertContextToJSONLD(context *server.Context) map[string]interface{} {
+	jsonLdContext := make(map[string]interface{})
+	jsonLdContext["@context"] = context.Namespaces
+	return jsonLdContext
+}
+
 // getEntitiesHandler
 // path param dataset
 // query param continuationToken
@@ -264,6 +271,13 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 		return c.NoContent(http.StatusNotFound)
 	}
 
+	// check if we need to return JSON-LD
+	asJsonLd := false
+	acceptHeader := c.Request().Header.Get("Accept")
+	if strings.Contains(acceptHeader, "application/ld+json") {
+		asJsonLd = true
+	}
+
 	preStream := func() error {
 		c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		c.Response().WriteHeader(http.StatusOK)
@@ -274,22 +288,44 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 		}
 
 		// write context
-		jsonContext, _ := json.Marshal(dataset.GetContext())
-		_, err = c.Response().Write(jsonContext)
-		if err != nil {
-			return err
+		if asJsonLd {
+			ctx := dataset.GetContext()
+			jsonContext, _ := json.Marshal(convertContextToJSONLD(ctx))
+			_, err = c.Response().Write(jsonContext)
+			if err != nil {
+				return err
+			}
+		} else {
+			jsonContext, _ := json.Marshal(dataset.GetContext())
+			_, err = c.Response().Write(jsonContext)
+			if err != nil {
+				return err
+			}
 		}
+
 		return nil
 	}
 	var continuationToken string
 	if dataset.IsProxy() {
-		continuationToken, err = dataset.AsProxy(
+
+		proxyDataset := dataset.AsProxy(
 			handler.lookupAuth(dataset.ProxyConfig.AuthProviderName),
-		).StreamEntitiesRaw(f, l, func(jsonData []byte) error {
-			_, _ = c.Response().Write([]byte(","))
-			_, _ = c.Response().Write(jsonData)
-			return nil
-		}, preStream)
+		)
+
+		if asJsonLd {
+			continuationToken, err = proxyDataset.StreamEntities(f, l, func(entity *server.Entity) error {
+				_, _ = c.Response().Write([]byte(","))
+				_, _ = c.Response().Write(toJSONLD(entity))
+				return nil
+			}, preStream)
+		} else {
+			continuationToken, err = proxyDataset.StreamEntitiesRaw(f, l, func(jsonData []byte) error {
+				_, _ = c.Response().Write([]byte(","))
+				_, _ = c.Response().Write(jsonData)
+				return nil
+			}, preStream)
+		}
+
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
@@ -331,9 +367,44 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 	return nil
 }
 
-// Convert Entity JSON to JSON-LD representation
-func (handler *datasetHandler) toJSONLD(jsonData []byte) ([]byte, error) {
+// Convert Entity JSON-LD representation
+func toJSONLD(entity *server.Entity) map[string]interface{} {
+	jsonLd := make(map[string]interface{})
 
+	// get the id and add that
+	jsonLd["@id"] = entity.ID
+
+	// get props
+	for key, value := range entity.Properties {
+		// check the type of value
+		switch v := value.(type) {
+		case int:
+			jsonLd[key] = v
+		case []int:
+			jsonLd[key] = v
+		case float64:
+			jsonLd[key] = v
+		case []float64:
+			jsonLd[key] = v
+		case bool:
+			jsonLd[key] = v
+		case []bool:
+			jsonLd[key] = v
+		case string:
+			jsonLd[key] = v
+		case []string:
+			jsonLd[key] = v
+		case []map[string]interface{}:
+			jsonLd[key] = v
+		case map[string]interface{}:
+
+		}
+		//
+	}
+
+	// get the refs
+
+	return jsonLd
 }
 
 func (handler *datasetHandler) lookupAuth(authProviderName string) func(req *http.Request) {
