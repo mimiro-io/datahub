@@ -47,8 +47,8 @@ type Env struct {
 
 type AuthConfig struct {
 	WellKnown  string
-	Audience   string
-	Issuer     string
+	Audience   []string
+	Issuer     []string
 	Middleware string
 }
 

@@ -91,8 +91,8 @@ func TestParseEnvFromFile(t *testing.T) {
 
 		g.It("should have correct auth values", func() {
 			g.Assert(env.Auth.WellKnown).Equal("https://example.io/jwks/.well-known/jwks.json")
-			g.Assert(env.Auth.Audience).Equal("https://example.io")
-			g.Assert(env.Auth.Issuer).Equal("https://example.io")
+			g.Assert(env.Auth.Audience).Equal([]string{"https://example.io"})
+			g.Assert(env.Auth.Issuer).Equal([]string{"https://example.io"})
 			g.Assert(env.Auth.Middleware).Equal("noop")
 
 		})

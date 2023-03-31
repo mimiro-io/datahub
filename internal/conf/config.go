@@ -65,8 +65,8 @@ func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 		SecretsManager: viper.GetString("SECRETS_MANAGER"),
 		Auth: &AuthConfig{
 			WellKnown:  viper.GetString("TOKEN_WELL_KNOWN"),
-			Audience:   viper.GetString("TOKEN_AUDIENCE"),
-			Issuer:     viper.GetString("TOKEN_ISSUER"),
+			Audience:   viper.GetStringSlice("TOKEN_AUDIENCE"),
+			Issuer:     viper.GetStringSlice("TOKEN_ISSUER"),
 			Middleware: viper.GetString("AUTHORIZATION_MIDDLEWARE"),
 		},
 		DlJwtConfig: &DatalayerJwtConfig{

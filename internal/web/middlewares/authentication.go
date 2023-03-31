@@ -36,8 +36,8 @@ type (
 
 		Cache     *jwk.Cache
 		Wellknown string
-		Audience  string
-		Issuer    string
+		Audience  []string
+		Issuer    []string
 
 		// This is set if Node security is enabled
 		NodePublicKey *rsa.PublicKey
@@ -158,12 +158,22 @@ func (config *JwtConfig) ValidateToken(auth string) (*jwt.Token, error) {
 	audience := config.Audience
 	issuer := config.Issuer
 
-	checkAud := claims.VerifyAudience(audience, false)
+	checkAud := false
+	for _, aud := range audience {
+		if claims.VerifyAudience(aud, false) {
+			checkAud = true
+		}
+	}
 	if !checkAud {
 		err = errors.New("invalid audience")
 	}
 
-	checkIss := claims.VerifyIssuer(issuer, false)
+	checkIss := false
+	for _, iss := range issuer {
+		if claims.VerifyIssuer(iss, false) {
+			checkIss = true
+		}
+	}
 	if !checkIss {
 		err = errors.New("invalid issuer")
 	}
