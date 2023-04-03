@@ -77,14 +77,12 @@ func TestStoreRelations(test *testing.T) {
 			})
 
 			// check that we can query outgoing
-			result, err := store.GetManyRelatedEntities(
-				[]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			result, err := store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(2)
 
 			// check that we can query incoming
-			result, err = store.GetManyRelatedEntities(
-				[]string{"http://data.mimiro.io/people/person-2"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-2"}, peopleNamespacePrefix+":Friend", true, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 
@@ -99,18 +97,15 @@ func TestStoreRelations(test *testing.T) {
 			})
 
 			// check that outgoing related entities is 0
-			result, err = store.GetManyRelatedEntities(
-				[]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 
-			result, err = store.GetManyRelatedEntities(
-				[]string{"http://data.mimiro.io/people/person-3"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-3"}, peopleNamespacePrefix+":Friend", true, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 
-			result, err = store.GetManyRelatedEntities(
-				[]string{"http://data.mimiro.io/people/person-2"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-2"}, peopleNamespacePrefix+":Friend", true, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(0)
 
@@ -128,8 +123,7 @@ func TestStoreRelations(test *testing.T) {
 			})
 
 			// check that we can query outgoing
-			result, err := store.GetManyRelatedEntities(
-				[]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			result, err := store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(result[0][1]).Eql(peopleNamespacePrefix + ":Friend")
@@ -146,8 +140,7 @@ func TestStoreRelations(test *testing.T) {
 			})
 
 			// check that outgoing related entities is 0
-			result, err = store.GetManyRelatedEntities(
-				[]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(0)
 		})
@@ -168,16 +161,14 @@ func TestStoreRelations(test *testing.T) {
 			})
 
 			// check that we can query outgoing
-			result, err := store.GetManyRelatedEntities(
-				[]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			result, err := store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(result[0][1]).Eql(peopleNamespacePrefix + ":Friend")
 			g.Assert(result[0][2].(*Entity).ID).Eql(peopleNamespacePrefix + ":person-3")
 
 			// check that we can query incoming
-			result, err = store.GetManyRelatedEntities(
-				[]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", true, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(result[0][1]).Eql(peopleNamespacePrefix + ":Friend")
@@ -195,20 +186,17 @@ func TestStoreRelations(test *testing.T) {
 			})
 
 			// check that outgoing related entities is 0
-			result, err = store.GetManyRelatedEntities(
-				[]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(0)
 
 			// check that we can query incoming count to person-3 is 0
-			result, err = store.GetManyRelatedEntities(
-				[]string{"http://data.mimiro.io/people/person-3"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-3"}, peopleNamespacePrefix+":Friend", true, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(0)
 
 			// check that we can query incoming count to person-1 is still 1
-			result, err = store.GetManyRelatedEntities(
-				[]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", true, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 
@@ -239,16 +227,14 @@ func TestStoreRelations(test *testing.T) {
 			g.Assert(count(b)).Eql(55)
 
 			// check that we can query outgoing
-			result, err := store.GetManyRelatedEntities(
-				[]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			result, err := store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(result[0][1]).Eql(peopleNamespacePrefix + ":Friend")
 			g.Assert(result[0][2].(*Entity).ID).Eql(peopleNamespacePrefix + ":person-3")
 
 			// check that we can query incoming
-			result, err = store.GetManyRelatedEntities(
-				[]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", true, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(result[0][1]).Eql(peopleNamespacePrefix + ":Friend")
@@ -267,16 +253,14 @@ func TestStoreRelations(test *testing.T) {
 			g.Assert(count(b)).Eql(72)
 
 			// check that we can still query outgoing
-			result, err = store.GetManyRelatedEntities(
-				[]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil, 0)
 			// result, err = store.GetManyRelatedEntities( []string{"http://data.mimiro.io/people/person-1"}, "*", false, nil)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1, "Expected still to find person-3 as a friend")
 			g.Assert(result[0][2].(*Entity).ID).Eql(peopleNamespacePrefix + ":person-3")
 
 			// and incoming
-			result, err = store.GetManyRelatedEntities(
-				[]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", true, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1, "Expected still to find person-2 as reverse friend")
 			g.Assert(result[0][2].(*Entity).ID).Eql(peopleNamespacePrefix + ":person-2")
@@ -299,19 +283,21 @@ func TestStoreRelations(test *testing.T) {
 					"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-1"}}),
 			})
 			// check that we can not query outgoing from deleted entity
-			result, err := store.GetManyRelatedEntities(
-				[]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			result, err := store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(0)
 
 			// check that we can query incoming. this relation is owned by Homer
-			result, err = store.GetManyRelatedEntities(
-				[]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", true, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(result[0][1]).Eql(peopleNamespacePrefix + ":Friend")
 			g.Assert(result[0][2].(*Entity).ID).Eql(peopleNamespacePrefix + ":person-2")
 
+			// inverse query from person-3 should not return anything because person-1 (which owns the relation) is deleted
+			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-3"}, peopleNamespacePrefix+":Friend", true, nil)
+			g.Assert(err).IsNil()
+			g.Assert(len(result)).Eql(0)
 		})
 
 		g.It("Should build query results", func() {
@@ -394,11 +380,11 @@ func TestStoreRelations(test *testing.T) {
 			g.Assert(len(results)).Eql(1)
 
 			// test at point in time
-			results, err = store.GetRelatedAtTime("http://data.mimiro.io/people/p-1", RdfTypeUri, false, []uint32{}, time0)
+			results, err = store.GetRelatedAtTime("http://data.mimiro.io/people/p-1", RdfTypeUri, false, []uint32{}, time0, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(results)).Eql(0)
 
-			invresults, err = store.GetRelatedAtTime("http://data.mimiro.io/model/Person", RdfTypeUri, true, []uint32{}, time0)
+			invresults, err = store.GetRelatedAtTime("http://data.mimiro.io/model/Person", RdfTypeUri, true, []uint32{}, time0, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(invresults)).Eql(0)
 		})
@@ -1148,14 +1134,14 @@ func TestStore(test *testing.T) {
 			g.Assert(err).IsNil()
 
 			// query
-			result, err := store.GetManyRelatedEntities(queryIds, "http://data.mimiro.io/people/worksfor", false, []string{})
+			result, err := store.GetManyRelatedEntities(queryIds, "http://data.mimiro.io/people/worksfor", false, []string{}, 0)
 			g.Assert(len(result)).Eql(100)
 
 			// check inverse
 			queryIds = make([]string, 0)
 			queryIds = append(queryIds, "http://data.mimiro.io/company/company-1")
 			queryIds = append(queryIds, "http://data.mimiro.io/company/company-2")
-			result, err = store.GetManyRelatedEntities(queryIds, "http://data.mimiro.io/people/worksfor", true, []string{})
+			result, err = store.GetManyRelatedEntities(queryIds, "http://data.mimiro.io/people/worksfor", true, []string{}, 0)
 			g.Assert(len(result)).Eql(numOfEmployees * 2)
 		})
 
@@ -1184,7 +1170,7 @@ func TestStore(test *testing.T) {
 
 			queryIds = append(queryIds, "http://data.mimiro.io/people/person-"+strconv.Itoa(1))
 			// query
-			result, err := store.GetManyRelatedEntities(queryIds, "http://data.mimiro.io/people/worksfor", false, []string{})
+			result, err := store.GetManyRelatedEntities(queryIds, "http://data.mimiro.io/people/worksfor", false, []string{}, 0)
 			g.Assert(len(result)).Eql(1)
 		})
 	})
@@ -1285,8 +1271,7 @@ func TestDatasetScope(test *testing.T) {
 		})
 
 		g.It("Should return all of an entity's relations when no dataset constraints are applied", func() {
-			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"},
-				"http://data.mimiro.io/people/worksfor", false, []string{})
+			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"}, "http://data.mimiro.io/people/worksfor", false, []string{}, 0)
 			g.Assert(len(result)).Eql(2,
 				"expected 2 relations to be found. one from people, one from workhistory")
 
@@ -1299,8 +1284,7 @@ func TestDatasetScope(test *testing.T) {
 		g.It("Should return only relation ID if access to relation dataset is not given", func() {
 			//constraint on "people" only. we should find the relation to a company in "people",
 			//but resolving the company should be omitted because we lack access to the "companies" dataset
-			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"},
-				"http://data.mimiro.io/people/worksfor", false, []string{PEOPLE})
+			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"}, "http://data.mimiro.io/people/worksfor", false, []string{PEOPLE}, 0)
 			g.Assert(len(result)).Eql(1, "expected 1 relation to be found in people dataset (not in workHistory)")
 
 			entity := findEntity(result, "ns4:company-1")
@@ -1311,16 +1295,14 @@ func TestDatasetScope(test *testing.T) {
 
 		g.It("Should not find outgoing relations if the datasets owning these relations are disallowed", func() {
 			//constraint on "companies". we cannot access outgoing refs in the "people" or "history" datasets, therefore we should not find anything
-			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"},
-				"http://data.mimiro.io/people/worksfor", false, []string{COMPANIES})
+			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"}, "http://data.mimiro.io/people/worksfor", false, []string{COMPANIES}, 0)
 			g.Assert(len(result)).Eql(0, "expected 0 relation to be found (people and history are excluded)")
 		})
 
 		g.It("Should treat a list of (all) unknown datasets like an empty scope list", func() {
 			//constraint on bogus dataset. due to implementation, this dataset filter will be ignored, query behaves as unrestricted
 			//TODO: this can be discussed. Producing an error would make Queries less unpredictable. But ignoring invalid input makes the API more approachable
-			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"},
-				"http://data.mimiro.io/people/worksfor", false, []string{"bogus"})
+			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"}, "http://data.mimiro.io/people/worksfor", false, []string{"bogus"}, 0)
 			g.Assert(len(result)).Eql(2, "expected 2 relations")
 
 			entity := findEntity(result, "ns4:company-1")
@@ -1332,8 +1314,7 @@ func TestDatasetScope(test *testing.T) {
 		g.It("Should find relations in secondary datasets if main dataset is disallowed", func() {
 			//constraint on history dataset. we should find an outgoing relation from history to a company,
 			//but company resolving should be disabled since we lack access to the companies dataset
-			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"},
-				"http://data.mimiro.io/people/worksfor", false, []string{HISTORY})
+			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"}, "http://data.mimiro.io/people/worksfor", false, []string{HISTORY}, 0)
 			g.Assert(len(result)).Eql(1, "expected 1 relation to be found in people dataset (not in workHistory)")
 
 			entity := findEntity(result, "ns4:company-1")
@@ -1345,8 +1326,7 @@ func TestDatasetScope(test *testing.T) {
 
 		g.It("Should return all incoming relations of an entity in inverse query, when no scope is given", func() {
 			//inverse query for "company-1", no datasets restriction. should find 3 people with resolved entities
-			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-1"},
-				"http://data.mimiro.io/people/worksfor", true, []string{})
+			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-1"}, "http://data.mimiro.io/people/worksfor", true, []string{}, 0)
 			g.Assert(len(result)).Eql(6, "expected 6 relation to be found 3 owned by people and 3 owned by history")
 			entity := findEntity(result, "ns3:person-5")
 			g.Assert(entity).IsNotNil()
@@ -1364,8 +1344,7 @@ func TestDatasetScope(test *testing.T) {
 			//should still find 3 people (incoming relation is owned by people dataset, which we have access to)
 			//people should be resolved
 			//but resolved relations in people should only be "people" data with no "history" refs merged in
-			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-1"},
-				"http://data.mimiro.io/people/worksfor", true, []string{PEOPLE})
+			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-1"}, "http://data.mimiro.io/people/worksfor", true, []string{PEOPLE}, 0)
 			g.Assert(len(result)).Eql(3, "expected 3 relations to be found in people dataset (not in workHistory)")
 
 			entity := findEntity(result, "ns3:person-5")
@@ -1380,16 +1359,14 @@ func TestDatasetScope(test *testing.T) {
 			//inverse query for "company-1" with restriction to "companies" dataset.
 			//all incoming relations are stored in either history or people dataset.
 			//with access limited to companies dataset, we should not find incoming relations
-			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-1"},
-				"http://data.mimiro.io/people/worksfor", true, []string{COMPANIES})
+			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-1"}, "http://data.mimiro.io/people/worksfor", true, []string{COMPANIES}, 0)
 			g.Assert(len(result)).Eql(0)
 		})
 
 		g.It("Should resolve all elements in relation arrays, when no scope restriction is given", func() {
 			//find person-4 and follow its workedfor relations without restriction
 			//should find 2 companies in "history" dataset, and fully resolve the company entities
-			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-4"},
-				"http://data.mimiro.io/people/workedfor", false, []string{})
+			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-4"}, "http://data.mimiro.io/people/workedfor", false, []string{}, 0)
 			g.Assert(len(result)).Eql(2, "expected 2 relations to be found in history dataset")
 
 			entity := findEntity(result, "ns4:company-2")
@@ -1402,8 +1379,7 @@ func TestDatasetScope(test *testing.T) {
 			//find person-4 and follow its workedfor relations in dataset "history"
 			//should find 2 companies in "history" dataset,
 			//but not fully resolve the company entities because we lack access to "company"
-			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-4"},
-				"http://data.mimiro.io/people/workedfor", false, []string{HISTORY})
+			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-4"}, "http://data.mimiro.io/people/workedfor", false, []string{HISTORY}, 0)
 			g.Assert(len(result)).Eql(2, "expected 2 relations to be found in history dataset")
 
 			entity := findEntity(result, "ns4:company-2")
@@ -1415,8 +1391,7 @@ func TestDatasetScope(test *testing.T) {
 		g.It("Should inversely find all relations in an array", func() {
 			//find company-2 and inversely follow workedfor relations without restriction
 			//should find person 3 and 4 in "history" dataset, and fully resolve the person entities
-			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-2"},
-				"http://data.mimiro.io/people/workedfor", true, []string{})
+			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-2"}, "http://data.mimiro.io/people/workedfor", true, []string{}, 0)
 			g.Assert(len(result)).Eql(2, "expected 2 people to be found from history dataset")
 
 			entity := findEntity(result, "ns3:person-4")
@@ -1434,8 +1409,7 @@ func TestDatasetScope(test *testing.T) {
 		g.It("Should inversely find all relations in array, but not resolve the relation-intities if no access", func() {
 			//find company-2 and inversely follow workedfor relations with filter on history
 			//should find person 3 and 4 in "history" dataset, but not fully resolve the person entities
-			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-2"},
-				"http://data.mimiro.io/people/workedfor", true, []string{HISTORY})
+			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-2"}, "http://data.mimiro.io/people/workedfor", true, []string{HISTORY}, 0)
 			g.Assert(len(result)).Eql(2, "expected 2 people to be found from history dataset")
 
 			entity := findEntity(result, "ns3:person-4")
@@ -1451,8 +1425,7 @@ func TestDatasetScope(test *testing.T) {
 		g.It("Should not inversly find array relations if relation-owning dataset is disallowed", func() {
 			//find company-2 and inversely follow workedfor relations with filter on people and companies
 			//should not find any relations since history access is not allowed, and workedfor is only stored there
-			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-2"},
-				"http://data.mimiro.io/people/workedfor", true, []string{PEOPLE, COMPANIES})
+			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-2"}, "http://data.mimiro.io/people/workedfor", true, []string{PEOPLE, COMPANIES}, 0)
 			g.Assert(len(result)).Eql(0)
 		})
 

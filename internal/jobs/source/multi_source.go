@@ -172,7 +172,7 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 	//go through joins in sequence
 	for idx, join := range dep.Joins {
 		// TODO: create GetManyRelated variant that takes internal ids as "startUris" ?
-		relatedEntities, err := multiSource.Store.GetManyRelatedEntities(uris, join.Predicate, join.Inverse, nil)
+		relatedEntities, err := multiSource.Store.GetManyRelatedEntities(uris, join.Predicate, join.Inverse, nil, 0)
 		if err != nil {
 			return fmt.Errorf("GetManyRelatedEntities failed for Join %+v, %w", join, err)
 		}
@@ -193,8 +193,7 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 
 				timestamp := int64(changes.Entities[0].Recorded)
 
-				prevRelatedEntities, err := multiSource.Store.GetManyRelatedEntitiesAtTime(
-					uris, join.Predicate, join.Inverse, nil, timestamp)
+				prevRelatedEntities, _, err := multiSource.Store.GetManyRelatedEntitiesAtTime(uris, join.Predicate, join.Inverse, nil, timestamp, 0)
 				if err != nil {
 					return fmt.Errorf("previous GetManyRelatedEntities failed for Join %+v at timestamp %v, %w", join, timestamp, err)
 				}

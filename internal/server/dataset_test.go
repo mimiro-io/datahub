@@ -90,7 +90,7 @@ func TestDataset(t *testing.T) {
 
 			// query
 			queryIds := []string{"http://data.mimiro.io/people/person-1"}
-			result, err := env.store.GetManyRelatedEntities(queryIds, "*", false, []string{})
+			result, err := env.store.GetManyRelatedEntities(queryIds, "*", false, []string{}, 0)
 			g.Assert(err).IsNil("Expected query to succeed")
 
 			var company2Seen, company1Seen bool
@@ -122,7 +122,7 @@ func TestDataset(t *testing.T) {
 			g.Assert(err).IsNil("Expected entity to be stored without error")
 
 			// query
-			result, err = env.store.GetManyRelatedEntities(queryIds, "*", false, []string{})
+			result, err = env.store.GetManyRelatedEntities(queryIds, "*", false, []string{}, 0)
 			g.Assert(err).IsNil("Expected query to succeed")
 
 			company3Seen := false

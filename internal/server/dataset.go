@@ -450,10 +450,10 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 				}
 
 				for _, ref := range refs {
-					outgoingBuffer := make([]byte, 40)
-					incomingBuffer := make([]byte, 40)
+					outgoingBuffer := [40]byte{} //make([]byte, 40)
+					incomingBuffer := [40]byte{} // make([]byte, 40)
 
-					// assert uint64 id for predicate
+					//assert uint64 id for predicate
 					predid, _, err := ds.store.assertIDForURI(k, idCache)
 					if err != nil {
 						return newitems, err
@@ -476,12 +476,15 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 						binary.BigEndian.PutUint16(outgoingBuffer[34:], 0) // deleted.
 					}
 					binary.BigEndian.PutUint32(outgoingBuffer[36:], ds.InternalID)
-					err = txn.Set(outgoingBuffer, []byte(""))
+					err = txn.Set(outgoingBuffer[:], []byte(""))
 					if err != nil {
 						return newitems, err
 					}
 
-					binary.BigEndian.PutUint16(incomingBuffer, INCOMING_REF_INDEX)
+					//if rid == 8 {
+					//	println("setting", relatedid, "->", rid, "deleted:", deleted, k, ref)
+					//}
+					binary.BigEndian.PutUint16(incomingBuffer[0:], INCOMING_REF_INDEX)
 					binary.BigEndian.PutUint64(incomingBuffer[2:], relatedid)
 					binary.BigEndian.PutUint64(incomingBuffer[10:], rid)
 					binary.BigEndian.PutUint64(incomingBuffer[18:], uint64(txnTime))
@@ -492,10 +495,14 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 						binary.BigEndian.PutUint16(incomingBuffer[34:], 0) // deleted.
 					}
 					binary.BigEndian.PutUint32(incomingBuffer[36:], ds.InternalID)
-					err = txn.Set(incomingBuffer, []byte(""))
+					if outgoingBuffer[35] != incomingBuffer[35] {
+						println("setting1", relatedid, "->", rid, "deleted:", deleted, fmt.Sprintf("\n    %+v\n    %+v", outgoingBuffer, incomingBuffer))
+					}
+					err = txn.Set(incomingBuffer[:], []byte(""))
 					if err != nil {
 						return newitems, err
 					}
+					//println(fmt.Sprintf("%p, value: %v", &deleted, deleted))
 				}
 			}
 

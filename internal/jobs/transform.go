@@ -382,7 +382,7 @@ func (javascriptTransform *JavascriptTransform) AssertNamespacePrefix(urlExpansi
 
 func (javascriptTransform *JavascriptTransform) Query(startingEntities []string, predicate string, inverse bool, datasets []string) [][]interface{} {
 	ts := time.Now()
-	results, err := javascriptTransform.Store.GetManyRelatedEntities(startingEntities, predicate, inverse, datasets)
+	results, err := javascriptTransform.Store.GetManyRelatedEntities(startingEntities, predicate, inverse, datasets, 0)
 	_ = javascriptTransform.statsDClient.Timing("transform.Query.time",
 		time.Since(ts), javascriptTransform.statsDTags, 1)
 	if err != nil {
