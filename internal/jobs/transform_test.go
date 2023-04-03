@@ -39,7 +39,7 @@ func TestTransform(t *testing.T) {
 					}`
 			f := base64.StdEncoding.EncodeToString([]byte(js))
 
-			transform, err := newJavascriptTransform(zap.NewNop().Sugar(), f, nil)
+			transform, err := NewJavascriptTransform(zap.NewNop().Sugar(), f, nil, nil)
 			g.Assert(err).IsNil("Expected transform runner to be created without error")
 
 			entities := make([]*server.Entity, 0)
@@ -57,7 +57,7 @@ func TestTransform(t *testing.T) {
 					}`
 			f := base64.StdEncoding.EncodeToString([]byte(js))
 
-			transform, err := newJavascriptTransform(zap.NewNop().Sugar(), f, nil)
+			transform, err := NewJavascriptTransform(zap.NewNop().Sugar(), f, nil, nil)
 			g.Assert(err).IsNil("Expected transform runner to be created without error")
 
 			entities := make([]*server.Entity, 0)
@@ -80,7 +80,7 @@ func TestTransform(t *testing.T) {
 					}`
 			f := base64.StdEncoding.EncodeToString([]byte(js))
 
-			transform, err := newJavascriptTransform(zap.NewNop().Sugar(), f, nil)
+			transform, err := NewJavascriptTransform(zap.NewNop().Sugar(), f, nil, nil)
 			g.Assert(err).IsNil("Expected transform runner to be created without error")
 
 			entities := make([]*server.Entity, 0)
@@ -108,7 +108,7 @@ func TestTransform(t *testing.T) {
 					}`
 			f := base64.StdEncoding.EncodeToString([]byte(js))
 
-			transform, err := newJavascriptTransform(zap.NewNop().Sugar(), f, nil)
+			transform, err := NewJavascriptTransform(zap.NewNop().Sugar(), f, nil, nil)
 			g.Assert(err).IsNil("Expected transform runner to be created without error")
 
 			entities := make([]*server.Entity, 0)
@@ -136,7 +136,7 @@ func TestTransform(t *testing.T) {
 					}`
 			f := base64.StdEncoding.EncodeToString([]byte(js))
 
-			transform, err := newJavascriptTransform(zap.NewNop().Sugar(), f, nil)
+			transform, err := NewJavascriptTransform(zap.NewNop().Sugar(), f, nil, nil)
 			g.Assert(err).IsNil("Expected transform runner to be created without error")
 
 			entities := make([]*server.Entity, 0)

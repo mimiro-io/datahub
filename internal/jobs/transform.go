@@ -43,7 +43,7 @@ type Transform interface {
 
 // these are upper cased to prevent the user from accidentally redefining them
 // (i mean, not really, but maybe it will help)
-const helperJavascriptFunctions = `
+const HelperJavascriptFunctions = `
 function SetProperty(entity, prefix, name, value) {
 	if (entity === null || entity === undefined) {
 		return;
@@ -188,7 +188,7 @@ func (s *Scheduler) parseTransform(config *JobConfiguration) (Transform, error) 
 			} else if transformTypeName == "JavascriptTransform" {
 				code64, ok := transformConfig["Code"]
 				if ok && code64 != "" {
-					transform, err := newJavascriptTransform(s.Logger, code64.(string), s.Store)
+					transform, err := NewJavascriptTransform(s.Logger, code64.(string), s.Store, s.DatasetManager)
 					if err != nil {
 						return nil, err
 					}
@@ -212,7 +212,7 @@ func (s *Scheduler) parseTransform(config *JobConfiguration) (Transform, error) 
 	return nil, nil
 }
 
-func newJavascriptTransform(log *zap.SugaredLogger, code64 string, store *server.Store) (*JavascriptTransform, error) {
+func NewJavascriptTransform(log *zap.SugaredLogger, code64 string, store *server.Store, dsm *server.DsManager) (*JavascriptTransform, error) {
 	transform := &JavascriptTransform{Logger: log.Named("transform")}
 	code, err := base64.StdEncoding.DecodeString(code64)
 	if err != nil {
@@ -221,6 +221,7 @@ func newJavascriptTransform(log *zap.SugaredLogger, code64 string, store *server
 	transform.Code = code
 	transform.Runtime = goja.New()
 	transform.Store = store
+	transform.DatasetManager = dsm
 
 	// add query function to runtime
 	transform.Runtime.Set("Query", transform.Query)
@@ -235,6 +236,8 @@ func newJavascriptTransform(log *zap.SugaredLogger, code64 string, store *server
 	transform.Runtime.Set("ExecuteTransaction", transform.ExecuteTransaction)
 	transform.Runtime.Set("AsEntity", transform.AsEntity)
 	transform.Runtime.Set("UUID", transform.UUID)
+	transform.Runtime.Set("WriteQueryResult", transform.WriteQueryResult)
+	transform.Runtime.Set("GetDatasetChanges", transform.DatasetChanges)
 
 	_, err = transform.Runtime.RunString(string(code))
 	if err != nil {
@@ -242,7 +245,7 @@ func newJavascriptTransform(log *zap.SugaredLogger, code64 string, store *server
 	}
 
 	// add helper functions
-	_, err = transform.Runtime.RunString(helperJavascriptFunctions)
+	_, err = transform.Runtime.RunString(HelperJavascriptFunctions)
 	if err != nil {
 		return nil, err
 	}
@@ -250,24 +253,40 @@ func newJavascriptTransform(log *zap.SugaredLogger, code64 string, store *server
 }
 
 type JavascriptTransform struct {
-	Store        *server.Store
-	Code         []byte
-	Runtime      *goja.Runtime
-	Logger       *zap.SugaredLogger
-	statsDClient statsd.ClientInterface
-	statsDTags   []string
-	timings      map[string]time.Time
-	Parallelism  int
+	Store             *server.Store
+	Code              []byte
+	Runtime           *goja.Runtime
+	Logger            *zap.SugaredLogger
+	statsDClient      statsd.ClientInterface
+	statsDTags        []string
+	timings           map[string]time.Time
+	Parallelism       int
+	QueryResultWriter QueryResultWriter
+	DatasetManager    *server.DsManager
+}
+
+func (javascriptTransform *JavascriptTransform) DatasetChanges(datasetName string, since uint64, limit int) (*server.Changes, error) {
+	dataset := javascriptTransform.DatasetManager.GetDataset(datasetName)
+	if dataset == nil {
+		return nil, errors.New("dataset not found: " + datasetName)
+	}
+
+	changes, err := dataset.GetChanges(since, limit, true)
+	return changes, err
+}
+
+func (javascriptTransform *JavascriptTransform) WriteQueryResult(object any) error {
+	return javascriptTransform.QueryResultWriter.WriteObject(object)
 }
 
 func (javascriptTransform *JavascriptTransform) getParallelism() int {
 	return javascriptTransform.Parallelism
 }
 
-// clone the transform for use in parallel processing
+// Clone the transform for use in parallel processing
 func (javascriptTransform *JavascriptTransform) Clone() (*JavascriptTransform, error) {
 	code := base64.StdEncoding.EncodeToString(javascriptTransform.Code)
-	return newJavascriptTransform(javascriptTransform.Logger, code, javascriptTransform.Store)
+	return NewJavascriptTransform(javascriptTransform.Logger, code, javascriptTransform.Store, javascriptTransform.DatasetManager)
 }
 
 func (javascriptTransform *JavascriptTransform) AsEntity(val interface{}) (res *server.Entity) {
@@ -402,6 +421,35 @@ func (javascriptTransform *JavascriptTransform) ToString(obj interface{}) string
 	default:
 		return fmt.Sprintf("%s", obj)
 	}
+}
+
+type QueryResultWriter interface {
+	WriteObject(object any) error
+	Close() error
+}
+
+func (javascriptTransform *JavascriptTransform) ExecuteQuery(resultWriter QueryResultWriter) (er error) {
+	// set the passed in result writer. This is delayed in cases where the query object may exist and is bound
+	// to a result writer nearer the time of execution.
+	javascriptTransform.QueryResultWriter = resultWriter
+	defer func(resultWriter QueryResultWriter) {
+		er = resultWriter.Close()
+	}(resultWriter)
+
+	var queryFunc func() error
+	err := javascriptTransform.Runtime.ExportTo(javascriptTransform.Runtime.Get("do_query"), &queryFunc)
+
+	if err != nil {
+		return err
+	}
+
+	// invoke transform, and catch js runtime err
+	err = queryFunc()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (javascriptTransform *JavascriptTransform) transformEntities(runner *Runner, entities []*server.Entity, jobTag string) ([]*server.Entity, error) {
