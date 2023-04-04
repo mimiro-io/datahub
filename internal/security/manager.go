@@ -128,6 +128,8 @@ func NewServiceCore(env *conf.Env) *ServiceCore {
 
 	serviceCore.Init()
 
+	jwt.MarshalSingleStringAsArray = false
+
 	return serviceCore
 }
 
