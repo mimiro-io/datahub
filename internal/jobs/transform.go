@@ -425,16 +425,12 @@ func (javascriptTransform *JavascriptTransform) ToString(obj interface{}) string
 
 type QueryResultWriter interface {
 	WriteObject(object any) error
-	Close() error
 }
 
 func (javascriptTransform *JavascriptTransform) ExecuteQuery(resultWriter QueryResultWriter) (er error) {
 	// set the passed in result writer. This is delayed in cases where the query object may exist and is bound
 	// to a result writer nearer the time of execution.
 	javascriptTransform.QueryResultWriter = resultWriter
-	defer func(resultWriter QueryResultWriter) {
-		er = resultWriter.Close()
-	}(resultWriter)
 
 	var queryFunc func() error
 	err := javascriptTransform.Runtime.ExportTo(javascriptTransform.Runtime.Get("do_query"), &queryFunc)

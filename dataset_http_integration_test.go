@@ -15,7 +15,9 @@
 package datahub
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/labstack/echo/v4"
@@ -43,6 +45,7 @@ func TestFullSync(t *testing.T) {
 	var mockLayer *MockLayer
 
 	location := "./dataset_fullsync_integration_test"
+	queryUrl := "http://localhost:24997/query"
 	dsUrl := "http://localhost:24997/datasets/bananas"
 	proxyDsUrl := "http://localhost:24997/datasets/cucumbers"
 	datasetsUrl := "http://localhost:24997/datasets"
@@ -178,6 +181,36 @@ func TestFullSync(t *testing.T) {
 				err = json.Unmarshal(bodyBytes, &entities)
 				g.Assert(err).IsNil()
 				g.Assert(len(entities)).Eql(12, "expected 10 entities plus @context and @continuation")
+			})
+
+			g.It("Query endpoint can find the changes", func() {
+				// populate dataset
+				payload := strings.NewReader(bananasFromTo(1, 10, false))
+				res, err := http.Post(dsUrl+"/entities", "application/json", payload)
+
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+
+				// do query
+				js := `
+					function do_query() {
+						let obj = { "name": "homer" };
+						WriteQueryResult(obj);
+					}
+					`
+				queryEncoded := base64.StdEncoding.EncodeToString([]byte(js))
+
+				query := map[string]interface{}{"query": queryEncoded}
+				queryBytes, _ := json.Marshal(query)
+
+				res, err = http.Post(queryUrl, "application/x-javascript-query", bytes.NewReader(queryBytes))
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+
+				// get the result
+
 			})
 
 			g.It("Should accept multiple overlapping batches of changes", func() {

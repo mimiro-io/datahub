@@ -137,12 +137,6 @@ func (w *HttpQueryResponseWriter) WriteObject(object interface{}) error {
 	return nil
 }
 
-func (w *HttpQueryResponseWriter) Close() error {
-	_, _ = w.context.Response().Write([]byte("]"))
-	w.context.Response().Flush()
-	return nil
-}
-
 func (handler *queryHandler) queryHandler(c echo.Context) error {
 
 	// get content type
@@ -177,6 +171,10 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 			handler.logger.Warn("Error executing javascript query " + err.Error())
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
+
+		c.Response().Write([]byte("]"))
+		c.Response().Flush()
+
 		return nil
 	}
 

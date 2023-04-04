@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"os"
+	"testing"
+
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/franela/goblin"
 	"github.com/mimiro-io/datahub/internal"
@@ -11,27 +14,19 @@ import (
 	"github.com/mimiro-io/datahub/internal/server"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
-	"os"
-	"testing"
 )
 
 // implements QueryResultWriter interface
 type TestQueryResultWriter struct {
-	Results       []interface{}
-	HasBeenClosed bool
+	Results []interface{}
 }
 
 func NewTestQueryResultWriter() *TestQueryResultWriter {
-	return &TestQueryResultWriter{Results: make([]interface{}, 0), HasBeenClosed: false}
+	return &TestQueryResultWriter{Results: make([]interface{}, 0)}
 }
 
 func (t *TestQueryResultWriter) WriteObject(result interface{}) error {
 	t.Results = append(t.Results, result)
-	return nil
-}
-
-func (t *TestQueryResultWriter) Close() error {
-	t.HasBeenClosed = true
 	return nil
 }
 
@@ -90,7 +85,6 @@ func TestQuery(test *testing.T) {
 			// check result
 			g.Assert(len(resultWriter.Results)).Equal(1)
 			g.Assert(resultWriter.Results[0]).Equal(map[string]interface{}{"name": "homer"})
-			g.Assert(resultWriter.HasBeenClosed).IsTrue()
 
 		})
 
@@ -138,7 +132,6 @@ func TestQuery(test *testing.T) {
 			// check result
 			g.Assert(len(resultWriter.Results)).Equal(1)
 			g.Assert(resultWriter.Results[0]).Equal(map[string]interface{}{"count": 1})
-			g.Assert(resultWriter.HasBeenClosed).IsTrue()
 
 		})
 
@@ -203,7 +196,6 @@ func TestQuery(test *testing.T) {
 			// check result
 			g.Assert(len(resultWriter.Results)).Equal(1)
 			g.Assert(resultWriter.Results[0]).Equal(map[string]interface{}{"count": 2, "names": []interface{}{"http://data.mimiro.io/people/homer", "http://data.mimiro.io/people/marge"}})
-			g.Assert(resultWriter.HasBeenClosed).IsTrue()
 
 		})
 	})
