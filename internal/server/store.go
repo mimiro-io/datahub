@@ -15,6 +15,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -830,6 +831,7 @@ func (s *Store) GetRelatedAtTime(startPoint RelatedEntitiesContinuation, predica
 	results := make([]result, 0)
 
 	cont := RelatedEntitiesContinuation{StartUri: uri}
+	cont.NextIdxKey = make([]byte, 40)
 	// lookup pred and id
 	err = s.database.View(func(txn *badger.Txn) error {
 		rid, ridExists, err := s.getIDForURI(txn, resourceCurie)
@@ -855,7 +857,7 @@ func (s *Store) GetRelatedAtTime(startPoint RelatedEntitiesContinuation, predica
 
 		if inverse {
 			// define search prefix
-			searchBuffer := make([]byte, 40)
+			searchBuffer := make([]byte, 10)
 			binary.BigEndian.PutUint16(searchBuffer, INCOMING_REF_INDEX)
 			binary.BigEndian.PutUint64(searchBuffer[2:], rid)
 
@@ -867,23 +869,26 @@ func (s *Store) GetRelatedAtTime(startPoint RelatedEntitiesContinuation, predica
 
 			opts1 := badger.DefaultIteratorOptions
 			opts1.PrefetchValues = false
-			opts1.Prefix = searchBuffer[:10]
+			opts1.Prefix = searchBuffer
 			// opts1.Reverse = true
 			outgoingIterator := txn.NewIterator(opts1)
 			defer outgoingIterator.Close()
 
 			var currentRID uint64
 			currentRID = 0
-			tmpResult := make(map[[12]byte]result)
+			//tmpResult := make(map[[12]byte]result)
 
-			for outgoingIterator.Seek(startBuffer); outgoingIterator.ValidForPrefix(searchBuffer[:10]); outgoingIterator.Next() {
+			var prevResult result
+			var prevDeleted bool
+			for outgoingIterator.Seek(startBuffer); outgoingIterator.ValidForPrefix(searchBuffer); outgoingIterator.Next() {
 				if startPoint.NextIdxKey != nil {
-					outgoingIterator.Next() // forward to next item
+					startPoint.NextIdxKey = nil
+					outgoingIterator.Next() // NextIdxKey is actually the last key of previous page. forward once to next item
 					if !outgoingIterator.ValidForPrefix(searchBuffer[:10]) {
 						break
 					}
 				}
-				if limit != 0 && len(results)+len(tmpResult) >= limit {
+				if limit != 0 && len(results) >= limit {
 					break
 				}
 				item := outgoingIterator.Item()
@@ -916,47 +921,32 @@ func (s *Store) GetRelatedAtTime(startPoint RelatedEntitiesContinuation, predica
 				// get related
 				relatedID := binary.BigEndian.Uint64(k[10:])
 
-				if relatedID != currentRID {
-					// add to results
-					if currentRID != 0 {
-						for _, v := range tmpResult {
-							results = append(results, v)
-						}
-					}
-					tmpResult = make(map[[12]byte]result)
-				}
-
-				// set current to be this related object
-				currentRID = relatedID
-
 				// get predicate
 				predID := binary.BigEndian.Uint64(k[26:])
 				if pid != predID && predicate != "*" {
 					continue
 				}
 
-				// make result key
-				var rkey [12]byte
-				binary.BigEndian.PutUint32(rkey[0:], datasetId)
-				binary.BigEndian.PutUint64(rkey[4:], predID)
-
-				// check is deleted
-				del := binary.BigEndian.Uint16(k[34:])
-				println("    in GetMany", del, rid, "->", relatedID)
-				if del == 1 {
-					// remove result from tmp for this
-					delete(tmpResult, rkey)
-				} else {
-					tmpResult[rkey] = result{time: uint64(et), entityID: relatedID, predicateID: predID, datasetID: datasetId}
+				if relatedID != currentRID {
+					// add to results
+					if currentRID != 0 && !prevDeleted {
+						results = append(results, prevResult)
+					}
 				}
+
+				del := binary.BigEndian.Uint16(k[34:])
+				prevDeleted = del == 1
+				prevResult = result{time: uint64(et), entityID: relatedID, predicateID: predID, datasetID: datasetId}
+
+				// set current to be this related object
+				currentRID = relatedID
+
 				cont.NextIdxKey = k
 			}
 
-			// add the last batch of pending tmp results
-			if currentRID != 0 {
-				for _, v := range tmpResult {
-					results = append(results, v)
-				}
+			// add the last iteration result
+			if currentRID != 0 && !prevDeleted && (limit == 0 || len(results) < limit) {
+				results = append(results, prevResult)
 			}
 		} else {
 			/*  binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
@@ -966,26 +956,31 @@ func (s *Store) GetRelatedAtTime(startPoint RelatedEntitiesContinuation, predica
 			binary.BigEndian.PutUint64(outgoingBuffer[26:], relatedid)
 			binary.BigEndian.PutUint16(outgoingBuffer[34:], 0) // deleted.
 			binary.BigEndian.PutUint32(outgoingBuffer[36:], ds.InternalID) */
-
 			searchBuffer := make([]byte, 10)
 			binary.BigEndian.PutUint16(searchBuffer, OUTGOING_REF_INDEX)
 			binary.BigEndian.PutUint64(searchBuffer[2:], rid)
 
 			// key is pid, ds, rid
-			tmpResult := make(map[[20]byte]result)
+			//tmpResult := make(map[[20]byte]result)
 
 			opts1 := badger.DefaultIteratorOptions
 			opts1.PrefetchValues = false
 			opts1.Prefix = searchBuffer
+			opts1.Reverse = true
 			outgoingIterator := txn.NewIterator(opts1)
 			defer outgoingIterator.Close()
 
-			for outgoingIterator.Seek(searchBuffer); outgoingIterator.ValidForPrefix(searchBuffer); outgoingIterator.Next() {
-				if limit != 0 && len(results)+len(tmpResult) >= limit {
-					break
-				}
+			seenIds := map[uint64]bool{}
+			var hasReachedStartKey bool
+			if startPoint.NextIdxKey == nil {
+				hasReachedStartKey = true
+			}
+			for outgoingIterator.Seek(append(searchBuffer, 0xFF)); outgoingIterator.ValidForPrefix(searchBuffer); outgoingIterator.Next() {
 				item := outgoingIterator.Item()
 				k := item.Key()
+				if limit != 0 && len(results) >= limit {
+					break
+				}
 
 				datasetId := binary.BigEndian.Uint32(k[36:])
 
@@ -1007,8 +1002,7 @@ func (s *Store) GetRelatedAtTime(startPoint RelatedEntitiesContinuation, predica
 				// if rel recorded time gt than query time then continue
 				et := int64(binary.BigEndian.Uint64(k[10:]))
 				if et > queryTime {
-					// we can use break here
-					break
+					continue
 				}
 
 				// get predicate
@@ -1019,27 +1013,25 @@ func (s *Store) GetRelatedAtTime(startPoint RelatedEntitiesContinuation, predica
 
 				// get related
 				relatedID := binary.BigEndian.Uint64(k[26:])
-
-				var rkey [20]byte
-				binary.BigEndian.PutUint32(rkey[0:], datasetId)
-				binary.BigEndian.PutUint64(rkey[4:], predID)
-				binary.BigEndian.PutUint64(rkey[12:], relatedID)
-
+				if _, seen := seenIds[relatedID]; seen {
+					continue
+				}
+				seenIds[relatedID] = true
 				// get deleted
 				del := binary.BigEndian.Uint16(k[34:])
-				if del == 1 {
-					delete(tmpResult, rkey)
-				} else {
-					tmpResult[rkey] = result{time: uint64(et), entityID: relatedID, predicateID: predID}
+				if del != 1 && hasReachedStartKey {
+					results = append(results, result{time: uint64(et), entityID: relatedID, predicateID: predID, datasetID: datasetId})
+					copy(cont.NextIdxKey, k)
 				}
-				cont.NextIdxKey = k
-			}
 
-			results = make([]result, len(tmpResult))
-			i := 0
-			for _, v := range tmpResult {
-				results[i] = v
-				i++
+				// set at end of iteration so that we jump over the item the previous page gave as continuation, while still
+				// adding it to seenIds
+				if !hasReachedStartKey {
+					if bytes.Equal(k, startPoint.NextIdxKey) {
+						hasReachedStartKey = true
+					}
+				}
+
 			}
 		}
 		return nil
@@ -1048,7 +1040,9 @@ func (s *Store) GetRelatedAtTime(startPoint RelatedEntitiesContinuation, predica
 	if err != nil {
 		return nil, cont, err
 	}
-
+	if len(results) == 0 {
+		cont.NextIdxKey = nil
+	}
 	return results, cont, nil
 }
 

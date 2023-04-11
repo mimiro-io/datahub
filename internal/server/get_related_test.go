@@ -3,13 +3,13 @@ package server
 import (
 	"context"
 	"fmt"
-	"os"
-	"testing"
-
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/franela/goblin"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
+	"os"
+	"testing"
+	"time"
 
 	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
@@ -47,21 +47,49 @@ func TestGetRelated(test *testing.T) {
 			peopleNamespacePrefix := setupData(store, dsm)
 			result, err := store.GetManyRelatedEntitiesBatch(
 				[]RelatedEntitiesContinuation{{StartUri: peopleNamespacePrefix + ":person-1"}},
-				"*", false, nil, 0)
+				"*",
+				false,
+				nil,
+				0,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
-			g.Assert(len(result[0].Relations)).Eql(3)
+			g.Assert(len(result[0].Relations)).Eql(3, "person-1 points to p2, p3 and (empty) p4")
+			seenCnt := 0
+			g.Assert(result[0].Relations[0].RelatedEntity.ID).Eql(peopleNamespacePrefix + ":person-3")
+			g.Assert(result[0].Relations[1].RelatedEntity.ID).Eql(peopleNamespacePrefix + ":person-4")
+			g.Assert(result[0].Relations[2].RelatedEntity.ID).Eql(peopleNamespacePrefix + ":person-2")
+			for _, r := range result[0].Relations {
+				if r.RelatedEntity.ID == peopleNamespacePrefix+":person-2" ||
+					r.RelatedEntity.ID == peopleNamespacePrefix+":person-3" {
+					seenCnt++
+					g.Assert(r.RelatedEntity.Recorded > 0).IsTrue("make sure person-2 is an actual entity")
+				}
+				if r.RelatedEntity.ID == peopleNamespacePrefix+":person-4" {
+					seenCnt++
+					g.Assert(r.RelatedEntity.Recorded).Eql(uint64(0), "make sure person-4 is an open ref")
+				}
+			}
+			g.Assert(seenCnt).Eql(3)
 
 			result, err = store.GetManyRelatedEntitiesBatch(
 				[]RelatedEntitiesContinuation{{StartUri: peopleNamespacePrefix + ":person-1"}},
-				"*", false, nil, 1)
+				"*",
+				false,
+				nil,
+				1,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(len(result[0].Relations)).Eql(1)
 
 			result, err = store.GetManyRelatedEntitiesBatch(
 				[]RelatedEntitiesContinuation{{StartUri: peopleNamespacePrefix + ":person-1"}},
-				"*", false, nil, 2)
+				"*",
+				false,
+				nil,
+				2,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(len(result[0].Relations)).Eql(2)
@@ -70,8 +98,15 @@ func TestGetRelated(test *testing.T) {
 			peopleNamespacePrefix := setupData(store, dsm)
 			// get everything
 			result, err := store.GetManyRelatedEntitiesBatch(
-				[]RelatedEntitiesContinuation{{StartUri: peopleNamespacePrefix + ":person-1"}, {StartUri: peopleNamespacePrefix + ":person-2"}},
-				"*", false, nil, 0)
+				[]RelatedEntitiesContinuation{
+					{StartUri: peopleNamespacePrefix + ":person-1"},
+					{StartUri: peopleNamespacePrefix + ":person-2"},
+				},
+				"*",
+				false,
+				nil,
+				0,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(2)
 			g.Assert(len(result[0].Relations)).Eql(3)
@@ -79,58 +114,159 @@ func TestGetRelated(test *testing.T) {
 
 			// limit 1, should return first hit of first startUri
 			result, err = store.GetManyRelatedEntitiesBatch(
-				[]RelatedEntitiesContinuation{{StartUri: peopleNamespacePrefix + ":person-1"}, {StartUri: peopleNamespacePrefix + ":person-2"}},
-				"*", false, nil, 1)
+				[]RelatedEntitiesContinuation{
+					{StartUri: peopleNamespacePrefix + ":person-1"},
+					{StartUri: peopleNamespacePrefix + ":person-2"},
+				},
+				"*",
+				false,
+				nil,
+				1,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(len(result[0].Relations)).Eql(1)
 
 			// limit 4, room for all 3 relations of first startUri plus 1 from other startUri
 			result, err = store.GetManyRelatedEntitiesBatch(
-				[]RelatedEntitiesContinuation{{StartUri: peopleNamespacePrefix + ":person-1"}, {StartUri: peopleNamespacePrefix + ":person-2"}},
-				"*", false, nil, 4)
+				[]RelatedEntitiesContinuation{
+					{StartUri: peopleNamespacePrefix + ":person-1"},
+					{StartUri: peopleNamespacePrefix + ":person-2"},
+				},
+				"*",
+				false,
+				nil,
+				4,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(2)
 			g.Assert(len(result[0].Relations)).Eql(3)
 			g.Assert(len(result[1].Relations)).Eql(1)
 		})
 		g.It("Should respect limit in inverse queries", func() {
-			g.Timeout(1 * time.Hour)
 			peopleNamespacePrefix := setupData(store, dsm)
 
 			// get everything
 			result, err := store.GetManyRelatedEntitiesBatch(
 				[]RelatedEntitiesContinuation{
-					//{StartUri: peopleNamespacePrefix + ":person-1"},
-					{StartUri: peopleNamespacePrefix + ":person-2"}},
+					{StartUri: peopleNamespacePrefix + ":person-1"},
+					{StartUri: peopleNamespacePrefix + ":person-2"},
+				},
 				"*", true, nil, 0)
 			g.Assert(err).IsNil()
-			//g.Assert(len(result)).Eql(2)
-			//g.Assert(len(result[0].Relations)).Eql(2)
-			for _, r := range result[0].Relations {
-				fmt.Printf("%+v\n", r.RelatedEntity)
-			}
-			//g.Assert(len(result[1].Relations)).Eql(3) // TODO: person-x is found, but its deleted? also in go-debug it does not find person-x???
-			/*
-				// limit 1, should return first hit of first startUri
-				result, err = store.GetManyRelatedEntitiesBatch(
-					[]RelatedEntitiesContinuation{{StartUri: peopleNamespacePrefix + ":person-1"}, {StartUri: peopleNamespacePrefix + ":person-2"}},
-					"*", true, nil, 1)
-				g.Assert(err).IsNil()
-				g.Assert(len(result)).Eql(1)
-				g.Assert(len(result[0].Relations)).Eql(1)
+			g.Assert(len(result)).Eql(2)
+			g.Assert(len(result[0].Relations)).Eql(1)
+			g.Assert(len(result[1].Relations)).Eql(2)
+			// limit 1, should return first hit of first startUri
+			result, err = store.GetManyRelatedEntitiesBatch(
+				[]RelatedEntitiesContinuation{
+					{StartUri: peopleNamespacePrefix + ":person-1"},
+					{StartUri: peopleNamespacePrefix + ":person-2"},
+				},
+				"*",
+				true,
+				nil,
+				1,
+			)
+			g.Assert(err).IsNil()
+			g.Assert(len(result)).Eql(1)
+			g.Assert(len(result[0].Relations)).Eql(1)
 
-				// limit 3, room for all 2 relations of first startUri plus 1 from other startUri
-				result, err = store.GetManyRelatedEntitiesBatch(
-					[]RelatedEntitiesContinuation{{StartUri: peopleNamespacePrefix + ":person-1"}, {StartUri: peopleNamespacePrefix + ":person-2"}},
-					"*", true, nil, 3)
-				g.Assert(err).IsNil()
-				g.Assert(len(result)).Eql(2)
-				g.Assert(len(result[0].Relations)).Eql(2)
-				g.Assert(len(result[1].Relations)).Eql(1)
-			*/
+			// limit 2, room for all 1 relations of first startUri plus 1 from other startUri
+			result, err = store.GetManyRelatedEntitiesBatch(
+				[]RelatedEntitiesContinuation{
+					{StartUri: peopleNamespacePrefix + ":person-1"},
+					{StartUri: peopleNamespacePrefix + ":person-2"},
+				},
+				"*",
+				true,
+				nil,
+				2,
+			)
+			g.Assert(err).IsNil()
+			g.Assert(len(result)).Eql(2)
+			g.Assert(len(result[0].Relations)).Eql(1)
+			g.Assert(len(result[1].Relations)).Eql(1)
+		})
+		g.It("Should return a working continuation token", func() {
+			g.Timeout(1 * time.Hour)
+			b := buildTestBatch(store, []testPerson{
+				{id: 1, friends: []int{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}},
+			})
+			pref := persist(store, dsm, b)
+			start := []RelatedEntitiesContinuation{{StartUri: pref + ":person-1"}}
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			g.Assert(err).IsNil()
+			g.Assert(len(queryResult)).Eql(1)
+			g.Assert(len(queryResult[0].Relations)).Eql(19)
+
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 2)
+			g.Assert(err).IsNil()
+			g.Assert(len(queryResult)).Eql(1)
+			g.Assert(len(queryResult[0].Relations)).Eql(2)
+			g.Assert(queryResult[0].Relations[0].RelatedEntity.ID).Eql(pref + ":person-20")
+			g.Assert(queryResult[0].Relations[1].RelatedEntity.ID).Eql(pref + ":person-19")
+			g.Assert(queryResult[0].Continuation.NextIdxKey).IsNotNil()
+			startFromCont := []RelatedEntitiesContinuation{queryResult[0].Continuation}
+			queryResult, err = store.GetManyRelatedEntitiesBatch(startFromCont, "*", false, nil, 3)
+			g.Assert(err).IsNil()
+			g.Assert(len(queryResult)).Eql(1)
+			g.Assert(len(queryResult[0].Relations)).Eql(3)
+			g.Assert(queryResult[0].Relations[0].RelatedEntity.ID).Eql(pref + ":person-18")
+			g.Assert(queryResult[0].Relations[1].RelatedEntity.ID).Eql(pref + ":person-17")
+			g.Assert(queryResult[0].Relations[2].RelatedEntity.ID).Eql(pref + ":person-16")
+			g.Assert(queryResult[0].Continuation.NextIdxKey).IsNotNil()
+			startFromCont = []RelatedEntitiesContinuation{queryResult[0].Continuation}
+			queryResult, err = store.GetManyRelatedEntitiesBatch(startFromCont, "*", false, nil, 25)
+			g.Assert(err).IsNil()
+			g.Assert(len(queryResult)).Eql(1)
+			g.Assert(len(queryResult[0].Relations)).Eql(14)
+			g.Assert(queryResult[0].Relations[0].RelatedEntity.ID).Eql(pref + ":person-15")
+			g.Assert(queryResult[0].Relations[13].RelatedEntity.ID).Eql(pref + ":person-2")
+			g.Assert(queryResult[0].Continuation.NextIdxKey).IsNotNil()
+			startFromCont = []RelatedEntitiesContinuation{queryResult[0].Continuation}
+			queryResult, err = store.GetManyRelatedEntitiesBatch(startFromCont, "*", false, nil, 25)
+			g.Assert(err).IsNil()
+			g.Assert(len(queryResult)).Eql(1)
+			g.Assert(len(queryResult[0].Relations)).Eql(0)
+			g.Assert(queryResult[0].Continuation.NextIdxKey).IsNil()
 		})
 	})
+}
+
+func persist(store *Store, dsm *DsManager, b []*Entity) string {
+	friendsDS, _ := dsm.CreateDataset("friends", nil)
+	_ = friendsDS.StoreEntities(b)
+	peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+		"http://data.mimiro.io/people/",
+	)
+	return peopleNamespacePrefix
+}
+
+type testPerson struct {
+	id      int
+	friends []int
+	family  []int
+	deleted bool
+}
+
+func buildTestBatch(store *Store, input []testPerson) []*Entity {
+	peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+		"http://data.mimiro.io/people/",
+	)
+	result := make([]*Entity, 0, len(input))
+	for _, p := range input {
+		e := NewEntity(fmt.Sprintf(peopleNamespacePrefix+":person-%v", p.id), 0)
+		e.Properties[peopleNamespacePrefix+":Name"] = fmt.Sprintf("Person %v", p.id)
+		var friends []string
+		for _, f := range p.friends {
+			friends = append(friends, fmt.Sprintf("%v:person-%v", peopleNamespacePrefix, f))
+		}
+		e.References[peopleNamespacePrefix+":Friend"] = friends
+		e.IsDeleted = p.deleted
+		result = append(result, e)
+	}
+	return result
 }
 
 /*
@@ -171,7 +307,6 @@ func setupData(store *Store, dsm *DsManager) string {
 			"id":    peopleNamespacePrefix + ":person-1",
 			"props": map[string]any{peopleNamespacePrefix + ":Name": "Lisa"},
 			"refs": map[string]any{
-				// TODO: this should not break the test??
 				peopleNamespacePrefix + ":Friend": []string{peopleNamespacePrefix + ":person-x"},
 			},
 		}),

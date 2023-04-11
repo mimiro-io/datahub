@@ -33,7 +33,7 @@ func NewStorageError(msg string, innerError error) *StorageError {
 }
 
 func (e *StorageError) Error() string {
-	return fmt.Sprintf("%s", e.msg)
+	return e.msg
 }
 
 // we define these errors to prevent leaking of internal details on the api

@@ -101,12 +101,12 @@ func (ds *Dataset) StartFullSyncWithLease(fullSyncID string) error {
 func (ds *Dataset) RefreshFullSyncLease(fullSyncID string) error {
 	if ds.fullSyncStarted {
 		if fullSyncID == ds.fullSyncID {
-			//cancel previous lease
+			// cancel previous lease
 			if ds.fullSyncLease != nil && ds.fullSyncLease.cancel != nil {
 				ds.fullSyncLease.cancel()
 			}
 
-			//start new lease
+			// start new lease
 			ctx, cancel := context.WithTimeout(context.Background(), ds.store.fullsyncLeaseTimeout)
 			ds.fullSyncLease = &fullSyncLease{
 				ctx,
@@ -182,7 +182,6 @@ func (ds *Dataset) CompleteFullSync() error {
 		}
 		return nil
 	})
-
 	if err != nil {
 		return err
 	}
@@ -255,7 +254,11 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 }
 
 // StoreEntities
-func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int64, txn *badger.Txn) (newitems int64, Error error) {
+func (ds *Dataset) StoreEntitiesWithTransaction(
+	entities []*Entity,
+	txnTime int64,
+	txn *badger.Txn,
+) (newitems int64, Error error) {
 	tags := []string{
 		"application:datahub",
 		fmt.Sprintf("dataset:%s", ds.ID),
@@ -372,6 +375,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 			if prevLocalJson, found := localLatests[rid]; found {
 				prevLocalEntity := &Entity{}
 				err = json.Unmarshal(prevLocalJson, prevLocalEntity)
+				prevEntity = prevLocalEntity
 				if err != nil {
 					return newitems, err
 				}
@@ -450,7 +454,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 				}
 
 				for _, ref := range refs {
-					outgoingBuffer := [40]byte{} //make([]byte, 40)
+					outgoingBuffer := [40]byte{} // make([]byte, 40)
 					incomingBuffer := [40]byte{} // make([]byte, 40)
 
 					// assert uint64 id for predicate
@@ -634,6 +638,34 @@ func (ds *Dataset) StoreEntitiesWithTransaction(entities []*Entity, txnTime int6
 						err = txn.Set(incomingBuffer, []byte(""))
 						if err != nil {
 							return newitems, err
+						}
+
+						/*
+							if this entity has been part of this batch already in a previous loop iteration,
+							then there is a chance that the previous version had deleted state.
+							If this was the case, then we potentially just added non deleted ref keys to incoming and
+							outgoing indexes for the same relations.
+							Since we are in the same batch, the txnTime is equal just as the rest of the key components apart from the deleted flag.
+							If only the deleted flag differentiates two keys in an ordered ref index, then the deleted version will always be seen as newer ( since 1 > 0 ).
+
+							We want our current not-deleted refs to be seen as latest for the given txnTime.
+							Therefore, here we remove eventual deleted ref variants from the txn.
+						*/
+						if isDifferentLocally {
+							prevOutgoing := make([]byte, len(outgoingBuffer))
+							copy(prevOutgoing, outgoingBuffer)
+							binary.BigEndian.PutUint16(prevOutgoing[34:], 1) // deleted.
+							err = txn.Delete(prevOutgoing)
+							if err != nil {
+								return newitems, err
+							}
+							prevIncoming := make([]byte, len(incomingBuffer))
+							copy(prevIncoming, incomingBuffer)
+							binary.BigEndian.PutUint16(prevIncoming[34:], 1) // deleted.
+							err = txn.Delete(prevIncoming)
+							if err != nil {
+								return newitems, err
+							}
 						}
 
 						if refs, ok := oldRefs[predid]; ok {
@@ -848,7 +880,6 @@ func (ds *Dataset) GetEntities(from string, count int) (*EntitiesResult, error) 
 		result.Entities = append(result.Entities, entity)
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -870,7 +901,6 @@ func (ds *Dataset) MapEntities(from string, count int, processEntity func(entity
 
 		return processEntity(e)
 	})
-
 	if err != nil {
 		return "", err
 	}
@@ -882,7 +912,6 @@ func (ds *Dataset) MapEntities(from string, count int, processEntity func(entity
 // MapEntities applies a function to all entities in the dataset. the entities are provided as raw json bytes
 // returns the id of the last entity so that it can be used as a continuation token
 func (ds *Dataset) MapEntitiesRaw(from string, count int, processEntity func(json []byte) error) (string, error) {
-
 	lastKeyAsContinuationToken := ""
 
 	err := ds.store.database.View(func(txn *badger.Txn) error {
@@ -934,7 +963,6 @@ func (ds *Dataset) MapEntitiesRaw(from string, count int, processEntity func(jso
 
 		return nil
 	})
-
 	if err != nil {
 		return "", err
 	}
@@ -971,7 +999,12 @@ func (ds *Dataset) GetChanges(since uint64, count int, latestOnly bool) (*Change
 	return changes, nil
 }
 
-func (ds *Dataset) ProcessChanges(since uint64, count int, latestOnly bool, processChangedEntity func(entity *Entity)) (uint64, error) {
+func (ds *Dataset) ProcessChanges(
+	since uint64,
+	count int,
+	latestOnly bool,
+	processChangedEntity func(entity *Entity),
+) (uint64, error) {
 	return ds.ProcessChangesRaw(since, count, latestOnly, func(jsonData []byte) error {
 		entity := &Entity{}
 		err := json.Unmarshal(jsonData, entity)
@@ -984,8 +1017,12 @@ func (ds *Dataset) ProcessChanges(since uint64, count int, latestOnly bool, proc
 	})
 }
 
-func (ds *Dataset) ProcessChangesRaw(since uint64, limit int, latestOnly bool, processChangedEntity func(entityJson []byte) error) (uint64, error) {
-
+func (ds *Dataset) ProcessChangesRaw(
+	since uint64,
+	limit int,
+	latestOnly bool,
+	processChangedEntity func(entityJson []byte) error,
+) (uint64, error) {
 	lastSeen := since
 	foundChanges := false
 
@@ -1020,7 +1057,6 @@ func (ds *Dataset) ProcessChangesRaw(since uint64, limit int, latestOnly bool, p
 				processFn = latestOnlyWrapper(k, ds, txn, processFn)
 			}
 			err := item.Value(processFn)
-
 			if err != nil {
 				return err
 			}
@@ -1032,7 +1068,6 @@ func (ds *Dataset) ProcessChangesRaw(since uint64, limit int, latestOnly bool, p
 
 		return nil
 	})
-
 	if err != nil {
 		return 0, err
 	}
@@ -1046,7 +1081,8 @@ func (ds *Dataset) ProcessChangesRaw(since uint64, limit int, latestOnly bool, p
 }
 
 func latestOnlyWrapper(k []byte, ds *Dataset, txn *badger.Txn,
-	next func(entityChangeID []byte) error) func(entityChangeID []byte) error {
+	next func(entityChangeID []byte) error,
+) func(entityChangeID []byte) error {
 	return func(entityChangeID []byte) error {
 		rid := binary.BigEndian.Uint64(k[14:])
 		datasetEntitiesLatestVersionKey := make([]byte, 14)

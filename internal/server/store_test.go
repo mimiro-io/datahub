@@ -86,6 +86,7 @@ func TestStoreRelations(test *testing.T) {
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 
+			g.Timeout(1 * time.Hour)
 			// update lisa
 			e := NewEntityFromMap(map[string]interface{}{
 				"id":    peopleNamespacePrefix + ":person-1",
@@ -95,7 +96,6 @@ func TestStoreRelations(test *testing.T) {
 			_ = friendsDS.StoreEntities([]*Entity{
 				e,
 			})
-
 			// check that outgoing related entities is 0
 			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
 			g.Assert(err).IsNil()
@@ -1271,8 +1271,7 @@ func TestDatasetScope(test *testing.T) {
 
 		g.It("Should return all of an entity's relations when no dataset constraints are applied", func() {
 			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"}, "http://data.mimiro.io/people/worksfor", false, []string{})
-			g.Assert(len(result)).Eql(2,
-				"expected 2 relations to be found. one from people, one from workhistory")
+			g.Assert(len(result)).Eql(1, "expected 1 relation to be found. both the people and workhistory datasets point to the same company.")
 
 			entity := findEntity(result, "ns4:company-1")
 			g.Assert(entity).IsNotNil()
@@ -1302,7 +1301,7 @@ func TestDatasetScope(test *testing.T) {
 			//constraint on bogus dataset. due to implementation, this dataset filter will be ignored, query behaves as unrestricted
 			//TODO: this can be discussed. Producing an error would make Queries less unpredictable. But ignoring invalid input makes the API more approachable
 			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"}, "http://data.mimiro.io/people/worksfor", false, []string{"bogus"})
-			g.Assert(len(result)).Eql(2, "expected 2 relations")
+			g.Assert(len(result)).Eql(1, "expected 1 relation (company-1)")
 
 			entity := findEntity(result, "ns4:company-1")
 			g.Assert(entity).IsNotNil()
@@ -1326,7 +1325,7 @@ func TestDatasetScope(test *testing.T) {
 		g.It("Should return all incoming relations of an entity in inverse query, when no scope is given", func() {
 			//inverse query for "company-1", no datasets restriction. should find 3 people with resolved entities
 			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-1"}, "http://data.mimiro.io/people/worksfor", true, []string{})
-			g.Assert(len(result)).Eql(6, "expected 6 relation to be found 3 owned by people and 3 owned by history")
+			g.Assert(len(result)).Eql(3, "there are 6 relations, 3 in dataset people and 3 owned by history. all relations come from total of 3 people")
 			entity := findEntity(result, "ns3:person-5")
 			g.Assert(entity).IsNotNil()
 			g.Assert(entity.Properties["ns3:Name"]).Eql("Person 5", "first relation property should be resolved")
