@@ -23,10 +23,12 @@ import (
 	"net/url"
 
 	"github.com/labstack/echo/v4"
-	"github.com/mimiro-io/datahub/internal/server"
-	ent "github.com/mimiro-io/datahub/internal/service/entity"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/jobs"
+	"github.com/mimiro-io/datahub/internal/server"
+	ent "github.com/mimiro-io/datahub/internal/service/entity"
 )
 
 type Filter struct {
@@ -68,7 +70,14 @@ type queryHandler struct {
 	logger         *zap.SugaredLogger
 }
 
-func NewQueryHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, store *server.Store, datasetManager *server.DsManager) {
+func NewQueryHandler(
+	lc fx.Lifecycle,
+	e *echo.Echo,
+	logger *zap.SugaredLogger,
+	mw *Middleware,
+	store *server.Store,
+	datasetManager *server.DsManager,
+) {
 	log := logger.Named("web")
 	handler := &queryHandler{
 		store:          store,
@@ -85,7 +94,6 @@ func NewQueryHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, m
 			return nil
 		},
 	})
-
 }
 
 func (handler *queryHandler) queryNamespacePrefix(c echo.Context) error {
@@ -103,7 +111,6 @@ func (handler *queryHandler) queryNamespacePrefix(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, &NamespacePrefix{Prefix: prefix, Expansion: urlExpansion})
-
 }
 
 type JavascriptQuery struct {
@@ -138,7 +145,6 @@ func (w *HttpQueryResponseWriter) WriteObject(object interface{}) error {
 }
 
 func (handler *queryHandler) queryHandler(c echo.Context) error {
-
 	// get content type
 	contentType := c.Request().Header.Get("Content-Type")
 	if contentType == "application/x-javascript-query" {
@@ -192,15 +198,14 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 
 	if query.EntityId != "" {
 		entity, err := handler.store.GetEntity(query.EntityId, query.Datasets)
-
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
 
 		result := make([]interface{}, 2)
-		//a returned Entity can be the product of multiple entities in multiple datasets with the same ID
-		//To get the correct namespace context, we'd have to use the supplied list of dataset names (query.Datasets)
-		//and merge their respective contexts to our result context here.
+		// a returned Entity can be the product of multiple entities in multiple datasets with the same ID
+		// To get the correct namespace context, we'd have to use the supplied list of dataset names (query.Datasets)
+		// and merge their respective contexts to our result context here.
 		result[0] = handler.store.GetGlobalContext()
 
 		if entity == nil {
@@ -230,8 +235,8 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 		}
 
 		result := make([]interface{}, 2)
-		//To get the correct namespace context, we'd have to use the supplied list of dataset names (query.Datasets)
-		//and merge their respective contexts to our result context here.
+		// To get the correct namespace context, we'd have to use the supplied list of dataset names (query.Datasets)
+		// and merge their respective contexts to our result context here.
 		result[0] = handler.store.GetGlobalContext()
 		result[1] = queryresult
 
