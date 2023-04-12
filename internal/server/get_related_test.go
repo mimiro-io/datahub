@@ -3,13 +3,14 @@ package server
 import (
 	"context"
 	"fmt"
+	"os"
+	"testing"
+	"time"
+
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/franela/goblin"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
-	"os"
-	"testing"
-	"time"
 
 	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
@@ -44,21 +45,26 @@ func TestGetRelated(test *testing.T) {
 		})
 
 		g.It("Should respect limit for single start uri", func() {
-			peopleNamespacePrefix := setupData(store, dsm)
-			result, err := store.GetManyRelatedEntitiesBatch(
-				[]RelatedEntitiesContinuation{{StartUri: peopleNamespacePrefix + ":person-1"}},
-				"*",
-				false,
-				nil,
-				0,
-			)
+			g.Timeout(1 * time.Hour)
+			peopleNamespacePrefix := persist("friends", store, dsm, buildTestBatch(store, []testPerson{
+				{id: 1, friends: []int{0}},
+				{id: 2, friends: []int{1, 4}},
+				{id: 3, deleted: true, friends: []int{2}},
+				{id: 0, friends: []int{1, 2, 3, 4}},
+				{id: 3, friends: []int{2}},
+				{id: 0, deleted: true, friends: []int{1, 2, 3, 4}},
+				{id: 1, friends: []int{3, 2, 4}},
+			}))
+			start := []RelatedEntitiesContinuation{{StartUri: peopleNamespacePrefix + ":person-1"}}
+			result, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(len(result[0].Relations)).Eql(3, "person-1 points to p2, p3 and (empty) p4")
-			seenCnt := 0
 			g.Assert(result[0].Relations[0].RelatedEntity.ID).Eql(peopleNamespacePrefix + ":person-3")
 			g.Assert(result[0].Relations[1].RelatedEntity.ID).Eql(peopleNamespacePrefix + ":person-4")
 			g.Assert(result[0].Relations[2].RelatedEntity.ID).Eql(peopleNamespacePrefix + ":person-2")
+
+			seenCnt := 0
 			for _, r := range result[0].Relations {
 				if r.RelatedEntity.ID == peopleNamespacePrefix+":person-2" ||
 					r.RelatedEntity.ID == peopleNamespacePrefix+":person-3" {
@@ -72,67 +78,48 @@ func TestGetRelated(test *testing.T) {
 			}
 			g.Assert(seenCnt).Eql(3)
 
-			result, err = store.GetManyRelatedEntitiesBatch(
-				[]RelatedEntitiesContinuation{{StartUri: peopleNamespacePrefix + ":person-1"}},
-				"*",
-				false,
-				nil,
-				1,
-			)
+			start = []RelatedEntitiesContinuation{{StartUri: peopleNamespacePrefix + ":person-1"}}
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 1)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(len(result[0].Relations)).Eql(1)
 
-			result, err = store.GetManyRelatedEntitiesBatch(
-				[]RelatedEntitiesContinuation{{StartUri: peopleNamespacePrefix + ":person-1"}},
-				"*",
-				false,
-				nil,
-				2,
-			)
+			start = []RelatedEntitiesContinuation{{StartUri: peopleNamespacePrefix + ":person-1"}}
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 2)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(len(result[0].Relations)).Eql(2)
 		})
 		g.It("Should respect limit for many start uris", func() {
-			peopleNamespacePrefix := setupData(store, dsm)
+			peopleNamespacePrefix := persist("friends", store, dsm, buildTestBatch(store, []testPerson{
+				{id: 1, friends: []int{0}},
+				{id: 2, friends: []int{1, 4}},
+				{id: 3, deleted: true, friends: []int{2}},
+				{id: 0, friends: []int{1, 2, 3, 4}},
+				{id: 3, friends: []int{2}},
+				{id: 0, deleted: true, friends: []int{1, 2, 3, 4}},
+				{id: 1, friends: []int{3, 2, 4}},
+			}))
 			// get everything
-			result, err := store.GetManyRelatedEntitiesBatch(
-				[]RelatedEntitiesContinuation{
-					{StartUri: peopleNamespacePrefix + ":person-1"},
-					{StartUri: peopleNamespacePrefix + ":person-2"},
-				},
-				"*",
-				false,
-				nil,
-				0,
-			)
+			start := []RelatedEntitiesContinuation{
+				{StartUri: peopleNamespacePrefix + ":person-1"},
+				{StartUri: peopleNamespacePrefix + ":person-2"},
+			}
+			result, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(2)
 			g.Assert(len(result[0].Relations)).Eql(3)
 			g.Assert(len(result[1].Relations)).Eql(2)
 
 			// limit 1, should return first hit of first startUri
-			result, err = store.GetManyRelatedEntitiesBatch(
-				[]RelatedEntitiesContinuation{
-					{StartUri: peopleNamespacePrefix + ":person-1"},
-					{StartUri: peopleNamespacePrefix + ":person-2"},
-				},
-				"*",
-				false,
-				nil,
-				1,
-			)
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 1)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(len(result[0].Relations)).Eql(1)
 
 			// limit 4, room for all 3 relations of first startUri plus 1 from other startUri
 			result, err = store.GetManyRelatedEntitiesBatch(
-				[]RelatedEntitiesContinuation{
-					{StartUri: peopleNamespacePrefix + ":person-1"},
-					{StartUri: peopleNamespacePrefix + ":person-2"},
-				},
+				start,
 				"*",
 				false,
 				nil,
@@ -144,25 +131,28 @@ func TestGetRelated(test *testing.T) {
 			g.Assert(len(result[1].Relations)).Eql(1)
 		})
 		g.It("Should respect limit in inverse queries", func() {
-			peopleNamespacePrefix := setupData(store, dsm)
-
+			peopleNamespacePrefix := persist("friends", store, dsm, buildTestBatch(store, []testPerson{
+				{id: 1, friends: []int{0}},
+				{id: 2, friends: []int{1, 4}},
+				{id: 3, deleted: true, friends: []int{2}},
+				{id: 0, friends: []int{1, 2, 3, 4}},
+				{id: 3, friends: []int{2}},
+				{id: 0, deleted: true, friends: []int{1, 2, 3, 4}},
+				{id: 1, friends: []int{3, 2, 4}},
+			}))
 			// get everything
-			result, err := store.GetManyRelatedEntitiesBatch(
-				[]RelatedEntitiesContinuation{
-					{StartUri: peopleNamespacePrefix + ":person-1"},
-					{StartUri: peopleNamespacePrefix + ":person-2"},
-				},
-				"*", true, nil, 0)
+			start := []RelatedEntitiesContinuation{
+				{StartUri: peopleNamespacePrefix + ":person-1"},
+				{StartUri: peopleNamespacePrefix + ":person-2"},
+			}
+			result, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(2)
 			g.Assert(len(result[0].Relations)).Eql(1)
 			g.Assert(len(result[1].Relations)).Eql(2)
 			// limit 1, should return first hit of first startUri
 			result, err = store.GetManyRelatedEntitiesBatch(
-				[]RelatedEntitiesContinuation{
-					{StartUri: peopleNamespacePrefix + ":person-1"},
-					{StartUri: peopleNamespacePrefix + ":person-2"},
-				},
+				start,
 				"*",
 				true,
 				nil,
@@ -174,10 +164,7 @@ func TestGetRelated(test *testing.T) {
 
 			// limit 2, room for all 1 relations of first startUri plus 1 from other startUri
 			result, err = store.GetManyRelatedEntitiesBatch(
-				[]RelatedEntitiesContinuation{
-					{StartUri: peopleNamespacePrefix + ":person-1"},
-					{StartUri: peopleNamespacePrefix + ":person-2"},
-				},
+				start,
 				"*",
 				true,
 				nil,
@@ -189,11 +176,9 @@ func TestGetRelated(test *testing.T) {
 			g.Assert(len(result[1].Relations)).Eql(1)
 		})
 		g.It("Should return a working continuation token", func() {
-			g.Timeout(1 * time.Hour)
-			b := buildTestBatch(store, []testPerson{
+			pref := persist("friends", store, dsm, buildTestBatch(store, []testPerson{
 				{id: 1, friends: []int{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}},
-			})
-			pref := persist(store, dsm, b)
+			}))
 			start := []RelatedEntitiesContinuation{{StartUri: pref + ":person-1"}}
 			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
 			g.Assert(err).IsNil()
@@ -234,9 +219,12 @@ func TestGetRelated(test *testing.T) {
 	})
 }
 
-func persist(store *Store, dsm *DsManager, b []*Entity) string {
-	friendsDS, _ := dsm.CreateDataset("friends", nil)
-	_ = friendsDS.StoreEntities(b)
+func persist(dsName string, store *Store, dsm *DsManager, b []*Entity) string {
+	friendsDS, _ := dsm.CreateDataset(dsName, nil)
+	err := friendsDS.StoreEntities(b)
+	if err != nil {
+		panic(err)
+	}
 	peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
 		"http://data.mimiro.io/people/",
 	)
@@ -262,99 +250,18 @@ func buildTestBatch(store *Store, input []testPerson) []*Entity {
 		for _, f := range p.friends {
 			friends = append(friends, fmt.Sprintf("%v:person-%v", peopleNamespacePrefix, f))
 		}
-		e.References[peopleNamespacePrefix+":Friend"] = friends
+		if len(friends) > 0 {
+			e.References[peopleNamespacePrefix+":Friend"] = friends
+		}
+		var family []string
+		for _, f := range p.family {
+			family = append(family, fmt.Sprintf("%v:person-%v", peopleNamespacePrefix, f))
+		}
+		if len(family) > 0 {
+			e.References[peopleNamespacePrefix+":Family"] = family
+		}
 		e.IsDeleted = p.deleted
 		result = append(result, e)
 	}
 	return result
-}
-
-/*
-setting up friends dataset of persons with friend relationships between them.
-*/
-func setupData(store *Store, dsm *DsManager) string {
-	peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
-		"http://data.mimiro.io/people/",
-	)
-	personX := NewEntityFromMap(map[string]any{
-		"id":      peopleNamespacePrefix + ":person-x",
-		"deleted": true,
-		"props":   map[string]any{peopleNamespacePrefix + ":Name": "will be deleted"},
-		"refs": map[string]any{
-			peopleNamespacePrefix + ":Friend": []string{
-				peopleNamespacePrefix + ":person-1",
-				peopleNamespacePrefix + ":person-2",
-				peopleNamespacePrefix + ":person-3",
-				peopleNamespacePrefix + ":person-4",
-			},
-		},
-	})
-	personX.IsDeleted = true
-	tmpPerson3 := NewEntityFromMap(map[string]any{
-		"id":    peopleNamespacePrefix + ":person-3",
-		"props": map[string]any{peopleNamespacePrefix + ":Name": "Heidi"},
-		"refs": map[string]any{
-			peopleNamespacePrefix + ":Friend": []string{
-				peopleNamespacePrefix + ":person-2",
-			},
-		},
-	})
-	tmpPerson3.IsDeleted = true
-
-	friendsDS, _ := dsm.CreateDataset("friends", nil)
-	_ = friendsDS.StoreEntities([]*Entity{
-		NewEntityFromMap(map[string]any{
-			"id":    peopleNamespacePrefix + ":person-1",
-			"props": map[string]any{peopleNamespacePrefix + ":Name": "Lisa"},
-			"refs": map[string]any{
-				peopleNamespacePrefix + ":Friend": []string{peopleNamespacePrefix + ":person-x"},
-			},
-		}),
-		NewEntityFromMap(map[string]any{
-			"id":    peopleNamespacePrefix + ":person-2",
-			"props": map[string]any{peopleNamespacePrefix + ":Name": "Jim"},
-			"refs": map[string]any{
-				peopleNamespacePrefix + ":Friend": []string{
-					peopleNamespacePrefix + ":person-1",
-					peopleNamespacePrefix + ":person-4",
-				},
-			},
-		}),
-		tmpPerson3,
-		NewEntityFromMap(map[string]any{
-			"id":    peopleNamespacePrefix + ":person-x",
-			"props": map[string]any{peopleNamespacePrefix + ":Name": "will be deleted"},
-			"refs": map[string]any{
-				peopleNamespacePrefix + ":Friend": []string{
-					peopleNamespacePrefix + ":person-1",
-					peopleNamespacePrefix + ":person-2",
-					peopleNamespacePrefix + ":person-3",
-					peopleNamespacePrefix + ":person-4",
-				},
-			},
-		}),
-		NewEntityFromMap(map[string]any{
-			"id":    peopleNamespacePrefix + ":person-3",
-			"props": map[string]any{peopleNamespacePrefix + ":Name": "Heidi"},
-			"refs": map[string]any{
-				peopleNamespacePrefix + ":Friend": []string{
-					peopleNamespacePrefix + ":person-2",
-				},
-			},
-		}),
-		personX,
-		NewEntityFromMap(map[string]any{
-			"id":    peopleNamespacePrefix + ":person-1",
-			"props": map[string]any{peopleNamespacePrefix + ":Name": "Lisa"},
-			"refs": map[string]any{
-				peopleNamespacePrefix + ":Friend": []string{
-					peopleNamespacePrefix + ":person-3",
-					peopleNamespacePrefix + ":person-2",
-					peopleNamespacePrefix + ":person-4",
-				},
-			},
-		}),
-	})
-
-	return peopleNamespacePrefix
 }
