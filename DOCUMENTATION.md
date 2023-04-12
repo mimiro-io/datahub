@@ -368,6 +368,57 @@ The outgoing query finds all the reference-ids that your starting entity is poin
 }
 ```
 
+### Javascript Query
+
+As well as entity lookup and traversal, it is possible to run a javascript query against the data hub. This allows for more complex queries, such as filtering and aggregation.
+
+To execute a javascript query it must be sent to the 'query' endpoint of the data hub. The query is sent as a POST request with the query as the body of the request.
+
+````
+POST /query
+````
+
+The query requets must be formatted as a JSON object with the following properties:
+
+- `query`: the javascript query to executed encoded as base64
+
+An example is shown below:
+
+``` json
+{
+  "query": "base64 encoded javascript query"
+}
+```
+
+The request must set the `Content-Type` header to `application/x-javascript-query`.
+
+The query itself is a single function called ´do_query´. 
+
+The query function has access to all the functions that a transform has access to as well as the following functions:
+
+- `GetDatasetChanges(name, since, limit)` - returns a list of changes to the dataset since value. The limit parameter is optional and can be used to limit the number of changes returned. The changes object returned has the following properties, NextToken, Entities, and Context.
+- `WriteQueryResult(any)` - writes the object to the output stream. The object must be a valid json object.
+
+An example query that iterates the changes in a dataset and does some counting before writing the result to the output stream is shown below:
+
+```javascript
+function do_query() {
+    let obj = GetDatasetChanges("people", 0, 5);
+    let entities = obj.Entities;
+    let count = 0;
+    for (let i = 0; i < entities.length; i++) {
+        count++;
+    }
+
+    let result = { "count": count };
+    WriteQueryResult(result);
+}
+```
+
+WriteQueryResult can be called multiple times to write multiple objects to the output stream. Array seperators are added automatically.
+
+The result returned from the query is a JSON array containing the objects inserted there by the query. There is no fixed schema for the query results.
+
 ## Data Layers
 
 Data Layers implement the [UDA Specification](#specification). They are used to expose data from different data sources, such as file systems and relational databases, in a standard way.

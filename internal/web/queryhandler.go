@@ -18,7 +18,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
+	"github.com/mimiro-io/datahub/internal/jobs"
+	"io"
 	"net/http"
 	"net/url"
 
@@ -105,9 +106,80 @@ func (handler *queryHandler) queryNamespacePrefix(c echo.Context) error {
 
 }
 
+type JavascriptQuery struct {
+	Query string `json:"query"`
+}
+
+// Implements interface for query response writer
+type HttpQueryResponseWriter struct {
+	context      echo.Context
+	writtenFirst bool
+}
+
+func NewHttpQueryResponseWriter(context echo.Context) *HttpQueryResponseWriter {
+	return &HttpQueryResponseWriter{
+		context:      context,
+		writtenFirst: false,
+	}
+}
+
+func (w *HttpQueryResponseWriter) WriteObject(object interface{}) error {
+	if !w.writtenFirst {
+		jsonObject, _ := json.Marshal(object)
+		_, _ = w.context.Response().Write(jsonObject)
+		w.writtenFirst = true
+	} else {
+		_, _ = w.context.Response().Write([]byte(","))
+		jsonObject, _ := json.Marshal(object)
+		_, _ = w.context.Response().Write(jsonObject)
+	}
+
+	return nil
+}
+
 func (handler *queryHandler) queryHandler(c echo.Context) error {
+
+	// get content type
+	contentType := c.Request().Header.Get("Content-Type")
+	if contentType == "application/x-javascript-query" {
+		query := &JavascriptQuery{}
+		body, err := io.ReadAll(c.Request().Body)
+		if err != nil {
+			handler.logger.Warn("Unable to read body")
+			return echo.NewHTTPError(http.StatusBadRequest, server.HttpBodyMissingErr(err).Error())
+		}
+		err = json.Unmarshal(body, &query)
+
+		if err != nil {
+			handler.logger.Warn("Unable to parse json")
+			return echo.NewHTTPError(http.StatusBadRequest, server.HttpJsonParsingErr(err).Error())
+		}
+
+		jsQuery, err := jobs.NewJavascriptTransform(handler.logger, query.Query, handler.store, handler.datasetManager)
+		if err != nil {
+			handler.logger.Warn("Unable to parse javascript query " + err.Error())
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
+
+		c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		c.Response().WriteHeader(http.StatusOK)
+		c.Response().Write([]byte("["))
+
+		writer := NewHttpQueryResponseWriter(c)
+		err = jsQuery.ExecuteQuery(writer)
+		if err != nil {
+			handler.logger.Warn("Error executing javascript query " + err.Error())
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+
+		c.Response().Write([]byte("]"))
+		c.Response().Flush()
+
+		return nil
+	}
+
 	query := &Query{}
-	body, err := ioutil.ReadAll(c.Request().Body)
+	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
 		handler.logger.Warn("Unable to read body")
 		return echo.NewHTTPError(http.StatusBadRequest, server.HttpBodyMissingErr(err).Error())
@@ -126,7 +198,6 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 		}
 
 		result := make([]interface{}, 2)
-		//TODO https://mimiro.atlassian.net/browse/MIM-670
 		//a returned Entity can be the product of multiple entities in multiple datasets with the same ID
 		//To get the correct namespace context, we'd have to use the supplied list of dataset names (query.Datasets)
 		//and merge their respective contexts to our result context here.
@@ -155,7 +226,6 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 		}
 
 		result := make([]interface{}, 2)
-		//TODO https://mimiro.atlassian.net/browse/MIM-670
 		//To get the correct namespace context, we'd have to use the supplied list of dataset names (query.Datasets)
 		//and merge their respective contexts to our result context here.
 		result[0] = handler.store.GetGlobalContext()
