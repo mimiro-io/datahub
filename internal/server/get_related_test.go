@@ -3,14 +3,12 @@ package server
 import (
 	"context"
 	"fmt"
-	"os"
-	"testing"
-	"time"
-
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/franela/goblin"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
+	"os"
+	"testing"
 
 	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
@@ -45,7 +43,6 @@ func TestGetRelated(test *testing.T) {
 		})
 
 		g.It("Should respect limit for single start uri", func() {
-			g.Timeout(1 * time.Hour)
 			peopleNamespacePrefix := persist("friends", store, dsm, buildTestBatch(store, []testPerson{
 				{id: 1, friends: []int{0}},
 				{id: 2, friends: []int{1, 4}},
@@ -55,7 +52,7 @@ func TestGetRelated(test *testing.T) {
 				{id: 0, deleted: true, friends: []int{1, 2, 3, 4}},
 				{id: 1, friends: []int{3, 2, 4}},
 			}))
-			start := []RelatedEntitiesContinuation{{StartUri: peopleNamespacePrefix + ":person-1"}}
+			start := []string{peopleNamespacePrefix + ":person-1"}
 			result, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
@@ -78,13 +75,11 @@ func TestGetRelated(test *testing.T) {
 			}
 			g.Assert(seenCnt).Eql(3)
 
-			start = []RelatedEntitiesContinuation{{StartUri: peopleNamespacePrefix + ":person-1"}}
 			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 1)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(len(result[0].Relations)).Eql(1)
 
-			start = []RelatedEntitiesContinuation{{StartUri: peopleNamespacePrefix + ":person-1"}}
 			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 2)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
@@ -101,10 +96,7 @@ func TestGetRelated(test *testing.T) {
 				{id: 1, friends: []int{3, 2, 4}},
 			}))
 			// get everything
-			start := []RelatedEntitiesContinuation{
-				{StartUri: peopleNamespacePrefix + ":person-1"},
-				{StartUri: peopleNamespacePrefix + ":person-2"},
-			}
+			start := []string{peopleNamespacePrefix + ":person-1", peopleNamespacePrefix + ":person-2"}
 			result, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(2)
@@ -141,10 +133,7 @@ func TestGetRelated(test *testing.T) {
 				{id: 1, friends: []int{3, 2, 4}},
 			}))
 			// get everything
-			start := []RelatedEntitiesContinuation{
-				{StartUri: peopleNamespacePrefix + ":person-1"},
-				{StartUri: peopleNamespacePrefix + ":person-2"},
-			}
+			start := []string{peopleNamespacePrefix + ":person-1", peopleNamespacePrefix + ":person-2"}
 			result, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(2)
@@ -179,7 +168,7 @@ func TestGetRelated(test *testing.T) {
 			pref := persist("friends", store, dsm, buildTestBatch(store, []testPerson{
 				{id: 1, friends: []int{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}},
 			}))
-			start := []RelatedEntitiesContinuation{{StartUri: pref + ":person-1"}}
+			start := []string{pref + ":person-1"}
 			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(queryResult)).Eql(1)
@@ -191,30 +180,24 @@ func TestGetRelated(test *testing.T) {
 			g.Assert(len(queryResult[0].Relations)).Eql(2)
 			g.Assert(queryResult[0].Relations[0].RelatedEntity.ID).Eql(pref + ":person-20")
 			g.Assert(queryResult[0].Relations[1].RelatedEntity.ID).Eql(pref + ":person-19")
-			g.Assert(queryResult[0].Continuation.NextIdxKey).IsNotNil()
-			startFromCont := []RelatedEntitiesContinuation{queryResult[0].Continuation}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(startFromCont, "*", false, nil, 3)
+			g.Assert(queryResult[0].Continuation.RelationIndexFromKey).IsNotNil()
+			startFromCont := queryResult.Cont()
+			queryResult, err = store.GetManyRelatedEntitiesAtTime(startFromCont, 3)
 			g.Assert(err).IsNil()
 			g.Assert(len(queryResult)).Eql(1)
 			g.Assert(len(queryResult[0].Relations)).Eql(3)
 			g.Assert(queryResult[0].Relations[0].RelatedEntity.ID).Eql(pref + ":person-18")
 			g.Assert(queryResult[0].Relations[1].RelatedEntity.ID).Eql(pref + ":person-17")
 			g.Assert(queryResult[0].Relations[2].RelatedEntity.ID).Eql(pref + ":person-16")
-			g.Assert(queryResult[0].Continuation.NextIdxKey).IsNotNil()
-			startFromCont = []RelatedEntitiesContinuation{queryResult[0].Continuation}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(startFromCont, "*", false, nil, 25)
+			g.Assert(queryResult[0].Continuation.RelationIndexFromKey).IsNotNil()
+			startFromCont = queryResult.Cont()
+			queryResult, err = store.GetManyRelatedEntitiesAtTime(startFromCont, 25)
 			g.Assert(err).IsNil()
 			g.Assert(len(queryResult)).Eql(1)
 			g.Assert(len(queryResult[0].Relations)).Eql(14)
 			g.Assert(queryResult[0].Relations[0].RelatedEntity.ID).Eql(pref + ":person-15")
 			g.Assert(queryResult[0].Relations[13].RelatedEntity.ID).Eql(pref + ":person-2")
-			g.Assert(queryResult[0].Continuation.NextIdxKey).IsNotNil()
-			startFromCont = []RelatedEntitiesContinuation{queryResult[0].Continuation}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(startFromCont, "*", false, nil, 25)
-			g.Assert(err).IsNil()
-			g.Assert(len(queryResult)).Eql(1)
-			g.Assert(len(queryResult[0].Relations)).Eql(0)
-			g.Assert(queryResult[0].Continuation.NextIdxKey).IsNil()
+			g.Assert(queryResult[0].Continuation.RelationIndexFromKey).IsNil()
 		})
 	})
 }

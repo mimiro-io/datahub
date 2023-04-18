@@ -127,7 +127,7 @@ func TestEvents(t *testing.T) {
 		})
 
 		g.It("Should emit an event if entities are posted to /entitites", func() {
-			g.Timeout(10 * time.Minute)
+			g.Timeout(1 * time.Minute)
 			var eventReceived bool
 			var wg sync.WaitGroup
 			wg.Add(1)

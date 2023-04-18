@@ -389,7 +389,6 @@ func TestPipeline(t *testing.T) {
 		})
 
 		g.It("Should incrementally do internal sync with js transform in parallel", func() {
-			g.Timeout(time.Hour)
 			// populate dataset with some entities
 			ds, _ := dsm.CreateDataset("Products", nil)
 			_, _ = dsm.CreateDataset("NewProducts", nil)
@@ -450,7 +449,6 @@ func TestPipeline(t *testing.T) {
 		})
 
 		g.It("Should incrementally do internal sync with js transform in parallel when les than workers count", func() {
-			g.Timeout(time.Hour)
 			// populate dataset with some entities
 			ds, _ := dsm.CreateDataset("Products", nil)
 			_, _ = dsm.CreateDataset("NewProducts", nil)
@@ -1177,7 +1175,6 @@ func TestPipeline(t *testing.T) {
 		})
 
 		g.It("Should store dependency watermarks after incremental in MultiSource jobs", func() {
-			g.Timeout(1 * time.Hour)
 			srcDs, _ := dsm.CreateDataset("src", nil)
 			ns, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://namespace/")
 			_ = srcDs.StoreEntities([]*server.Entity{

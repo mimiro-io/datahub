@@ -86,7 +86,6 @@ func TestStoreRelations(test *testing.T) {
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 
-			g.Timeout(1 * time.Hour)
 			// update lisa
 			e := NewEntityFromMap(map[string]interface{}{
 				"id":    peopleNamespacePrefix + ":person-1",
@@ -380,13 +379,15 @@ func TestStoreRelations(test *testing.T) {
 			g.Assert(len(results)).Eql(1)
 
 			// test at point in time
-			results, _, err = store.GetRelatedAtTime(RelatedEntitiesContinuation{StartUri: "http://data.mimiro.io/people/p-1"}, RdfTypeUri, false, []uint32{}, time0, 0)
+			from, err := store.ToRelatedFrom([]string{"http://data.mimiro.io/people/p-1"}, RdfTypeUri, false, nil, time0)
+			results2, _, err := store.GetRelatedAtTime(from[0], 0)
 			g.Assert(err).IsNil()
-			g.Assert(len(results)).Eql(0)
+			g.Assert(len(results2)).Eql(0)
 
-			invresults, _, err = store.GetRelatedAtTime(RelatedEntitiesContinuation{StartUri: "http://data.mimiro.io/model/Person"}, RdfTypeUri, true, []uint32{}, time0, 0)
+			from, err = store.ToRelatedFrom([]string{"http://data.mimiro.io/model/Person"}, RdfTypeUri, true, nil, time0)
+			invresults2, _, err := store.GetRelatedAtTime(from[0], 0)
 			g.Assert(err).IsNil()
-			g.Assert(len(invresults)).Eql(0)
+			g.Assert(len(invresults2)).Eql(0)
 		})
 	})
 }

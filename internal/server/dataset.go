@@ -457,7 +457,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 					outgoingBuffer := [40]byte{} // make([]byte, 40)
 					incomingBuffer := [40]byte{} // make([]byte, 40)
 
-					// assert uint64 id for predicate
+					// assert uint64 id for Predicate
 					predid, _, err := ds.store.assertIDForURI(k, idCache)
 					if err != nil {
 						return newitems, err
@@ -525,7 +525,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 					}
 
 					for _, ref := range refs {
-						// get predicate
+						// get Predicate
 						predid, _, err := ds.store.assertIDForURI(k, idCache)
 						if err != nil {
 							return newitems, err
@@ -604,7 +604,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 						outgoingBuffer := make([]byte, 40)
 						incomingBuffer := make([]byte, 40)
 
-						// assert uint64 id for predicate
+						// assert uint64 id for Predicate
 						predid, _, err := ds.store.assertIDForURI(k, idCache)
 						if err != nil {
 							return newitems, err
