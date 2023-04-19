@@ -281,30 +281,94 @@ SUCCESS  Dataset has been created
 
 The query model is very simple, for now. It is possible to fetch a single entity via its URI, and it is possible to traverse from one, or many entities to related entities via incoming or outgoing references.
 
+Examles are given both using the `mim` CLI
+```
+mim query ...
+```
+and using the HTTP API by posting a query payload to
+```
+POST /query
+```
+
 ### Getting A Single Entity
 
 To lookup a single entity:
 
-```
-> mim query --id="http://data.mimiro.io/people/homer"
-```
+* using `mim`, the datahub CLI
+    ```shell
+    > mim query --id="http://data.mimiro.io/people/homer"
+    ```
+* using the HTTP API, with the following POST body
+    ```json
+    {
+        "entityId": "http://data.mimiro.io/people/homer"
+    }
+    ```
 
 ### Getting Related Entities
 
 To fetch related entities for a given entity:
 
-```
-> mim query --entity="http://data.mimiro.io/people/homer" /
-            --via="http://data.mimiro.io/schema/person/"
-```
+* using `mim`, the datahub CLI
+    ```shell
+    > mim query --entity="http://data.mimiro.io/people/homer" \
+                --via="http://data.mimiro.io/schema/person/"
+    ```
+
+* using the HTTP API, with the following POST body
+    ```json
+    {
+        "startingEntities": [ "http://data.mimiro.io/people/homer" ],
+        "predicate": "http://data.mimiro.io/schema/person/"
+    }
+    ```
+
 
 and to get entities referencing a given entity, e.g. all entities of type person.
 
+* using `mim`, the datahub CLI
+    ```shell
+    > mim query --entity="http://data.mimiro.io/schema/person" \
+                --via="http://www.w3.org/1999/02/22-rdf-syntax-ns#type" \
+                --inverse=true
+    ```
+* using the HTTP API, with the following POST body
+
+    ```json
+    {
+        "startingEntities": [ "http://data.mimiro.io/schema/person" ],
+        "predicate": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+        "inverse": true
+    }
+    ```
+
+### All Query parameters
+
+The query payload for the /query endpoint accepts the following options, all of which have an equivalent
+parameter in `mim query`, please consult `mim query --help` for details.
+
+```json
+{
+    "entityId": "http://some.id",
+    "startingEntities": ["http://one.id", "http://another.id"],
+    "predicate":  "*",
+    "inverse": false,
+    "datasets": ["people", "workplaces"],
+    "details": false,
+    "limit":  100,
+    "continuations": []
+}
 ```
-> mim query --entity="http://data.mimiro.io/schema/person" /
-            --via="http://www.w3.org/1999/02/22-rdf-syntax-ns#type" /
-            --inverse=true
-```
+| parameter        | default value                             | description                                                                                                             |
+|------------------|-------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|
+| entityId         | empty                                     | if set, all other parameters except for datasets are ignored. Ask to lookup one entity                                  |
+| startingEntities | []                                        | if no entityId and no continuations given, start query from these entities                                              |
+| predicate        | none,required when using startingEntities | use '*' to follow all relations, else only follow this relation                                                         |
+| inverse          | false                                     | specify query direction, only relevant when using startingEntities                                                      |
+| datasets         | [] | a filter. if other value than empty list, only consider relations belonging to these datasets                           |
+| details          | false | only reledant when using entityId. if true, augment returned entity with information about datasets and change history  |
+| limit            | 100 | limit number of query results. if set explicitly, response may contain contiuation token list                           |
+| continuations    | [] | value found in a previous query result page. can - together with limit - be used to retrieve next page of query results |                                                                                                                    |
 
 ### Incoming or outgoing query
 
@@ -392,7 +456,7 @@ An example is shown below:
 
 The request must set the `Content-Type` header to `application/x-javascript-query`.
 
-The query itself is a single function called ´do_query´. 
+The query itself is a single function called ´do_query´.
 
 The query function has access to all the functions that a transform has access to as well as the following functions:
 

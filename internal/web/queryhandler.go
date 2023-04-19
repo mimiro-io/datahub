@@ -261,6 +261,7 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 		// and merge their respective contexts to our result context here.
 		result[0] = handler.store.GetGlobalContext()
 		result[1] = server.ToLegacyQueryResult(queryresult)
+		// for compatibility with older clients, do not add new array elem when no limit parameter was given
 		if includeContinuation {
 			cont, err := encodeCont(queryresult.Cont())
 			if err != nil {

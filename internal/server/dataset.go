@@ -454,8 +454,8 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 				}
 
 				for _, ref := range refs {
-					outgoingBuffer := [40]byte{} // make([]byte, 40)
-					incomingBuffer := [40]byte{} // make([]byte, 40)
+					outgoingBuffer := make([]byte, 40)
+					incomingBuffer := make([]byte, 40)
 
 					// assert uint64 id for Predicate
 					predid, _, err := ds.store.assertIDForURI(k, idCache)
@@ -469,7 +469,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 						return newitems, err
 					}
 
-					binary.BigEndian.PutUint16(outgoingBuffer[0:], OUTGOING_REF_INDEX)
+					binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
 					binary.BigEndian.PutUint64(outgoingBuffer[2:], rid)
 					binary.BigEndian.PutUint64(outgoingBuffer[10:], uint64(txnTime))
 					binary.BigEndian.PutUint64(outgoingBuffer[18:], predid)
@@ -480,12 +480,12 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 						binary.BigEndian.PutUint16(outgoingBuffer[34:], 0) // deleted.
 					}
 					binary.BigEndian.PutUint32(outgoingBuffer[36:], ds.InternalID)
-					err = txn.Set(outgoingBuffer[:], []byte(""))
+					err = txn.Set(outgoingBuffer, []byte(""))
 					if err != nil {
 						return newitems, err
 					}
 
-					binary.BigEndian.PutUint16(incomingBuffer[0:], INCOMING_REF_INDEX)
+					binary.BigEndian.PutUint16(incomingBuffer, INCOMING_REF_INDEX)
 					binary.BigEndian.PutUint64(incomingBuffer[2:], relatedid)
 					binary.BigEndian.PutUint64(incomingBuffer[10:], rid)
 					binary.BigEndian.PutUint64(incomingBuffer[18:], uint64(txnTime))
@@ -496,10 +496,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 						binary.BigEndian.PutUint16(incomingBuffer[34:], 0) // deleted.
 					}
 					binary.BigEndian.PutUint32(incomingBuffer[36:], ds.InternalID)
-					// if outgoingBuffer[35] != incomingBuffer[35] {
-					// 	fmt.Println("deleted state on relation indexes inconsistent ", rid, "->", relatedid)
-					// }
-					err = txn.Set(incomingBuffer[:], []byte(""))
+					err = txn.Set(incomingBuffer, []byte(""))
 					if err != nil {
 						return newitems, err
 					}
