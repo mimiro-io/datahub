@@ -16,6 +16,10 @@ package dataset_test
 
 import (
 	"context"
+	"os"
+	"strconv"
+	"testing"
+
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
@@ -23,9 +27,6 @@ import (
 	ds "github.com/mimiro-io/datahub/internal/service/dataset"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
-	"os"
-	"strconv"
-	"testing"
 )
 
 func BenchmarkChangesIterator(b *testing.B) {
@@ -37,16 +38,17 @@ func BenchmarkChangesIterator(b *testing.B) {
 	b.ResetTimer()
 	for no := 0; no < b.N; no++ {
 		c := 0
-		//b.Log("run")
+		// b.Log("run")
 		it, _ := ds.At(0)
 		for it.Next() {
 			c += len(it.Item())
 		}
 		it.Close()
-		//b.Log(c)
-		//b.Logf("found %v", raw)
+		// b.Log(c)
+		// b.Logf("found %v", raw)
 	}
 }
+
 func BenchmarkGetChanges(b *testing.B) {
 	storeLocation := "./test_store_iterator_bench_1"
 	dataset, _, _, after := setup(storeLocation, b)
@@ -54,7 +56,7 @@ func BenchmarkGetChanges(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for no := 0; no < b.N; no++ {
-		//b.Log("run")
+		// b.Log("run")
 		c := 0
 		_, err := dataset.ProcessChangesRaw(0, 10000, false, func(jsonData []byte) error {
 			c += len(jsonData)
@@ -63,8 +65,8 @@ func BenchmarkGetChanges(b *testing.B) {
 		if err != nil {
 			panic(err)
 		}
-		//b.Logf("found %v", raw)
-		//b.Log(c)
+		// b.Logf("found %v", raw)
+		// b.Log(c)
 	}
 }
 

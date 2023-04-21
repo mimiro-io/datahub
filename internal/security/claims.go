@@ -15,8 +15,9 @@
 package security
 
 import (
-	"github.com/golang-jwt/jwt/v4"
 	"strings"
+
+	"github.com/golang-jwt/jwt/v4"
 )
 
 type CustomClaims struct {
@@ -25,7 +26,7 @@ type CustomClaims struct {
 	Gty      string   `json:"gty"`
 	Adm      bool     `json:"adm"`
 	Roles    []string `json:"roles"`
-	ClientId string   `json:"client_id"`
+	ClientID string   `json:"client_id"`
 	jwt.RegisteredClaims
 }
 

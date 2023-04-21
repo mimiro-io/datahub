@@ -38,7 +38,6 @@ type LoggerConfig struct {
 }
 
 func LoggerFilter(config LoggerConfig) echo.MiddlewareFunc {
-
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			if config.Skipper(c) {
@@ -63,7 +62,13 @@ func LoggerFilter(config LoggerConfig) echo.MiddlewareFunc {
 			timed := time.Since(start)
 
 			err := config.StatsdClient.Incr("http.count", tags, 1)
+			if err != nil {
+				config.Logger.Warn("Error with statsd", zap.String("error", fmt.Sprintf("%s", err)))
+			}
 			err = config.StatsdClient.Timing("http.time", timed, tags, 1)
+			if err != nil {
+				config.Logger.Warn("Error with statsd", zap.String("error", fmt.Sprintf("%s", err)))
+			}
 			err = config.StatsdClient.Gauge("http.size", float64(res.Size), tags, 1)
 			if err != nil {
 				config.Logger.Warn("Error with statsd", zap.String("error", fmt.Sprintf("%s", err)))

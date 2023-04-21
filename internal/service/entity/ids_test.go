@@ -12,7 +12,7 @@ import (
 type nsMock struct{}
 
 func (n nsMock) LookupNamespaceExpansion(prefix types.Prefix) (types.URI, error) {
-	if "foo" == prefix {
+	if prefix == "foo" {
 		return "http://foo", nil
 	}
 	return "", errors.New("unknown prefix")

@@ -19,8 +19,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/mimiro-io/datahub/internal"
-	"github.com/mimiro-io/datahub/internal/security"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -29,6 +27,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/mimiro-io/datahub/internal"
+	"github.com/mimiro-io/datahub/internal/security"
 
 	"github.com/bamzi/jobrunner"
 	"github.com/robfig/cron/v3"
@@ -91,7 +92,7 @@ func TestScheduler(t *testing.T) {
 			_, ok := runner.scheduledJobs[sj.ID]
 			g.Assert(ok).IsFalse("Does not have job id, because it is paused")
 
-			//register callback to get notified when job is done
+			// register callback to get notified when job is done
 			wg := sync.WaitGroup{}
 			wg.Add(2) // ticket is borrowed and returned = 2 callback calls
 			statsdClient.GaugesCallback = func(data map[string]interface{}) {
@@ -129,7 +130,7 @@ func TestScheduler(t *testing.T) {
 		})
 
 		g.It("Should kill a job when asked to", func() {
-			//install a job that runs 50*100 ms (6 sec, exceeding goblins 5s timeout)
+			// install a job that runs 50*100 ms (6 sec, exceeding goblins 5s timeout)
 			sj, err := scheduler.Parse([]byte((`{
 			"id" : "sync-slowsource-to-null",
 			"title" : "sync-slowsource-to-null",
@@ -148,17 +149,17 @@ func TestScheduler(t *testing.T) {
 			err = scheduler.AddJob(sj)
 			g.Assert(err).IsNil("Could add job to scheduler")
 
-			//register callback to get notified when job is started and done
+			// register callback to get notified when job is started and done
 			startWg := sync.WaitGroup{}
 			startWg.Add(1)
 			doneWg := sync.WaitGroup{}
 			doneWg.Add(1)
 			statsdClient.GaugesCallback = func(data map[string]interface{}) {
-				//ticket is borrowed -> available ticket count decreases to 9
+				// ticket is borrowed -> available ticket count decreases to 9
 				if data["name"] == "jobs.tickets.incr" && data["value"] == float64(9) {
 					startWg.Done()
 				}
-				//ticket is returned -> available ticket count back to 10
+				// ticket is returned -> available ticket count back to 10
 				if data["name"] == "jobs.tickets.incr" && data["value"] == float64(10) {
 					doneWg.Done()
 				}
@@ -173,7 +174,7 @@ func TestScheduler(t *testing.T) {
 
 			scheduler.KillJob(sj.ID)
 
-			//wait until our job is not running anymore
+			// wait until our job is not running anymore
 			doneWg.Wait()
 			g.Assert(scheduler.GetRunningJob(sj.ID)).IsNil("Our job is killed now")
 		})
@@ -256,7 +257,7 @@ func TestScheduler(t *testing.T) {
 
 			_, _ = dsm.CreateDataset("People", nil)
 
-			//register callback to get notified when job is done
+			// register callback to get notified when job is done
 			wg := sync.WaitGroup{}
 			wg.Add(2)
 			statsdClient.GaugesCallback = func(data map[string]interface{}) {
@@ -351,7 +352,8 @@ func TestScheduler(t *testing.T) {
 			g.Assert(err).IsNil("Error free parsing of jobConfiguration json")
 			err = scheduler.AddJob(sj)
 			g.Assert(err).IsNil("Could add job to scheduler")
-			g.Assert(runner.scheduledJobs[sj.ID]).Eql([]cron.EntryID{cron.EntryID(1)}, "Our job has received internal id 1")
+			g.Assert(runner.scheduledJobs[sj.ID]).
+				Eql([]cron.EntryID{cron.EntryID(1)}, "Our job has received internal id 1")
 
 			// close
 			runner.Stop()
@@ -360,7 +362,8 @@ func TestScheduler(t *testing.T) {
 
 			// reopen
 			scheduler, store, runner, dsm, statsdClient = setupScheduler(storeLocation, t)
-			g.Assert(runner.scheduledJobs[sj.ID]).Eql([]cron.EntryID{cron.EntryID(1)}, "Our job has received internal id 1")
+			g.Assert(runner.scheduledJobs[sj.ID]).
+				Eql([]cron.EntryID{cron.EntryID(1)}, "Our job has received internal id 1")
 		})
 
 		g.It("Should marshal entities back and forth without data loss", func() {
@@ -389,15 +392,16 @@ func TestScheduler(t *testing.T) {
 					Source: map[string]interface{}{"Type": "SlowSource", "Sleep": "300ms"},
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeCron, JobType: JobTypeIncremental, Schedule: "@midnight"},
-					}}
+					},
+				}
 				err := scheduler.AddJob(config)
 				g.Assert(err).IsNil("could add job config without error")
 
-				//add additional schedule which triggers "now"
+				// add additional schedule which triggers "now"
 				js, err := scheduler.toTriggeredJobs(config)
 				g.Assert(err).IsNil()
 				j := js[0]
-				//register callback to get notified when job is started
+				// register callback to get notified when job is started
 				wg := sync.WaitGroup{}
 				wg.Add(1) // we will never see the return of the borrowed ticket since the job is longrunning
 				statsdClient.GaugesCallback = func(data map[string]interface{}) {
@@ -409,20 +413,20 @@ func TestScheduler(t *testing.T) {
 				id := jobrunner.MainCron.Schedule(&TestSched{}, jobrunner.New(j))
 				g.Assert(id).Eql(cron.EntryID(2), "this should be the second schedule (same job though)")
 
-				//wait for schedule to start
+				// wait for schedule to start
 				wg.Wait()
 
 				g.Assert(runner.raffle.runningJob(j.id).id).Eql(j.id, "scheduled job has started")
-				runJobId, err := scheduler.RunJob(j.id, JobTypeIncremental)
-				g.Assert(runJobId).IsZero()
+				runJobID, err := scheduler.RunJob(j.id, JobTypeIncremental)
+				g.Assert(runJobID).IsZero()
 				g.Assert(err).IsNotNil()
 				g.Assert(err.Error()).Eql("job with id 'j1' (j1) already running")
 
-				//Also try to shortcut "running" check in scheduler.RunJob. tickets still should prevent concurrent run
+				// Also try to shortcut "running" check in scheduler.RunJob. tickets still should prevent concurrent run
 				g.Assert(len(scheduler.GetRunningJobs())).Eql(1, "there is one (scheduled) job running")
 				originalStartTime := runner.raffle.runningJob(j.id).started
 				scheduler.Runner.startJob(j)
-				//ideally we need to wait for the job runner to go through raffle etc.
+				// ideally we need to wait for the job runner to go through raffle etc.
 				g.Assert(runner.raffle.runningJob(j.id).started).Eql(originalStartTime, "runState did not change")
 				scheduler.KillJob(j.id)
 			})
@@ -435,11 +439,12 @@ func TestScheduler(t *testing.T) {
 					Source: map[string]interface{}{"Type": "SlowSource", "Sleep": "100ms"},
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeCron, JobType: JobTypeIncremental, Schedule: "@midnight"},
-					}}
+					},
+				}
 				err := scheduler.AddJob(config)
 				g.Assert(err).IsNil("could add job config without error")
 
-				//add additional schedule which triggers "now"
+				// add additional schedule which triggers "now"
 				js, err := scheduler.toTriggeredJobs(config)
 				g.Assert(err).IsNil()
 				j := js[0]
@@ -448,7 +453,7 @@ func TestScheduler(t *testing.T) {
 				id := jobrunner.MainCron.Schedule(&TestSched{Callback: func() { schedwg.Done() }}, jobrunner.New(j))
 				g.Assert(id).Eql(cron.EntryID(2), "this should be the second schedule (same job though)")
 
-				//register callback to get notified when job is started and done
+				// register callback to get notified when job is started and done
 				wg := sync.WaitGroup{}
 				wg.Add(1)
 				donewg := sync.WaitGroup{}
@@ -463,19 +468,19 @@ func TestScheduler(t *testing.T) {
 						donewg.Done()
 					}
 				}
-				runJobId, err := scheduler.RunJob(j.id, JobTypeFull)
-				g.Assert(runJobId).Eql(j.id, "The RunJob has succeeded")
+				runJobID, err := scheduler.RunJob(j.id, JobTypeFull)
+				g.Assert(runJobID).Eql(j.id, "The RunJob has succeeded")
 				g.Assert(err).IsNil()
-				//wait for RunJob to reach running state
+				// wait for RunJob to reach running state
 				wg.Wait()
 
 				originalStartTime := runner.raffle.runningJob(j.id).started
-				//wait for schedule to trigger another run
+				// wait for schedule to trigger another run
 				schedwg.Wait()
 				state := runner.raffle.runningJob(j.id)
 				g.Assert(state.started).Eql(originalStartTime, "runState did not change")
 				g.Assert(state).IsNotZero("there is a runstate")
-				//wait for RunJob to finish (should run more 100ms)
+				// wait for RunJob to finish (should run more 100ms)
 				donewg.Wait()
 				state = runner.raffle.runningJob(j.id)
 				g.Assert(state).IsZero("no more runstate")
@@ -488,14 +493,15 @@ func TestScheduler(t *testing.T) {
 					Source: map[string]interface{}{"Type": "SampleSource"},
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeCron, JobType: JobTypeIncremental, Schedule: "@midnight"},
-					}}
+					},
+				}
 				err := scheduler.AddJob(config)
 				g.Assert(err).IsNil("could add job config without error")
 				js, err := scheduler.toTriggeredJobs(config)
 				g.Assert(err).IsNil()
 				j := js[0]
 
-				//register callback to get notified when job is done
+				// register callback to get notified when job is done
 				donewg := sync.WaitGroup{}
 				donewg.Add(2)
 				statsdClient.GaugesCallback = func(data map[string]interface{}) {
@@ -503,8 +509,8 @@ func TestScheduler(t *testing.T) {
 						donewg.Done()
 					}
 				}
-				runJobId, err := scheduler.RunJob(j.id, JobTypeIncremental)
-				g.Assert(runJobId).Eql(j.id, "The RunJob has succeeded")
+				runJobID, err := scheduler.RunJob(j.id, JobTypeIncremental)
+				g.Assert(runJobID).Eql(j.id, "The RunJob has succeeded")
 				g.Assert(err).IsNil()
 
 				donewg.Wait()
@@ -516,51 +522,55 @@ func TestScheduler(t *testing.T) {
 				g.Assert(err).IsNil()
 				g.Assert(syncJobState).Eql(&SyncJobState{ID: j.id, ContinuationToken: "0"})
 			})
-			g.It("Should let a fullsync  RunJob fail, while a scheduled run is active (user can try again soon)", func() {
-				config := &JobConfiguration{
-					ID:     "j1",
-					Title:  "j1",
-					Sink:   map[string]interface{}{"Type": "DevNullSink"},
-					Source: map[string]interface{}{"Type": "SlowSource", "Sleep": "300ms"},
-					Triggers: []JobTrigger{
-						{TriggerType: TriggerTypeCron, JobType: JobTypeIncremental, Schedule: "@midnight"},
-					}}
-				err := scheduler.AddJob(config)
-				g.Assert(err).IsNil("could add job config without error")
-
-				//add additional schedule which triggers "now"
-				js, err := scheduler.toTriggeredJobs(config)
-				g.Assert(err).IsNil()
-				j := js[0]
-
-				//register callback to get notified when job is started
-				startWg := sync.WaitGroup{}
-				startWg.Add(1)
-				statsdClient.GaugesCallback = func(data map[string]interface{}) {
-					if data["name"] == "jobs.tickets.incr" && data["value"] == float64(9) {
-						startWg.Done()
+			g.It(
+				"Should let a fullsync  RunJob fail, while a scheduled run is active (user can try again soon)",
+				func() {
+					config := &JobConfiguration{
+						ID:     "j1",
+						Title:  "j1",
+						Sink:   map[string]interface{}{"Type": "DevNullSink"},
+						Source: map[string]interface{}{"Type": "SlowSource", "Sleep": "300ms"},
+						Triggers: []JobTrigger{
+							{TriggerType: TriggerTypeCron, JobType: JobTypeIncremental, Schedule: "@midnight"},
+						},
 					}
-				}
+					err := scheduler.AddJob(config)
+					g.Assert(err).IsNil("could add job config without error")
 
-				id := jobrunner.MainCron.Schedule(&TestSched{}, jobrunner.New(j))
-				g.Assert(id).Eql(cron.EntryID(2), "this should be the second schedule (same job though)")
+					// add additional schedule which triggers "now"
+					js, err := scheduler.toTriggeredJobs(config)
+					g.Assert(err).IsNil()
+					j := js[0]
 
-				//wait for schedule to start
-				startWg.Wait()
-				g.Assert(runner.raffle.runningJob(j.id).id).Eql(j.id, "scheduled job has started")
+					// register callback to get notified when job is started
+					startWg := sync.WaitGroup{}
+					startWg.Add(1)
+					statsdClient.GaugesCallback = func(data map[string]interface{}) {
+						if data["name"] == "jobs.tickets.incr" && data["value"] == float64(9) {
+							startWg.Done()
+						}
+					}
 
-				//Now start a fullSync RunJob
-				runJobId, err := scheduler.RunJob(j.id, JobTypeFull)
-				g.Assert(runJobId).IsZero()
-				g.Assert(err).IsNotNil()
-				g.Assert(err.Error()).Eql("job with id 'j1' (j1) already running")
+					id := jobrunner.MainCron.Schedule(&TestSched{}, jobrunner.New(j))
+					g.Assert(id).Eql(cron.EntryID(2), "this should be the second schedule (same job though)")
 
-				//Also try to shortcut "running" check in scheduler.RunJob. tickets still should prevent concurrent run
-				g.Assert(len(scheduler.GetRunningJobs())).Eql(1, "there is one (scheduled) job running")
-				originalStartTime := runner.raffle.runningJob(j.id).started
-				scheduler.Runner.startJob(j)
-				g.Assert(runner.raffle.runningJob(j.id).started).Eql(originalStartTime, "runState did not change")
-			})
+					// wait for schedule to start
+					startWg.Wait()
+					g.Assert(runner.raffle.runningJob(j.id).id).Eql(j.id, "scheduled job has started")
+
+					// Now start a fullSync RunJob
+					runJobID, err := scheduler.RunJob(j.id, JobTypeFull)
+					g.Assert(runJobID).IsZero()
+					g.Assert(err).IsNotNil()
+					g.Assert(err.Error()).Eql("job with id 'j1' (j1) already running")
+
+					// Also try to shortcut "running" check in scheduler.RunJob. tickets still should prevent concurrent run
+					g.Assert(len(scheduler.GetRunningJobs())).Eql(1, "there is one (scheduled) job running")
+					originalStartTime := runner.raffle.runningJob(j.id).started
+					scheduler.Runner.startJob(j)
+					g.Assert(runner.raffle.runningJob(j.id).started).Eql(originalStartTime, "runState did not change")
+				},
+			)
 
 			g.It("Should start a scheduled fullsync after a RunJob if the schedule triggers during RunJob", func() {
 				_ = os.Setenv("JOB_FULLSYNC_RETRY_INTERVAL", "100ms")
@@ -571,16 +581,17 @@ func TestScheduler(t *testing.T) {
 					Source: map[string]interface{}{"Type": "SlowSource", "Sleep": "200ms"},
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeCron, JobType: JobTypeFull, Schedule: "@midnight"},
-					}}
+					},
+				}
 				err := scheduler.AddJob(config)
 				g.Assert(err).IsNil("could add job config without error")
 
-				//add additional schedule which triggers "now"
+				// add additional schedule which triggers "now"
 				js, err := scheduler.toTriggeredJobs(config)
 				g.Assert(err).IsNil()
 				j := js[0]
 
-				//register callback to get notified when job is started and done
+				// register callback to get notified when job is started and done
 				startWg := sync.WaitGroup{}
 				startWg.Add(1)
 				var started bool
@@ -601,22 +612,22 @@ func TestScheduler(t *testing.T) {
 				id := jobrunner.MainCron.Schedule(&TestSched{Callback: func() { schedWg.Done() }}, jobrunner.New(j))
 				g.Assert(id).Eql(cron.EntryID(2), "this should be the second schedule (same job though)")
 
-				runJobId, err := scheduler.RunJob(j.id, JobTypeFull)
-				g.Assert(runJobId).Eql(j.id, "The RunJob has succeeded")
+				runJobID, err := scheduler.RunJob(j.id, JobTypeFull)
+				g.Assert(runJobID).Eql(j.id, "The RunJob has succeeded")
 				g.Assert(err).IsNil()
-				//wait for RunJob to reach running state
+				// wait for RunJob to reach running state
 				startWg.Wait()
-				//capture startingTime of RunJob for comparison
+				// capture startingTime of RunJob for comparison
 				originalStartTime := runner.raffle.runningJob(j.id).started
 
-				//wait for schedule to trigger another run
+				// wait for schedule to trigger another run
 				schedWg.Wait()
 
 				state := runner.raffle.runningJob(j.id)
 				g.Assert(state.started).Eql(originalStartTime, "runState should not change")
 				g.Assert(state).IsNotZero("there should be a runstate")
 
-				//wait for RunJob to finish
+				// wait for RunJob to finish
 				doneWg.Wait()
 
 				state = runner.raffle.runningJob(j.id)
@@ -629,7 +640,7 @@ func TestScheduler(t *testing.T) {
 
 				state = runner.raffle.runningJob(j.id)
 				g.Assert(state).IsNotZero("should be a new runstate")
-				g.Assert(state.started == originalStartTime).IsFalse("should not be same runstate as RunJob")
+				g.Assert(state.started.Equal(originalStartTime)).IsFalse("should not be same runstate as RunJob")
 
 				_ = os.Unsetenv("JOB_FULLSYNC_RETRY_INTERVAL")
 			})
@@ -650,19 +661,19 @@ func TestScheduler(t *testing.T) {
 				var done bool
 				statsdClient.GaugesCallback = func(data map[string]interface{}) {
 					if data["name"] == "jobs.tickets.full" && data["value"] == float64(4) {
-						//gauge goes down, a "start"
+						// gauge goes down, a "start"
 						started = true
 					}
 					if data["name"] == "jobs.tickets.full" && data["value"] == float64(5) && started && !done {
-						//gauge goes up again, a "done"
+						// gauge goes up again, a "done"
 						doneWg.Done()
 						done = true
 					}
 				}
 
-				//set retry interval larger than job duration, so that subsequent retries do not mess with our backpressure counts.
-				//we want to only measure the number queued jobs in parellel (not in series)
-				//also set it larger than runtime of complete testsuite to avoid that it kicks in while other tests run
+				// set retry interval larger than job duration, so that subsequent retries do not mess with our backpressure counts.
+				// we want to only measure the number queued jobs in parellel (not in series)
+				// also set it larger than runtime of complete testsuite to avoid that it kicks in while other tests run
 				_ = os.Setenv("JOB_FULLSYNC_RETRY_INTERVAL", "5m")
 				config := &JobConfiguration{
 					ID:     "j1",
@@ -671,7 +682,8 @@ func TestScheduler(t *testing.T) {
 					Source: map[string]interface{}{"Type": "SlowSource", "Sleep": "200ms"},
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeCron, JobType: JobTypeFull, Schedule: "@every 100ms"},
-					}}
+					},
+				}
 
 				// add the job to run it
 				scheduler.AddJob(config)
@@ -734,7 +746,8 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if JobType is missing", func() {
-				err := scheduler.AddJob(&JobConfiguration{ID: "x", Title: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{
+					ID: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeCron},
 					},
@@ -743,7 +756,8 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if trigger type is unknown", func() {
-				err := scheduler.AddJob(&JobConfiguration{ID: "x", Title: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{
+					ID: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: "foo"},
 					},
@@ -751,7 +765,8 @@ func TestScheduler(t *testing.T) {
 				g.Assert(err).Eql(errors.New("need to set 'triggerType'. must be one of: cron, onchange"))
 			})
 			g.It("Should fail if sync type is unknown", func() {
-				err := scheduler.AddJob(&JobConfiguration{ID: "x", Title: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{
+					ID: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeCron, JobType: "foo"},
 					},
@@ -760,17 +775,19 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if schedule is missing", func() {
-				err := scheduler.AddJob(&JobConfiguration{ID: "x", Title: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{
+					ID: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeCron, JobType: JobTypeIncremental},
 					},
 				})
-				g.Assert(err).Eql(errors.New("trigger type cron requires a valid 'Schedule' expression. But: empty spec string"))
-
+				g.Assert(err).
+					Eql(errors.New("trigger type cron requires a valid 'Schedule' expression. But: empty spec string"))
 			})
 
 			g.It("Should fail if source is unknown type", func() {
-				err := scheduler.AddJob(&JobConfiguration{ID: "x", Title: "x",
+				err := scheduler.AddJob(&JobConfiguration{
+					ID: "x", Title: "x",
 					Source: map[string]interface{}{"Type": "foo"},
 					Sink:   validSink,
 					Triggers: []JobTrigger{
@@ -781,7 +798,8 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if sink is unknown type", func() {
-				err := scheduler.AddJob(&JobConfiguration{ID: "x", Title: "x", Source: validSource,
+				err := scheduler.AddJob(&JobConfiguration{
+					ID: "x", Title: "x", Source: validSource,
 					Sink: map[string]interface{}{"Type": "foo"},
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeCron, JobType: JobTypeIncremental, Schedule: "@midnight"},
@@ -791,32 +809,37 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if transform is unknown type", func() {
-				err := scheduler.AddJob(&JobConfiguration{ID: "x", Title: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{
+					ID: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeOnChange, JobType: JobTypeIncremental, MonitoredDataset: "foo"},
 					},
 					Transform: map[string]interface{}{},
 				})
-				g.Assert(err).Eql(errors.New("transform config must contain 'Type'. can be one of: JavascriptTransform, HttpTransform"))
+				g.Assert(err).
+					Eql(errors.New("transform config must contain 'Type'. can be one of: JavascriptTransform, HttpTransform"))
 			})
 
 			g.It("Should fail if job type is 'event', but schedule is set", func() {
-				err := scheduler.AddJob(&JobConfiguration{ID: "x", Title: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{
+					ID: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeOnChange, JobType: JobTypeIncremental, Schedule: "@midnight"},
 					},
 				})
-				g.Assert(err).Eql(errors.New("trigger type 'onchange' requires that 'MonitoredDataset' parameter also is set"))
+				g.Assert(err).
+					Eql(errors.New("trigger type 'onchange' requires that 'MonitoredDataset' parameter also is set"))
 			})
 
 			g.It("Should fail if schedule is not parsable", func() {
-				err := scheduler.AddJob(&JobConfiguration{ID: "x", Title: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{
+					ID: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeCron, JobType: JobTypeIncremental, Schedule: "midnight"},
 					},
 				})
-				g.Assert(err).Eql(errors.New("trigger type cron requires a valid 'Schedule' expression. But: expected exactly 5 fields, found 1: [midnight]"))
-
+				g.Assert(err).
+					Eql(errors.New("trigger type cron requires a valid 'Schedule' expression. But: expected exactly 5 fields, found 1: [midnight]"))
 			})
 		})
 	})
@@ -841,13 +864,13 @@ func (s *TestSched) Next(t time.Time) time.Time {
 }
 
 type Continuation struct {
-	Id    string `json:"id"`
+	ID    string `json:"id"`
 	Token string `json:"token"`
 }
 
 type MockService struct {
 	RecordedEntities        map[string][]*server.Entity
-	HttpNotificationChannel chan *http.Request
+	HTTPNotificationChannel chan *http.Request
 	echo                    *echo.Echo
 }
 
@@ -855,7 +878,7 @@ func (m MockService) getContinuationTokenForDataset(dsName string) string {
 	token := ""
 	for _, e := range m.RecordedEntities[dsName] {
 		if e.ID == "@continuation" {
-			//continue so that we find the last token
+			// continue so that we find the last token
 			token = fmt.Sprintf("%v", e.Properties)
 		}
 	}
@@ -877,14 +900,14 @@ func NewMockService() MockService {
 	e := echo.New()
 	result := MockService{}
 	result.RecordedEntities = make(map[string][]*server.Entity)
-	result.HttpNotificationChannel = make(chan *http.Request, 100)
+	result.HTTPNotificationChannel = make(chan *http.Request, 100)
 	result.echo = e
 	// attach middleware to wrap every handler with channel notifications
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// after handler (right before response is sent), notify channel
 			c.Response().Before(func() {
-				result.HttpNotificationChannel <- c.Request()
+				result.HTTPNotificationChannel <- c.Request()
 			})
 			return next(c)
 		}
@@ -933,7 +956,7 @@ func NewMockService() MockService {
 				e := server.NewEntity("ex:e-"+strconv.Itoa(i), 0)
 				result = append(result, e)
 			}
-			c := &Continuation{Id: "@continuation", Token: "nextplease"}
+			c := &Continuation{ID: "@continuation", Token: "nextplease"}
 			result = append(result, c)
 		} else {
 			// return more objects
@@ -1003,7 +1026,10 @@ func NewMockService() MockService {
 	return result
 }
 
-func setupScheduler(storeLocation string, t *testing.T) (*Scheduler, *server.Store, *Runner, *server.DsManager, *StatsDRecorder) {
+func setupScheduler(
+	storeLocation string,
+	t *testing.T,
+) (*Scheduler, *server.Store, *Runner, *server.DsManager, *StatsDRecorder) {
 	statsdClient := &StatsDRecorder{}
 	statsdClient.Reset()
 	e := &conf.Env{
@@ -1025,8 +1051,8 @@ func setupScheduler(storeLocation string, t *testing.T) (*Scheduler, *server.Sto
 	lc := fxtest.NewLifecycle(internal.FxTestLog(t, false))
 	store := server.NewStore(lc, e, statsdClient)
 
-	var pm = security.NewProviderManager(lc, e, store, logger)
-	var tps = security.NewTokenProviders(lc, logger, pm, nil)
+	pm := security.NewProviderManager(lc, e, store, logger)
+	tps := security.NewTokenProviders(lc, logger, pm, nil)
 	runner := NewRunner(e, store, tps, eb, statsdClient)
 
 	dsm := server.NewDsManager(lc, e, store, server.NoOpBus())
@@ -1058,11 +1084,23 @@ type StatsDRecorder struct {
 	CountCallback  func(map[string]interface{})
 }
 
-func (r *StatsDRecorder) GaugeWithTimestamp(name string, value float64, tags []string, rate float64, timestamp time.Time) error {
+func (r *StatsDRecorder) GaugeWithTimestamp(
+	name string,
+	value float64,
+	tags []string,
+	rate float64,
+	timestamp time.Time,
+) error {
 	return nil
 }
 
-func (r *StatsDRecorder) CountWithTimestamp(name string, value int64, tags []string, rate float64, timestamp time.Time) error {
+func (r *StatsDRecorder) CountWithTimestamp(
+	name string,
+	value int64,
+	tags []string,
+	rate float64,
+	timestamp time.Time,
+) error {
 	return nil
 }
 
@@ -1095,7 +1133,7 @@ func (r *StatsDRecorder) Gauge(name string, value float64, tags []string, rate f
 }
 
 func (r *StatsDRecorder) Count(name string, value int64, tags []string, rate float64) error {
-	//r.Counts[name] = value
+	// r.Counts[name] = value
 	if r.CountCallback != nil {
 		r.CountCallback(map[string]interface{}{
 			"name":  name,
@@ -1110,6 +1148,7 @@ func (r *StatsDRecorder) Count(name string, value int64, tags []string, rate flo
 func (r *StatsDRecorder) Histogram(name string, value float64, tags []string, rate float64) error {
 	return nil
 }
+
 func (r *StatsDRecorder) Distribution(name string, value float64, tags []string, rate float64) error {
 	return nil
 }
@@ -1118,9 +1157,11 @@ func (r *StatsDRecorder) Incr(name string, tags []string, rate float64) error { 
 func (r *StatsDRecorder) Set(name string, value string, tags []string, rate float64) error {
 	return nil
 }
+
 func (r *StatsDRecorder) Timing(name string, value time.Duration, tags []string, rate float64) error {
 	return nil
 }
+
 func (r *StatsDRecorder) TimeInMilliseconds(name string, value float64, tags []string, rate float64) error {
 	return nil
 }

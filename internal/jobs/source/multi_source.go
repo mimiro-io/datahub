@@ -253,9 +253,9 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 						prevRelatedFrom.At = timestamp
 					repeatPrevQuery:
 						// same query paging logic as lines 213-227, just different point in time. duplicates may be put onto channel here
-						prevRelatedEntities, cont, err := multiSource.Store.GetRelatedAtTime(prevRelatedFrom, batchSize)
-						if err != nil {
-							errChan <- fmt.Errorf("previous GetRelatedAtTime failed for Join %+v at timestamp %v, %w", join, timestamp, err)
+						prevRelatedEntities, cont, err2 := multiSource.Store.GetRelatedAtTime(prevRelatedFrom, batchSize)
+						if err2 != nil {
+							errChan <- fmt.Errorf("previous GetRelatedAtTime failed for Join %+v at timestamp %v, %w", join, timestamp, err2)
 						}
 						for _, r := range prevRelatedEntities {
 							joinLvlChan <- r.EntityID

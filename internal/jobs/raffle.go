@@ -46,7 +46,12 @@ type ticket struct {
 	runState *runState
 }
 
-func NewRaffle(ticketsFull int, ticketsIncr int, logger *zap.SugaredLogger, statsdClient statsd.ClientInterface) *raffle {
+func NewRaffle(
+	ticketsFull int,
+	ticketsIncr int,
+	logger *zap.SugaredLogger,
+	statsdClient statsd.ClientInterface,
+) *raffle {
 	return &raffle{
 		logger:       logger,
 		statsdClient: statsdClient,
@@ -122,7 +127,6 @@ func (r *raffle) returnTicket(ticket *ticket) {
 		r.ticketsIncr++
 		_ = r.statsdClient.Gauge("jobs.tickets.incr", float64(r.ticketsIncr), tags, 1)
 	}
-
 }
 
 func (r *raffle) runningJob(jobid string) *runState {

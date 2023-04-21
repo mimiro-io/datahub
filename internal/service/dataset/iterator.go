@@ -17,8 +17,9 @@ package dataset
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/mimiro-io/datahub/internal/service/types"
 	"io"
+
+	"github.com/mimiro-io/datahub/internal/service/types"
 
 	"github.com/dgraph-io/badger/v3"
 

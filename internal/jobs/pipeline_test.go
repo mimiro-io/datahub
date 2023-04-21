@@ -69,7 +69,7 @@ func TestPipeline(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			_ = mockService.echo.Shutdown(ctx)
 			cancel()
-			mockService.HttpNotificationChannel = nil
+			mockService.HTTPNotificationChannel = nil
 			_ = store.Close()
 			_ = os.RemoveAll(storeLocation)
 		})
@@ -1035,12 +1035,12 @@ func TestPipeline(t *testing.T) {
 			}()
 
 			// block and wait for channel notification - indicating the first page/batch has been received
-			<-mockService.HttpNotificationChannel
+			<-mockService.HTTPNotificationChannel
 			g.Assert(len(mockService.getRecordedEntitiesForDataset("inctest"))).
 				Eql(5, "After first batch, 5 entities should have been postet to httpSink")
 
 			// block for next batch request finished - this should be before syncState is updated
-			<-mockService.HttpNotificationChannel
+			<-mockService.HTTPNotificationChannel
 			syncJobState := &SyncJobState{}
 			err := store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
 			g.Assert(err).IsNil()
@@ -1548,7 +1548,7 @@ func TestPipeline(t *testing.T) {
 				defer wg.Done()
 				for afterCh := time.After(100 * time.Millisecond); ; {
 					select {
-					case d := <-mockService.HttpNotificationChannel:
+					case d := <-mockService.HTTPNotificationChannel:
 						receivedMockRequests = append(receivedMockRequests, d)
 					case <-afterCh:
 						return
@@ -1608,7 +1608,7 @@ func TestPipeline(t *testing.T) {
 				defer wg.Done()
 				for afterCh := time.After(100 * time.Millisecond); ; {
 					select {
-					case d := <-mockService.HttpNotificationChannel:
+					case d := <-mockService.HTTPNotificationChannel:
 						receivedMockRequests = append(receivedMockRequests, d)
 					case <-afterCh:
 						return

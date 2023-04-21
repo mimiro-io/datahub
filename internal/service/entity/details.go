@@ -3,6 +3,7 @@ package entity
 import (
 	"encoding/binary"
 	"fmt"
+
 	"github.com/dgraph-io/badger/v3"
 	"github.com/mimiro-io/datahub/internal/service/namespace"
 	"github.com/mimiro-io/datahub/internal/service/store"
@@ -48,23 +49,27 @@ func (l Lookup) Details(id string, datasetNames []string) (map[string]interface{
 
 	rtxn := b.NewTransaction(false)
 	defer rtxn.Discard()
-	internalId, err := l.internalIdForCURIE(rtxn, curie)
+	internalID, err := l.internalIDForCURIE(rtxn, curie)
 	if err != nil {
 		return nil, err
 	}
 
 	scope := l.badger.LookupDatasetIDs(datasetNames)
-	details, err := l.loadDetails(rtxn, internalId, scope)
+	details, err := l.loadDetails(rtxn, internalID, scope)
 	if err != nil {
 		return nil, err
 	}
 	return details, nil
 }
 
-func (l Lookup) loadDetails(rtxn *badger.Txn, internalEntityId types.InternalID, scope []types.InternalDatasetID) (map[string]interface{}, error) {
+func (l Lookup) loadDetails(
+	rtxn *badger.Txn,
+	internalEntityID types.InternalID,
+	scope []types.InternalDatasetID,
+) (map[string]interface{}, error) {
 	result := map[string]interface{}{}
 
-	entityLocatorPrefixBuffer := store.SeekEntity(internalEntityId)
+	entityLocatorPrefixBuffer := store.SeekEntity(internalEntityID)
 	opts1 := badger.DefaultIteratorOptions
 	opts1.PrefetchValues = false
 	opts1.Prefix = entityLocatorPrefixBuffer
@@ -72,21 +77,21 @@ func (l Lookup) loadDetails(rtxn *badger.Txn, internalEntityId types.InternalID,
 	defer entityLocatorIterator.Close()
 
 	var prevValueBytes []byte
-	var previousDatasetId types.InternalDatasetID = 0
-	var currentDatasetId types.InternalDatasetID = 0
+	var previousDatasetID types.InternalDatasetID = 0
+	var currentDatasetID types.InternalDatasetID = 0
 	partials := map[types.InternalDatasetID][]byte{}
 	for entityLocatorIterator.Seek(entityLocatorPrefixBuffer); entityLocatorIterator.ValidForPrefix(entityLocatorPrefixBuffer); entityLocatorIterator.Next() {
 		item := entityLocatorIterator.Item()
 		key := item.Key()
 
-		currentDatasetId = types.InternalDatasetID(binary.BigEndian.Uint32(key[10:]))
+		currentDatasetID = types.InternalDatasetID(binary.BigEndian.Uint32(key[10:]))
 
 		// check if dataset has been deleted, or must be excluded
-		datasetDeleted := l.badger.IsDatasetDeleted(currentDatasetId)
+		datasetDeleted := l.badger.IsDatasetDeleted(currentDatasetID)
 		datasetIncluded := len(scope) == 0 // no specified datasets means no restriction - all datasets are allowed
 		if !datasetIncluded {
 			for _, id := range scope {
-				if id == currentDatasetId {
+				if id == currentDatasetID {
 					datasetIncluded = true
 					break
 				}
@@ -96,38 +101,41 @@ func (l Lookup) loadDetails(rtxn *badger.Txn, internalEntityId types.InternalID,
 			continue
 		}
 
-		if previousDatasetId != 0 {
-			if currentDatasetId != previousDatasetId {
-				partials[previousDatasetId] = prevValueBytes
+		if previousDatasetID != 0 {
+			if currentDatasetID != previousDatasetID {
+				partials[previousDatasetID] = prevValueBytes
 			}
 		}
 
-		previousDatasetId = currentDatasetId
+		previousDatasetID = currentDatasetID
 
 		// fixme: pre alloc big ish buffer once and use value size
 		prevValueBytes, _ = item.ValueCopy(nil)
 	}
 
-	if previousDatasetId != 0 {
-		partials[previousDatasetId] = prevValueBytes
+	if previousDatasetID != 0 {
+		partials[previousDatasetID] = prevValueBytes
 	}
 
-	for internalDatasetId, entityBytes := range partials {
-		n, ok := l.badger.LookupDatasetName(internalDatasetId)
+	for internalDatasetID, entityBytes := range partials {
+		n, ok := l.badger.LookupDatasetName(internalDatasetID)
 		if !ok {
-			result[fmt.Sprintf("%v", internalDatasetId)] = "UNEXPECTED: dataset name not found"
+			result[fmt.Sprintf("%v", internalDatasetID)] = "UNEXPECTED: dataset name not found"
 		} else {
 			result[n] = map[string]interface{}{
 				"latest":  string(entityBytes),
-				"changes": l.loadChanges(rtxn, internalEntityId, internalDatasetId),
+				"changes": l.loadChanges(rtxn, internalEntityID, internalDatasetID),
 			}
 		}
 	}
 	return result, nil
-
 }
 
-func (l Lookup) loadChanges(rtxn *badger.Txn, internalEntityID types.InternalID, internalDatasetID types.InternalDatasetID) []string {
+func (l Lookup) loadChanges(
+	rtxn *badger.Txn,
+	internalEntityID types.InternalID,
+	internalDatasetID types.InternalDatasetID,
+) []string {
 	seekPrefix := store.SeekEntityChanges(internalDatasetID, internalEntityID)
 	iteratorOptions := badger.DefaultIteratorOptions
 	iteratorOptions.PrefetchValues = true

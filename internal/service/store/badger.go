@@ -32,6 +32,6 @@ type BadgerStore interface {
 	LookupDatasetName(internalDatasetID types.InternalDatasetID) (string, bool)
 
 	// need access ot in-memory mapping
-	IsDatasetDeleted(datasetId types.InternalDatasetID) bool
+	IsDatasetDeleted(datasetID types.InternalDatasetID) bool
 	LegacyNamespaceAccess
 }

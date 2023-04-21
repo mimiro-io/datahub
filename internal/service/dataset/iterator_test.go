@@ -17,6 +17,9 @@ package dataset_test
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"testing"
+
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/franela/goblin"
 	"github.com/mimiro-io/datahub/internal"
@@ -26,8 +29,6 @@ import (
 	"github.com/mimiro-io/datahub/internal/service/types"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
-	"os"
-	"testing"
 )
 
 func TestDatasetIterator(t *testing.T) {
@@ -76,7 +77,6 @@ func TestDatasetIterator(t *testing.T) {
 		g.After(func() {
 			lc.Stop(context.Background())
 			os.RemoveAll(storeLocation)
-
 		})
 		g.It("should be able to create a 0 offset", func() {
 			dataset, err := ds.Of(server.NewBadgerAccess(store, dsm), ds1.ID)
@@ -131,8 +131,8 @@ func TestDatasetIterator(t *testing.T) {
 			for it.Next() {
 				jsonData := it.Item()
 				e := server.Entity{}
-				err := json.Unmarshal(jsonData, &e)
-				g.Assert(err).IsNil()
+				err2 := json.Unmarshal(jsonData, &e)
+				g.Assert(err2).IsNil()
 				foundIds = append(foundIds, e.ID)
 				continuationToken = it.NextOffset()
 				if len(foundIds) == 2 {
@@ -145,6 +145,7 @@ func TestDatasetIterator(t *testing.T) {
 			g.Assert(continuationToken).Equal(types.DatasetOffset(2))
 
 			it, err = dataset.At(continuationToken)
+			g.Assert(err).IsNil()
 			foundIds = []string{}
 			for it.Next() {
 				jsonData := it.Item()
@@ -213,8 +214,8 @@ func TestDatasetIterator(t *testing.T) {
 			for it.Next() {
 				jsonData := it.Item()
 				e := server.Entity{}
-				err := json.Unmarshal(jsonData, &e)
-				g.Assert(err).IsNil()
+				err2 := json.Unmarshal(jsonData, &e)
+				g.Assert(err2).IsNil()
 				foundIds = append(foundIds, e.ID)
 				continuationToken = it.NextOffset()
 				if len(foundIds) == 2 {
@@ -227,6 +228,7 @@ func TestDatasetIterator(t *testing.T) {
 			g.Assert(continuationToken).Equal(types.DatasetOffset(2))
 
 			it, err = dataset.At(continuationToken)
+			g.Assert(err).IsNil()
 			it = it.Inverse()
 			foundIds = []string{}
 			for it.Next() {
@@ -242,6 +244,5 @@ func TestDatasetIterator(t *testing.T) {
 			g.Assert(foundIds).Equal([]string{"II", "I"})
 			g.Assert(continuationToken).Equal(types.DatasetOffset(0))
 		})
-
 	})
 }

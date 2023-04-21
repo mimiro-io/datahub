@@ -65,7 +65,7 @@ func (pm *ProviderManager) addComp() error {
 		provider := ProviderConfig{
 			Name: "jwttokenprovider",
 			Type: "bearer",
-			ClientId: &ValueReader{
+			ClientID: &ValueReader{
 				Type:  "env",
 				Value: "DL_JWT_CLIENT_ID",
 			},
@@ -153,7 +153,7 @@ type ProviderConfig struct {
 	Type         string       `json:"type"`
 	User         *ValueReader `json:"user,omitempty"`
 	Password     *ValueReader `json:"password,omitempty"`
-	ClientId     *ValueReader `json:"key,omitempty"`
+	ClientID     *ValueReader `json:"key,omitempty"`
 	ClientSecret *ValueReader `json:"secret,omitempty"`
 	Audience     *ValueReader `json:"audience,omitempty"`
 	GrantType    *ValueReader `json:"grantType,omitempty"`

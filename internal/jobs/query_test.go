@@ -60,7 +60,6 @@ func TestQuery(test *testing.T) {
 		})
 
 		g.It("Should support js query that just writes to the response writer", func() {
-
 			// transform js
 			js := `
 			function do_query() {
@@ -85,7 +84,6 @@ func TestQuery(test *testing.T) {
 			// check result
 			g.Assert(len(resultWriter.Results)).Equal(1)
 			g.Assert(resultWriter.Results[0]).Equal(map[string]interface{}{"name": "homer"})
-
 		})
 
 		g.It("Should support js query that can access dataset changes", func() {
@@ -132,7 +130,6 @@ func TestQuery(test *testing.T) {
 			// check result
 			g.Assert(len(resultWriter.Results)).Equal(1)
 			g.Assert(resultWriter.Results[0]).Equal(map[string]interface{}{"count": 1})
-
 		})
 
 		g.It("Should support js query that can access dataset changes with continuation token", func() {
@@ -195,8 +192,8 @@ func TestQuery(test *testing.T) {
 
 			// check result
 			g.Assert(len(resultWriter.Results)).Equal(1)
-			g.Assert(resultWriter.Results[0]).Equal(map[string]interface{}{"count": 2, "names": []interface{}{"http://data.mimiro.io/people/homer", "http://data.mimiro.io/people/marge"}})
-
+			g.Assert(resultWriter.Results[0]).
+				Equal(map[string]interface{}{"count": 2, "names": []interface{}{"http://data.mimiro.io/people/homer", "http://data.mimiro.io/people/marge"}})
 		})
 	})
 }
