@@ -204,9 +204,9 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 				// 1. build a RelatedFrom query input
 				searchBuffer := make([]byte, 10)
 				if join.Inverse {
-					binary.BigEndian.PutUint16(searchBuffer, server.INCOMING_REF_INDEX)
+					binary.BigEndian.PutUint16(searchBuffer, server.IncomingRefIndex)
 				} else {
-					binary.BigEndian.PutUint16(searchBuffer, server.OUTGOING_REF_INDEX)
+					binary.BigEndian.PutUint16(searchBuffer, server.OutgoingRefIndex)
 				}
 				binary.BigEndian.PutUint64(searchBuffer[2:], rid)
 

@@ -116,14 +116,14 @@ func TestScheduler(t *testing.T) {
 				ID:                "job-1",
 				ContinuationToken: "cont-token-123",
 			}
-			err := store.StoreObject(server.JOB_DATA_INDEX, "job-1", syncJobState)
+			err := store.StoreObject(server.JobDataIndex, "job-1", syncJobState)
 			g.Assert(err).IsNil("We could store a syncJobState")
 
 			err = scheduler.ResetJob("job-1", "hello-world")
 			g.Assert(err).IsNil("We called ResetJob without error")
 
 			s2 := &SyncJobState{}
-			err = store.GetObject(server.JOB_DATA_INDEX, "job-1", s2)
+			err = store.GetObject(server.JobDataIndex, "job-1", s2)
 			g.Assert(err).IsNil("We could load the syncJobState back")
 			g.Assert(s2.ContinuationToken).Eql("hello-world",
 				"We find the continuation token that was injected with ResetJob in the syncState")
@@ -518,7 +518,7 @@ func TestScheduler(t *testing.T) {
 				hist := scheduler.GetJobHistory()
 				g.Assert(len(hist)).Eql(1, "our RunJob is in history")
 				syncJobState := &SyncJobState{}
-				err = runner.store.GetObject(server.JOB_DATA_INDEX, j.id, syncJobState)
+				err = runner.store.GetObject(server.JobDataIndex, j.id, syncJobState)
 				g.Assert(err).IsNil()
 				g.Assert(syncJobState).Eql(&SyncJobState{ID: j.id, ContinuationToken: "0"})
 			})

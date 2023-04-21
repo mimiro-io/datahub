@@ -1042,14 +1042,14 @@ func TestPipeline(t *testing.T) {
 			// block for next batch request finished - this should be before syncState is updated
 			<-mockService.HTTPNotificationChannel
 			syncJobState := &SyncJobState{}
-			err := store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+			err := store.GetObject(server.JobDataIndex, job.id, syncJobState)
 			g.Assert(err).IsNil()
 			token := syncJobState.ContinuationToken
 			g.Assert(token).Eql("5", "Between batch 1 and 2, token should be continuation of batch 1")
 
 			wg.Wait()
 			syncJobState = &SyncJobState{}
-			err = store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+			err = store.GetObject(server.JobDataIndex, job.id, syncJobState)
 			g.Assert(err).IsNil()
 			token = syncJobState.ContinuationToken
 			g.Assert(token).Eql("10")
@@ -1078,7 +1078,7 @@ func TestPipeline(t *testing.T) {
 			//wait for first syncState (token) update in badger (should be in db when 2nd batch arrives)
 			//_ = <-mockService.HttpNotificationChannel
 			syncJobState := &SyncJobState{}
-			err := store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+			err := store.GetObject(server.JobDataIndex, job.id, syncJobState)
 			g.Assert(err).IsNil()
 			token := syncJobState.ContinuationToken
 			g.Assert(token).Eql("", "there should not be a token stored after first batch")
@@ -1086,7 +1086,7 @@ func TestPipeline(t *testing.T) {
 			// wait for job to finish
 			wg.Wait()
 			syncJobState = &SyncJobState{}
-			err = store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+			err = store.GetObject(server.JobDataIndex, job.id, syncJobState)
 			g.Assert(err).IsNil()
 			token = syncJobState.ContinuationToken
 			g.Assert(token).Eql("10", "First after job there should be a token")
@@ -1184,7 +1184,7 @@ func TestPipeline(t *testing.T) {
 			g.Assert(len(sinkChanges)).Eql(2, "Expected only 2 entities in current state in fullsync")
 
 			syncJobState := &SyncJobState{}
-			err := store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+			err := store.GetObject(server.JobDataIndex, job.id, syncJobState)
 			g.Assert(err).IsNil()
 			token := syncJobState.ContinuationToken
 			g.Assert(token).Eql("{\"MainToken\":\"2\",\"DependencyTokens\":{\"dep\":{\"Token\":\"3\"}}}",
@@ -1228,7 +1228,7 @@ func TestPipeline(t *testing.T) {
 			g.Assert(len(sinkChanges)).Eql(2, "Expected only 2 entities")
 
 			syncJobState := &SyncJobState{}
-			err := store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+			err := store.GetObject(server.JobDataIndex, job.id, syncJobState)
 			g.Assert(err).IsNil()
 			token := syncJobState.ContinuationToken
 			g.Assert(token).Eql("{\"MainToken\":\"2\",\"DependencyTokens\":{\"dep\":{\"Token\":\"3\"}}}",
@@ -1250,7 +1250,7 @@ func TestPipeline(t *testing.T) {
 			g.Assert(sinkChanges[0].ID).Eql(ns+":1", "new dependency points to id 1")
 
 			syncJobState = &SyncJobState{}
-			err = store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+			err = store.GetObject(server.JobDataIndex, job.id, syncJobState)
 			g.Assert(err).IsNil()
 			token = syncJobState.ContinuationToken
 			g.Assert(token).Eql("{\"MainToken\":\"2\",\"DependencyTokens\":{\"dep\":{\"Token\":\"4\"}}}",
@@ -1268,7 +1268,7 @@ func TestPipeline(t *testing.T) {
 			g.Assert(len(sinkChanges)).Eql(0)
 
 			syncJobState = &SyncJobState{}
-			err = store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+			err = store.GetObject(server.JobDataIndex, job.id, syncJobState)
 			g.Assert(err).IsNil()
 			token = syncJobState.ContinuationToken
 			g.Assert(token).Eql("{\"MainToken\":\"2\",\"DependencyTokens\":{\"dep\":{\"Token\":\"4\"}}}",
@@ -1310,7 +1310,7 @@ func TestPipeline(t *testing.T) {
 			g.Assert(len(sinkChanges)).Eql(5, "Expected 5 entities in current state in fullsync")
 
 			syncJobState := &SyncJobState{}
-			err = store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+			err = store.GetObject(server.JobDataIndex, job.id, syncJobState)
 			g.Assert(err).IsNil()
 			token := syncJobState.ContinuationToken
 			g.Assert(token).Eql("",
@@ -1352,7 +1352,7 @@ func TestPipeline(t *testing.T) {
 			g.Assert(len(sinkChanges)).Eql(5, "Expected 5 entities in current state")
 
 			syncJobState := &SyncJobState{}
-			err = store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+			err = store.GetObject(server.JobDataIndex, job.id, syncJobState)
 			g.Assert(err).IsNil()
 			token := syncJobState.ContinuationToken
 			g.Assert(token).
@@ -1416,12 +1416,12 @@ func TestPipeline(t *testing.T) {
 			job.Run()
 
 			syncJobState := &SyncJobState{}
-			err = store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+			err = store.GetObject(server.JobDataIndex, job.id, syncJobState)
 			g.Assert(err).IsNil()
 			g.Assert(syncJobState.LastRunCompletedOk).IsFalse()
 
 			jobResult := &jobResult{}
-			err = store.GetObject(server.JOB_RESULT_INDEX, job.id, jobResult)
+			err = store.GetObject(server.JobResultIndex, job.id, jobResult)
 			g.Assert(err).IsNil()
 			g.Assert(jobResult.LastError == "").IsFalse()
 		})
@@ -1429,7 +1429,7 @@ func TestPipeline(t *testing.T) {
 		g.It("Should support proxy dataset as incremental datasetSource", func() {
 			_, err := dsm.CreateDataset("proxy", &server.CreateDatasetConfig{
 				ProxyDatasetConfig: &server.ProxyDatasetConfig{
-					RemoteUrl: "http://localhost:7777/datasets/people",
+					RemoteURL: "http://localhost:7777/datasets/people",
 				},
 			})
 			g.Assert(err).IsNil()
@@ -1468,7 +1468,7 @@ func TestPipeline(t *testing.T) {
 		g.It("Should support proxy dataset as fullsync datasetSource", func() {
 			_, err := dsm.CreateDataset("proxy", &server.CreateDatasetConfig{
 				ProxyDatasetConfig: &server.ProxyDatasetConfig{
-					RemoteUrl: "http://localhost:7777/datasets/people",
+					RemoteURL: "http://localhost:7777/datasets/people",
 				},
 			})
 			g.Assert(err).IsNil()
@@ -1508,7 +1508,7 @@ func TestPipeline(t *testing.T) {
 		g.It("Should support proxy dataset as incremental datasetSink", func() {
 			_, err := dsm.CreateDataset("proxy", &server.CreateDatasetConfig{
 				ProxyDatasetConfig: &server.ProxyDatasetConfig{
-					RemoteUrl:        "http://localhost:7777/datasets/people",
+					RemoteURL:        "http://localhost:7777/datasets/people",
 					AuthProviderName: "local",
 				},
 			})
@@ -1568,7 +1568,7 @@ func TestPipeline(t *testing.T) {
 		g.It("Should support proxy dataset as fullsync datasetSink", func() {
 			_, err := dsm.CreateDataset("proxy", &server.CreateDatasetConfig{
 				ProxyDatasetConfig: &server.ProxyDatasetConfig{
-					RemoteUrl:        "http://localhost:7777/datasets/people",
+					RemoteURL:        "http://localhost:7777/datasets/people",
 					AuthProviderName: "local",
 				},
 			})

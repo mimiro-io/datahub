@@ -55,7 +55,7 @@ func (s *Scheduler) parseSink(jobConfig *JobConfiguration) (Sink, error) {
 					sink := &httpDatasetSink{}
 					sink.Store = s.Store
 					sink.logger = s.Logger.Named("sink")
-					sink.Endpoint, _ = server.UrlJoin(dataset.ProxyConfig.RemoteUrl, "/entities")
+					sink.Endpoint, _ = server.URLJoin(dataset.ProxyConfig.RemoteURL, "/entities")
 
 					if dataset.ProxyConfig.AuthProviderName != "" {
 						sink.TokenProvider = dataset.ProxyConfig.AuthProviderName

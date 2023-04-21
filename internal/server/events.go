@@ -43,8 +43,7 @@ type MEventBus struct {
 	logger *zap.SugaredLogger
 }
 
-type NoOp struct {
-}
+type NoOp struct{}
 
 func NewBus(env *conf.Env) (EventBus, error) {
 	// configure id generator (it doesn't have to be monoton)

@@ -72,7 +72,7 @@ func TestContent(t *testing.T) {
 			g.Assert(err).IsNil()
 
 			content2 := &Content{}
-			err = store.GetObject(server.CONTENT_INDEX, "test-import-content", content2)
+			err = store.GetObject(server.ContentIndex, "test-import-content", content2)
 			g.Assert(err).IsNil()
 
 			g.Assert(content2.ID).Eql("test-import-content")
@@ -95,7 +95,7 @@ func TestContent(t *testing.T) {
 
 			// read it back
 			content2 := &Content{}
-			err = store.GetObject(server.CONTENT_INDEX, "test-import-content", content2)
+			err = store.GetObject(server.ContentIndex, "test-import-content", content2)
 			g.Assert(err).IsNil()
 			g.Assert(content2.ID).Eql(content.ID)
 			g.Assert(content2.Data["baseUri"]).Eql("http://data.mimiro.io/test/")

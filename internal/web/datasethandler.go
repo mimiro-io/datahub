@@ -156,7 +156,7 @@ func (handler *datasetHandler) datasetCreate(c echo.Context) error {
 	}
 	if isProxy == "true" {
 		if createDatasetConfig.ProxyDatasetConfig == nil ||
-			createDatasetConfig.ProxyDatasetConfig.RemoteUrl == "" {
+			createDatasetConfig.ProxyDatasetConfig.RemoteURL == "" {
 			return echo.NewHTTPError(http.StatusBadRequest, "invalid proxy configuration provided")
 		}
 		_, err = handler.datasetManager.CreateDataset(datasetName, createDatasetConfig)
@@ -253,7 +253,7 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 	if limit != "" {
 		f, err2 := strconv.ParseInt(limit, 10, 64)
 		if err2 != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, server.HttpQueryParamErr(err2).Error())
+			return echo.NewHTTPError(http.StatusBadRequest, server.HTTPQueryParamErr(err2).Error())
 		}
 		l = int(f)
 	}
@@ -359,7 +359,7 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 	if limit != "" {
 		f, err := strconv.ParseInt(limit, 10, 64)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, server.HttpQueryParamErr(err).Error())
+			return echo.NewHTTPError(http.StatusBadRequest, server.HTTPQueryParamErr(err).Error())
 		}
 		l = int(f)
 	}
@@ -488,12 +488,12 @@ func (handler *datasetHandler) processEntities(
 	if fullSyncStart {
 		err2 := dataset.StartFullSyncWithLease(fullSyncID)
 		if err2 != nil {
-			return echo.NewHTTPError(http.StatusConflict, server.HttpFullsyncErr(err2).Error())
+			return echo.NewHTTPError(http.StatusConflict, server.HTTPFullsyncErr(err2).Error())
 		}
 	} else if dataset.FullSyncStarted() {
 		err = dataset.RefreshFullSyncLease(fullSyncID)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusConflict, server.HttpFullsyncErr(err).Error())
+			return echo.NewHTTPError(http.StatusConflict, server.HTTPFullsyncErr(err).Error())
 		}
 	}
 
@@ -529,10 +529,10 @@ func (handler *datasetHandler) processEntities(
 
 	if fullSyncEnd {
 		if err := dataset.ReleaseFullSyncLease(fullSyncID); err != nil {
-			return echo.NewHTTPError(http.StatusGone, server.HttpGenericErr(err).Error())
+			return echo.NewHTTPError(http.StatusGone, server.HTTPGenericErr(err).Error())
 		}
 		if err := dataset.CompleteFullSync(); err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, server.HttpGenericErr(err).Error())
+			return echo.NewHTTPError(http.StatusInternalServerError, server.HTTPGenericErr(err).Error())
 		}
 	}
 	// we have to emit the dataset, so that subscribers can react to the event

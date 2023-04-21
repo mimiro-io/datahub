@@ -19,33 +19,33 @@ import "encoding/binary"
 type CollectionIndex uint16
 
 const (
-	URI_TO_ID_INDEX_ID         uint16 = 0
-	ENTITY_ID_TO_JSON_INDEX_ID uint16 = 1
-	INCOMING_REF_INDEX         uint16 = 2
-	OUTGOING_REF_INDEX         uint16 = 3
-	DATASET_ENTITY_CHANGE_LOG  uint16 = 4
-	SYS_DATASETS_ID            uint16 = 5
-	SYS_JOBS_ID                uint16 = 6
-	SYS_DATASETS_SEQUENCES     uint16 = 7
-	DATASET_LATEST_ENTITIES    uint16 = 8
-	ID_TO_URI_INDEX_ID         uint16 = 9
+	URIToIDIndexID         uint16 = 0
+	EntityIDToJSONIndexID  uint16 = 1
+	IncomingRefIndex       uint16 = 2
+	OutgoingRefIndex       uint16 = 3
+	DatasetEntityChangeLog uint16 = 4
+	SysDatasetsID          uint16 = 5
+	SysJobsID              uint16 = 6
+	SysDatasetsSequences   uint16 = 7
+	DatasetLatestEntities  uint16 = 8
+	IDToURIIndexID         uint16 = 9
 
-	STORE_META_INDEX      CollectionIndex = 10
-	NAMESPACES_INDEX      CollectionIndex = 11
-	JOB_RESULT_INDEX      CollectionIndex = 12
-	JOB_DATA_INDEX        CollectionIndex = 13
-	JOB_CONFIGS_INDEX     CollectionIndex = 14
-	CONTENT_INDEX         CollectionIndex = 15
-	STORE_NEXT_DATASET_ID CollectionIndex = 16
-	LOGIN_PROVIDER_INDEX  CollectionIndex = 17
+	StoreMetaIndex     CollectionIndex = 10
+	NamespacesIndex    CollectionIndex = 11
+	JobResultIndex     CollectionIndex = 12
+	JobDataIndex       CollectionIndex = 13
+	JobConfigIndex     CollectionIndex = 14
+	ContentIndex       CollectionIndex = 15
+	StoreNextDatasetID CollectionIndex = 16
+	LoginProviderIndex CollectionIndex = 17
 )
 
 var (
-	JOB_RESULT_INDEX_BYTES      = uint16ToBytes(JOB_RESULT_INDEX)
-	JOB_CONFIGS_INDEX_BYTES     = uint16ToBytes(JOB_CONFIGS_INDEX)
-	CONTENT_INDEX_BYTES         = uint16ToBytes(CONTENT_INDEX)
-	STORE_NEXT_DATASET_ID_BYTES = uint16ToBytes(STORE_NEXT_DATASET_ID)
-	LOGIN_PROVIDER_INDEX_BYTES  = uint16ToBytes(LOGIN_PROVIDER_INDEX)
+	JobResultIndexBytes     = uint16ToBytes(JobResultIndex)
+	JobConfigsIndexBytes    = uint16ToBytes(JobConfigIndex)
+	ContentIndexBytes       = uint16ToBytes(ContentIndex)
+	StoreNextDatasetIDBytes = uint16ToBytes(StoreNextDatasetID)
+	LoginProviderIndexBytes = uint16ToBytes(LoginProviderIndex)
 )
 
 func uint16ToBytes(i CollectionIndex) []byte {

@@ -154,13 +154,13 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 		body, err := io.ReadAll(c.Request().Body)
 		if err != nil {
 			handler.logger.Warn("Unable to read body")
-			return echo.NewHTTPError(http.StatusBadRequest, server.HttpBodyMissingErr(err).Error())
+			return echo.NewHTTPError(http.StatusBadRequest, server.HTTPBodyMissingErr(err).Error())
 		}
 		err = json.Unmarshal(body, &query)
 
 		if err != nil {
 			handler.logger.Warn("Unable to parse json")
-			return echo.NewHTTPError(http.StatusBadRequest, server.HttpJsonParsingErr(err).Error())
+			return echo.NewHTTPError(http.StatusBadRequest, server.HTTPJsonParsingErr(err).Error())
 		}
 
 		jsQuery, err := jobs.NewJavascriptTransform(handler.logger, query.Query, handler.store, handler.datasetManager)
@@ -190,12 +190,12 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
 		handler.logger.Warn("Unable to read body")
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpBodyMissingErr(err).Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HTTPBodyMissingErr(err).Error())
 	}
 	err = json.Unmarshal(body, &query)
 	if err != nil {
 		handler.logger.Warn("Unable to parse json")
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpJsonParsingErr(err).Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HTTPJsonParsingErr(err).Error())
 	}
 	includeContinuation := true
 	// conservative default

@@ -16,6 +16,7 @@ package server
 
 import (
 	"fmt"
+
 	"github.com/dgraph-io/badger/v3"
 	"github.com/mimiro-io/datahub/internal/service/types"
 )
@@ -41,8 +42,8 @@ func (b BadgerAccess) LookupDatasetName(internalDatasetID types.InternalDatasetI
 	return result, result != ""
 }
 
-func (b BadgerAccess) IsDatasetDeleted(datasetId types.InternalDatasetID) bool {
-	return b.dsm.store.deletedDatasets[uint32(datasetId)]
+func (b BadgerAccess) IsDatasetDeleted(datasetID types.InternalDatasetID) bool {
+	return b.dsm.store.deletedDatasets[uint32(datasetID)]
 }
 
 func (b BadgerAccess) LookupExpansionPrefix(namespaceURI types.URI) (types.Prefix, error) {

@@ -94,11 +94,11 @@ func NewStore(lc fx.Lifecycle, env *conf.Env, statsdClient statsd.ClientInterfac
 	store.NamespaceManager = NewNamespaceManager(store)
 
 	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
+		OnStart: func(_ context.Context) error {
 			store.logger.Infof("Opening store in location: %s", store.storeLocation)
 			return store.Open()
 		},
-		OnStop: func(ctx context.Context) error {
+		OnStop: func(_ context.Context) error {
 			store.logger.Infof("Unmounting store")
 			return store.Close()
 		},
@@ -146,7 +146,7 @@ type NamespacesState struct {
 }
 
 type Context struct {
-	Id         string            `json:"id"`
+	ID         string            `json:"id"`
 	Namespaces map[string]string `json:"namespaces"`
 }
 
@@ -161,9 +161,9 @@ func (namespaceManager *NamespaceManager) GetContext(includedNamespaces []string
 			prefix, _ := namespaceManager.GetPrefixMappingForExpansion(expansionURI)
 			filteredPrefixMapping[prefix] = expansionURI
 		}
-		context = &Context{Id: "@context", Namespaces: filteredPrefixMapping}
+		context = &Context{ID: "@context", Namespaces: filteredPrefixMapping}
 	} else {
-		context = &Context{Id: "@context", Namespaces: namespaceManager.GetPrefixToExpansionMap()}
+		context = &Context{ID: "@context", Namespaces: namespaceManager.GetPrefixToExpansionMap()}
 	}
 	return
 }
@@ -213,7 +213,7 @@ func (namespaceManager *NamespaceManager) AssertPrefixMappingForExpansion(uriExp
 		state := &NamespacesState{}
 		state.PrefixToExpansionMapping = namespaceManager.prefixToExpansionMapping
 		state.ExpansionToPrefixMapping = namespaceManager.expansionToPrefixMapping
-		err := namespaceManager.store.StoreObject(NAMESPACES_INDEX, "namespacestate", state)
+		err := namespaceManager.store.StoreObject(NamespacesIndex, "namespacestate", state)
 		if err != nil {
 			return "", err
 		}
@@ -389,7 +389,7 @@ func (s *Store) Open() error {
 	s.database = db
 
 	// get next internal id for dataset
-	nextDatasetIDBytes := s.readValue(STORE_NEXT_DATASET_ID_BYTES)
+	nextDatasetIDBytes := s.readValue(StoreNextDatasetIDBytes)
 	if nextDatasetIDBytes == nil {
 		s.nextDatasetID = 1
 	} else {
@@ -403,7 +403,7 @@ func (s *Store) Open() error {
 
 	// load namespace state
 	nsState := &NamespacesState{}
-	err = s.GetObject(NAMESPACES_INDEX, "namespacestate", nsState)
+	err = s.GetObject(NamespacesIndex, "namespacestate", nsState)
 	if err != nil {
 		return err
 	}
@@ -421,7 +421,7 @@ func (s *Store) Open() error {
 	}
 
 	// load deleted datasets
-	err = s.GetObject(STORE_META_INDEX, "deleteddatasets", &s.deletedDatasets)
+	err = s.GetObject(StoreMetaIndex, "deleteddatasets", &s.deletedDatasets)
 	if err != nil {
 		return err
 	}
@@ -447,7 +447,7 @@ func (s *Store) Close() error {
 func (s *Store) loadDatasets() error {
 	// iterate keys starting with SYS_DATASETS_ID
 	prefix := make([]byte, 2)
-	binary.BigEndian.PutUint16(prefix, SYS_DATASETS_ID)
+	binary.BigEndian.PutUint16(prefix, SysDatasetsID)
 	return s.iterateObjects(prefix, reflect.TypeOf(Dataset{}), func(i interface{}) error {
 		ds := i.(*Dataset)
 		ds.store = s
@@ -587,7 +587,7 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 	defer rtxn.Discard()
 
 	entityLocatorPrefixBuffer := make([]byte, 10)
-	binary.BigEndian.PutUint16(entityLocatorPrefixBuffer, ENTITY_ID_TO_JSON_INDEX_ID)
+	binary.BigEndian.PutUint16(entityLocatorPrefixBuffer, EntityIDToJSONIndexID)
 	binary.BigEndian.PutUint64(entityLocatorPrefixBuffer[2:], internalID)
 
 	opts1 := badger.DefaultIteratorOptions
@@ -798,9 +798,9 @@ func (s *Store) ToRelatedFrom(
 		// define search prefix
 		searchBuffer := make([]byte, 10)
 		if inverse {
-			binary.BigEndian.PutUint16(searchBuffer, INCOMING_REF_INDEX)
+			binary.BigEndian.PutUint16(searchBuffer, IncomingRefIndex)
 		} else {
-			binary.BigEndian.PutUint16(searchBuffer, OUTGOING_REF_INDEX)
+			binary.BigEndian.PutUint16(searchBuffer, OutgoingRefIndex)
 		}
 		binary.BigEndian.PutUint64(searchBuffer[2:], rid)
 		from[i] = RelatedFrom{
@@ -965,20 +965,20 @@ func (s *Store) GetRelatedAtTime(from RelatedFrom, limit int) ([]qresult, Relate
 				k := item.Key()
 
 				// check dataset if deleted, or if excluded from search
-				datasetId := binary.BigEndian.Uint32(k[36:])
+				datasetID := binary.BigEndian.Uint32(k[36:])
 
 				// no specified datasets means no restriction - all datasets are allowed
 				datasetIncluded := len(from.Datasets) == 0
 				if !datasetIncluded {
 					for _, id := range from.Datasets {
-						if id == datasetId {
+						if id == datasetID {
 							datasetIncluded = true
 							break
 						}
 					}
 				}
 
-				if s.deletedDatasets[datasetId] || !datasetIncluded {
+				if s.deletedDatasets[datasetID] || !datasetIncluded {
 					continue
 				}
 
@@ -1007,7 +1007,7 @@ func (s *Store) GetRelatedAtTime(from RelatedFrom, limit int) ([]qresult, Relate
 
 				del := binary.BigEndian.Uint16(k[34:])
 				prevDeleted = del == 1
-				prevResult = qresult{Time: uint64(et), EntityID: relatedID, PredicateID: predID, DatasetID: datasetId}
+				prevResult = qresult{Time: uint64(et), EntityID: relatedID, PredicateID: predID, DatasetID: datasetID}
 
 				// set current to be this related object
 				currentRID = relatedID
@@ -1059,20 +1059,20 @@ func (s *Store) GetRelatedAtTime(from RelatedFrom, limit int) ([]qresult, Relate
 					break
 				}
 
-				datasetId := binary.BigEndian.Uint32(k[36:])
+				datasetID := binary.BigEndian.Uint32(k[36:])
 
 				// no specified datasets means no restriction - all datasets are allowed
 				datasetIncluded := len(from.Datasets) == 0
 				if !datasetIncluded {
 					for _, id := range from.Datasets {
-						if id == datasetId {
+						if id == datasetID {
 							datasetIncluded = true
 							break
 						}
 					}
 				}
 
-				if s.deletedDatasets[datasetId] || !datasetIncluded {
+				if s.deletedDatasets[datasetID] || !datasetIncluded {
 					continue
 				}
 
@@ -1098,7 +1098,7 @@ func (s *Store) GetRelatedAtTime(from RelatedFrom, limit int) ([]qresult, Relate
 				// get deleted
 				del := binary.BigEndian.Uint16(k[34:])
 				if del != 1 && hasReachedStartKey {
-					results = append(results, qresult{Time: uint64(et), EntityID: relatedID, PredicateID: predID, DatasetID: datasetId})
+					results = append(results, qresult{Time: uint64(et), EntityID: relatedID, PredicateID: predID, DatasetID: datasetID})
 					copy(cont.RelationIndexFromKey, k)
 				}
 
@@ -1137,7 +1137,7 @@ func (s *Store) getIDForURI(txn *badger.Txn, uri string) (uint64, bool, error) {
 	// check if it exists already uri => id
 	uriAsBytes := []byte(uri)
 	uribuf := make([]byte, len(uriAsBytes)+2)
-	binary.BigEndian.PutUint16(uribuf, URI_TO_ID_INDEX_ID)
+	binary.BigEndian.PutUint16(uribuf, URIToIDIndexID)
 	copy(uribuf[2:], uriAsBytes)
 
 	item, err := txn.Get(uribuf)
@@ -1163,7 +1163,7 @@ func (s *Store) getIDForURI(txn *badger.Txn, uri string) (uint64, bool, error) {
 	return rid, exists, nil
 }
 
-func (s *Store) commitIdTxn() error {
+func (s *Store) commitIDTxn() error {
 	s.idmux.Lock()
 	defer s.idmux.Unlock()
 
@@ -1182,7 +1182,7 @@ func (s *Store) commitIdTxn() error {
 
 func (s *Store) getURIForID(rid uint64) (string, error) {
 	buf := make([]byte, 10) // seq id int 64 and 2 byte index id
-	binary.BigEndian.PutUint16(buf, ID_TO_URI_INDEX_ID)
+	binary.BigEndian.PutUint16(buf, IDToURIIndexID)
 	binary.BigEndian.PutUint64(buf[2:], rid)
 
 	txn := s.database.NewTransaction(false)
@@ -1232,7 +1232,7 @@ func (s *Store) assertIDForURI(uri string, localTxnCache map[string]uint64) (uin
 	// check if it exists already uri => id
 	uriAsBytes := []byte(uri)
 	uribuf := make([]byte, len(uriAsBytes)+2)
-	binary.BigEndian.PutUint16(uribuf, URI_TO_ID_INDEX_ID)
+	binary.BigEndian.PutUint16(uribuf, URIToIDIndexID)
 	copy(uribuf[2:], uriAsBytes)
 
 	item, err := s.idtxn.Get(uribuf)
@@ -1253,7 +1253,7 @@ func (s *Store) assertIDForURI(uri string, localTxnCache map[string]uint64) (uin
 			copy(invuribuf, uriAsBytes)
 
 			invseqbuf := make([]byte, 10) // seq id int 64 and 2 byte index id
-			binary.BigEndian.PutUint16(invseqbuf, ID_TO_URI_INDEX_ID)
+			binary.BigEndian.PutUint16(invseqbuf, IDToURIIndexID)
 			binary.BigEndian.PutUint64(invseqbuf[2:], rid)
 
 			err = s.idtxn.Set(invseqbuf, invuribuf)
@@ -1332,7 +1332,7 @@ func (s *Store) readValue(key []byte) []byte {
 			// return nil
 		}
 
-		val, err = item.ValueCopy(nil)
+		val, _ = item.ValueCopy(nil)
 		return nil
 	})
 	if err != nil {
@@ -1344,7 +1344,7 @@ func (s *Store) readValue(key []byte) []byte {
 	}
 
 	if len(val) > 0 {
-		_ = s.statsdClient.Count("store.read.bytes", int64(len(val)), tags, 1) // don't care about errors here
+		s.statsdClient.Count("store.read.bytes", int64(len(val)), tags, 1) // don't care about errors here
 	}
 
 	return val
@@ -1373,7 +1373,7 @@ func (s *Store) GetObject(collection CollectionIndex, id string, obj interface{}
 	binary.BigEndian.PutUint16(indexBytes, uint16(collection))
 	key := append(indexBytes, []byte("::"+id)...)
 	data := s.readValue(key)
-	if data == nil || len(data) == 0 {
+	if len(data) == 0 {
 		obj = nil
 		return nil
 	}
@@ -1480,7 +1480,7 @@ func (s *Store) ExecuteTransaction(transaction *Transaction) error {
 		}
 	}
 
-	err := s.commitIdTxn()
+	err := s.commitIDTxn()
 	if err != nil {
 		return err
 	}

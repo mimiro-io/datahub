@@ -131,7 +131,7 @@ func (runner *Runner) deleteJob(jobID string) error {
 		clearCrontab(runner.scheduledJobs, jobID)
 		runner.eventBus.UnsubscribeToDataset(jobID)
 	}()
-	err := runner.store.DeleteObject(server.JOB_CONFIGS_INDEX, jobID)
+	err := runner.store.DeleteObject(server.JobConfigIndex, jobID)
 	if err != nil {
 		return err
 	}

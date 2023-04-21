@@ -153,7 +153,7 @@ func (job *job) Run() {
 		lastRun.LastError = err.Error()
 	}
 	// its not really a problem to ignore this error
-	_ = job.runner.store.StoreObject(server.JOB_RESULT_INDEX, job.id, lastRun)
+	_ = job.runner.store.StoreObject(server.JobResultIndex, job.id, lastRun)
 }
 
 var retryJobIds sync.Map

@@ -36,7 +36,7 @@ type fullSyncLease struct {
 }
 
 type ProxyDatasetConfig struct {
-	RemoteUrl           string `json:"remoteUrl"`
+	RemoteURL           string `json:"remoteUrl"`
 	UpstreamTransform   string `json:"upstreamTransform"`
 	DownstreamTransform string `json:"downstreamTransform"`
 	AuthProviderName    string `json:"authProviderName"`
@@ -200,7 +200,7 @@ func (ds *Dataset) CompleteFullSync() error {
 // GetStorageKey gets storage key for storing dataset in database
 func (ds *Dataset) getStorageKey() []byte {
 	key := make([]byte, 2+len(ds.ID))
-	binary.BigEndian.PutUint16(key, SYS_DATASETS_ID)
+	binary.BigEndian.PutUint16(key, SysDatasetsID)
 	copy(key[2:], ds.ID)
 	return key
 }
@@ -235,7 +235,7 @@ func (ds *Dataset) StoreEntities(entities []*Entity) (Error error) {
 		return err
 	}
 
-	err = ds.store.commitIdTxn()
+	err = ds.store.commitIDTxn()
 	if err != nil {
 		return err
 	}
@@ -281,7 +281,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 	// get dataset seq
 	// fixme: can be part of the dataset data structure no need to open each txn as the is a mutex protecting it
 	datasetSeqKey := make([]byte, 6)
-	binary.BigEndian.PutUint16(datasetSeqKey, SYS_DATASETS_SEQUENCES)
+	binary.BigEndian.PutUint16(datasetSeqKey, SysDatasetsSequences)
 	binary.BigEndian.PutUint32(datasetSeqKey[2:], ds.InternalID)
 	logseq, _ := ds.store.database.GetSequence(datasetSeqKey, 1000)
 	defer func() {
@@ -302,10 +302,10 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 
 	for batchSeqNum, e := range entities {
 
-		// entityIdBuffer buffer for lookup in main index
+		// entityIDBuffer buffer for lookup in main index
 		// index_id;rid;dataset;time => blob
 		// unit16;unit64;uint32;uint64
-		entityIdBuffer := make([]byte, 24)
+		entityIDBuffer := make([]byte, 24)
 		uid := e.ID
 		var err error
 		rid, isnew, err = ds.store.assertIDForURI(uid, idCache)
@@ -324,62 +324,62 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 
 		_ = ds.store.statsdClient.Count("ds.processed.bytes", int64(jsonLength), tags, 1)
 
-		binary.BigEndian.PutUint16(entityIdBuffer, ENTITY_ID_TO_JSON_INDEX_ID)
-		binary.BigEndian.PutUint64(entityIdBuffer[2:], rid)
-		binary.BigEndian.PutUint32(entityIdBuffer[10:], ds.InternalID)
-		binary.BigEndian.PutUint64(entityIdBuffer[14:], uint64(txnTime))
-		binary.BigEndian.PutUint16(entityIdBuffer[22:], uint16(batchSeqNum))
+		binary.BigEndian.PutUint16(entityIDBuffer, EntityIDToJSONIndexID)
+		binary.BigEndian.PutUint64(entityIDBuffer[2:], rid)
+		binary.BigEndian.PutUint32(entityIDBuffer[10:], ds.InternalID)
+		binary.BigEndian.PutUint64(entityIDBuffer[14:], uint64(txnTime))
+		binary.BigEndian.PutUint16(entityIDBuffer[22:], uint16(batchSeqNum))
 
 		// assume different from a previous version
 		isDifferent := true
 		isDifferentLocally := true
 
 		datasetEntitiesLatestVersionKey := make([]byte, 14)
-		binary.BigEndian.PutUint16(datasetEntitiesLatestVersionKey, DATASET_LATEST_ENTITIES)
+		binary.BigEndian.PutUint16(datasetEntitiesLatestVersionKey, DatasetLatestEntities)
 		binary.BigEndian.PutUint32(datasetEntitiesLatestVersionKey[2:], ds.InternalID)
 		binary.BigEndian.PutUint64(datasetEntitiesLatestVersionKey[6:], rid)
 		// fixme: optimise to have txntime in key and not need a value
 
-		var previousEntityIdBuffer []byte
+		var previousEntityIDBuffer []byte
 		var prevEntity *Entity
-		var prevJsonData []byte
+		var prevJSONData []byte
 
 		if !isnew {
-			if previousEntityIdBufferValue, err := rtxn.Get(datasetEntitiesLatestVersionKey); err == nil {
-				previousEntityIdBuffer, err = previousEntityIdBufferValue.ValueCopy(nil)
-				if err != nil {
-					return newitems, err
+			if previousEntityIDBufferValue, err2 := rtxn.Get(datasetEntitiesLatestVersionKey); err2 == nil {
+				previousEntityIDBuffer, err2 = previousEntityIDBufferValue.ValueCopy(nil)
+				if err2 != nil {
+					return newitems, err2
 				}
-				prevJsonDataValue, err := rtxn.Get(previousEntityIdBuffer)
-				if err != nil {
-					return newitems, err
+				prevJSONDataValue, err2 := rtxn.Get(previousEntityIDBuffer)
+				if err2 != nil {
+					return newitems, err2
 				}
-				prevJsonData, err = prevJsonDataValue.ValueCopy(nil)
-				_ = ds.store.statsdClient.Count("ds.read.bytes", prevJsonDataValue.ValueSize(), tags, 1)
-				if err != nil {
-					return newitems, err
+				prevJSONData, err2 = prevJSONDataValue.ValueCopy(nil)
+				_ = ds.store.statsdClient.Count("ds.read.bytes", prevJSONDataValue.ValueSize(), tags, 1)
+				if err2 != nil {
+					return newitems, err2
 				}
 				prevEntity = &Entity{}
-				err = json.Unmarshal(prevJsonData, prevEntity)
-				if err != nil {
-					return newitems, err
+				err2 = json.Unmarshal(prevJSONData, prevEntity)
+				if err2 != nil {
+					return newitems, err2
 				}
 			}
 			if prevEntity != nil {
-				if len(prevJsonData) == jsonLength &&
+				if len(prevJSONData) == jsonLength &&
 					reflect.DeepEqual(prevEntity.References, e.References) &&
 					reflect.DeepEqual(prevEntity.Properties, e.Properties) {
 					isDifferent = false
 				}
 			}
-			if prevLocalJson, found := localLatests[rid]; found {
+			if prevLocalJSON, found := localLatests[rid]; found {
 				prevLocalEntity := &Entity{}
-				err = json.Unmarshal(prevLocalJson, prevLocalEntity)
+				err = json.Unmarshal(prevLocalJSON, prevLocalEntity)
 				prevEntity = prevLocalEntity
 				if err != nil {
 					return newitems, err
 				}
-				if len(prevLocalJson) == jsonLength &&
+				if len(prevLocalJSON) == jsonLength &&
 					reflect.DeepEqual(prevLocalEntity.References, e.References) &&
 					reflect.DeepEqual(prevLocalEntity.Properties, e.Properties) {
 					isDifferentLocally = false
@@ -402,25 +402,25 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 		// store entity and the log entry
 		_ = ds.store.statsdClient.Count("ds.added.bytes", int64(jsonLength), tags, 1)
 		_ = ds.store.statsdClient.Gauge("ds.throughput.bytes", float64(jsonLength), tags, 1)
-		err = txn.Set(entityIdBuffer, jsonData)
+		err = txn.Set(entityIDBuffer, jsonData)
 		if err != nil {
 			return newitems, err
 		}
 
 		// store change log
-		entityIdChangeTimeBuffer := make([]byte, 22)
+		entityIDChangeTimeBuffer := make([]byte, 22)
 		nextEntitySeq, _ := logseq.Next()
-		binary.BigEndian.PutUint16(entityIdChangeTimeBuffer, DATASET_ENTITY_CHANGE_LOG)
-		binary.BigEndian.PutUint32(entityIdChangeTimeBuffer[2:], ds.InternalID)
-		binary.BigEndian.PutUint64(entityIdChangeTimeBuffer[6:], nextEntitySeq)
-		binary.BigEndian.PutUint64(entityIdChangeTimeBuffer[14:], rid)
-		err = txn.Set(entityIdChangeTimeBuffer, entityIdBuffer)
+		binary.BigEndian.PutUint16(entityIDChangeTimeBuffer, DatasetEntityChangeLog)
+		binary.BigEndian.PutUint32(entityIDChangeTimeBuffer[2:], ds.InternalID)
+		binary.BigEndian.PutUint64(entityIDChangeTimeBuffer[6:], nextEntitySeq)
+		binary.BigEndian.PutUint64(entityIDChangeTimeBuffer[14:], rid)
+		err = txn.Set(entityIDChangeTimeBuffer, entityIDBuffer)
 		if err != nil {
 			return newitems, err
 		}
 
 		// dataset all latest entities
-		err = txn.Set(datasetEntitiesLatestVersionKey, entityIdBuffer)
+		err = txn.Set(datasetEntitiesLatestVersionKey, entityIDBuffer)
 		if err != nil {
 			return newitems, err
 		}
@@ -438,15 +438,14 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 
 				// need to check if v is string, []interface{} or []string
 				var refs []string
-				switch stringOrArrayValue.(type) {
+				switch v := stringOrArrayValue.(type) {
 				case string:
-					refs = []string{stringOrArrayValue.(string)}
+					refs = []string{v}
 				case []string:
-					refs = stringOrArrayValue.([]string)
+					refs = v
 				case []interface{}:
-					interfaceRefs := stringOrArrayValue.([]interface{})
-					refs = make([]string, len(interfaceRefs))
-					for i, v := range interfaceRefs {
+					refs = make([]string, len(v))
+					for i, v := range v {
 						refs[i] = v.(string)
 					}
 				case nil:
@@ -469,7 +468,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 						return newitems, err
 					}
 
-					binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
+					binary.BigEndian.PutUint16(outgoingBuffer, OutgoingRefIndex)
 					binary.BigEndian.PutUint64(outgoingBuffer[2:], rid)
 					binary.BigEndian.PutUint64(outgoingBuffer[10:], uint64(txnTime))
 					binary.BigEndian.PutUint64(outgoingBuffer[18:], predid)
@@ -485,7 +484,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 						return newitems, err
 					}
 
-					binary.BigEndian.PutUint16(incomingBuffer, INCOMING_REF_INDEX)
+					binary.BigEndian.PutUint16(incomingBuffer, IncomingRefIndex)
 					binary.BigEndian.PutUint64(incomingBuffer[2:], relatedid)
 					binary.BigEndian.PutUint64(incomingBuffer[10:], rid)
 					binary.BigEndian.PutUint64(incomingBuffer[18:], uint64(txnTime))
@@ -551,7 +550,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 						incomingBuffer := make([]byte, 40)
 						outgoingBuffer := make([]byte, 40)
 
-						binary.BigEndian.PutUint16(incomingBuffer, INCOMING_REF_INDEX)
+						binary.BigEndian.PutUint16(incomingBuffer, IncomingRefIndex)
 						binary.BigEndian.PutUint64(incomingBuffer[2:], e)
 						binary.BigEndian.PutUint64(incomingBuffer[10:], rid)
 						binary.BigEndian.PutUint64(incomingBuffer[18:], uint64(txnTime))
@@ -563,7 +562,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 							return newitems, err
 						}
 
-						binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
+						binary.BigEndian.PutUint16(outgoingBuffer, OutgoingRefIndex)
 						binary.BigEndian.PutUint64(outgoingBuffer[2:], rid)
 						binary.BigEndian.PutUint64(outgoingBuffer[10:], uint64(txnTime))
 						binary.BigEndian.PutUint64(outgoingBuffer[18:], p)
@@ -582,16 +581,15 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 
 					// need to check if v is string, []interface{} or []string
 					var refs []string
-					switch stringOrArrayValue.(type) {
+					switch v := stringOrArrayValue.(type) {
 					case string:
-						refs = []string{stringOrArrayValue.(string)}
+						refs = []string{v}
 					case []string:
-						refs = stringOrArrayValue.([]string)
+						refs = v
 					case []interface{}:
-						interfaceRefs := stringOrArrayValue.([]interface{})
-						refs = make([]string, len(interfaceRefs))
-						for i, v := range interfaceRefs {
-							refs[i] = v.(string)
+						refs = make([]string, len(v))
+						for i, val := range v {
+							refs[i] = val.(string)
 						}
 					case nil:
 						return newitems, fmt.Errorf("encountered nil ref, cannot store entity %v", e)
@@ -613,7 +611,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 							return newitems, err
 						}
 
-						binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
+						binary.BigEndian.PutUint16(outgoingBuffer, OutgoingRefIndex)
 						binary.BigEndian.PutUint64(outgoingBuffer[2:], rid)
 						binary.BigEndian.PutUint64(outgoingBuffer[10:], uint64(txnTime))
 						binary.BigEndian.PutUint64(outgoingBuffer[18:], predid)
@@ -625,7 +623,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 							return newitems, err
 						}
 
-						binary.BigEndian.PutUint16(incomingBuffer, INCOMING_REF_INDEX)
+						binary.BigEndian.PutUint16(incomingBuffer, IncomingRefIndex)
 						binary.BigEndian.PutUint64(incomingBuffer[2:], relatedid)
 						binary.BigEndian.PutUint64(incomingBuffer[10:], rid)
 						binary.BigEndian.PutUint64(incomingBuffer[18:], uint64(txnTime))
@@ -685,7 +683,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 						incomingBuffer := make([]byte, 40)
 						outgoingBuffer := make([]byte, 40)
 
-						binary.BigEndian.PutUint16(incomingBuffer, INCOMING_REF_INDEX)
+						binary.BigEndian.PutUint16(incomingBuffer, IncomingRefIndex)
 						binary.BigEndian.PutUint64(incomingBuffer[2:], e)
 						binary.BigEndian.PutUint64(incomingBuffer[10:], rid)
 						binary.BigEndian.PutUint64(incomingBuffer[18:], uint64(txnTime))
@@ -696,7 +694,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 						if err != nil {
 							return newitems, err
 						}
-						binary.BigEndian.PutUint16(outgoingBuffer, OUTGOING_REF_INDEX)
+						binary.BigEndian.PutUint16(outgoingBuffer, OutgoingRefIndex)
 						binary.BigEndian.PutUint64(outgoingBuffer[2:], rid)
 						binary.BigEndian.PutUint64(outgoingBuffer[10:], uint64(txnTime))
 						binary.BigEndian.PutUint64(outgoingBuffer[18:], p)
@@ -811,7 +809,7 @@ func (ds *Dataset) GetChangesWatermark() (uint64, error) {
 
 	err := ds.store.database.View(func(txn *badger.Txn) error {
 		searchBuffer := make([]byte, 7)
-		binary.BigEndian.PutUint16(searchBuffer, DATASET_ENTITY_CHANGE_LOG)
+		binary.BigEndian.PutUint16(searchBuffer, DatasetEntityChangeLog)
 		binary.BigEndian.PutUint32(searchBuffer[2:], ds.InternalID)
 		searchBuffer[6] = 0xFF
 
@@ -913,7 +911,7 @@ func (ds *Dataset) MapEntitiesRaw(from string, count int, processEntity func(jso
 
 	err := ds.store.database.View(func(txn *badger.Txn) error {
 		searchBufferPrefix := make([]byte, 10)
-		binary.BigEndian.PutUint16(searchBufferPrefix, DATASET_LATEST_ENTITIES)
+		binary.BigEndian.PutUint16(searchBufferPrefix, DatasetLatestEntities)
 		binary.BigEndian.PutUint32(searchBufferPrefix[2:], ds.InternalID)
 		var searchBuffer []byte
 		if from == "" {
@@ -1025,7 +1023,7 @@ func (ds *Dataset) ProcessChangesRaw(
 
 	err := ds.store.database.View(func(txn *badger.Txn) error {
 		searchBuffer := make([]byte, 14)
-		binary.BigEndian.PutUint16(searchBuffer, DATASET_ENTITY_CHANGE_LOG)
+		binary.BigEndian.PutUint16(searchBuffer, DatasetEntityChangeLog)
 		binary.BigEndian.PutUint32(searchBuffer[2:], ds.InternalID)
 		binary.BigEndian.PutUint64(searchBuffer[6:], since)
 
@@ -1083,13 +1081,13 @@ func latestOnlyWrapper(k []byte, ds *Dataset, txn *badger.Txn,
 	return func(entityChangeID []byte) error {
 		rid := binary.BigEndian.Uint64(k[14:])
 		datasetEntitiesLatestVersionKey := make([]byte, 14)
-		binary.BigEndian.PutUint16(datasetEntitiesLatestVersionKey, DATASET_LATEST_ENTITIES)
+		binary.BigEndian.PutUint16(datasetEntitiesLatestVersionKey, DatasetLatestEntities)
 		binary.BigEndian.PutUint32(datasetEntitiesLatestVersionKey[2:], ds.InternalID)
 		binary.BigEndian.PutUint64(datasetEntitiesLatestVersionKey[6:], rid)
 
 		latestItem, _ := txn.Get(datasetEntitiesLatestVersionKey)
 		if err := latestItem.Value(func(v2 []byte) error {
-			if bytes.Compare(v2, entityChangeID) == 0 {
+			if bytes.Equal(v2, entityChangeID) {
 				return next(entityChangeID)
 			}
 			return nil

@@ -113,7 +113,7 @@ func (pm *ProviderManager) LoadValue(vp *ValueReader) string {
 
 func (pm *ProviderManager) ListProviders() ([]ProviderConfig, error) {
 	providers := make([]ProviderConfig, 0)
-	err := pm.store.IterateObjectsRaw(server.LOGIN_PROVIDER_INDEX_BYTES, func(bytes []byte) error {
+	err := pm.store.IterateObjectsRaw(server.LoginProviderIndexBytes, func(bytes []byte) error {
 		provider := ProviderConfig{}
 		if err := json.Unmarshal(bytes, &provider); err != nil {
 			return err
@@ -125,7 +125,7 @@ func (pm *ProviderManager) ListProviders() ([]ProviderConfig, error) {
 }
 
 func (pm *ProviderManager) AddProvider(providerConfig ProviderConfig) error {
-	err := pm.store.StoreObject(server.LOGIN_PROVIDER_INDEX, providerConfig.Name, providerConfig)
+	err := pm.store.StoreObject(server.LoginProviderIndex, providerConfig.Name, providerConfig)
 	if err != nil {
 		return err
 	}
@@ -133,12 +133,12 @@ func (pm *ProviderManager) AddProvider(providerConfig ProviderConfig) error {
 }
 
 func (pm *ProviderManager) DeleteProvider(name string) error {
-	return pm.store.DeleteObject(server.LOGIN_PROVIDER_INDEX, name)
+	return pm.store.DeleteObject(server.LoginProviderIndex, name)
 }
 
 func (pm *ProviderManager) FindByName(name string) (*ProviderConfig, error) {
 	config := &ProviderConfig{}
-	if err := pm.store.GetObject(server.LOGIN_PROVIDER_INDEX, name, config); err != nil {
+	if err := pm.store.GetObject(server.LoginProviderIndex, name, config); err != nil {
 		return nil, err
 	} else {
 		if config.Name == "" { // does not exist

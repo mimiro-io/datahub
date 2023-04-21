@@ -17,10 +17,11 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/mimiro-io/datahub/internal"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/mimiro-io/datahub/internal"
 
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"go.uber.org/zap"
@@ -96,7 +97,6 @@ func TestStreamParser(t *testing.T) {
 
 			people := txn.DatasetEntities["people"]
 			g.Assert(people).IsNotNil("people dataset updates missing")
-
 		})
 
 		g.It("Should process transaction with dataset with empty array of entities", func() {

@@ -50,7 +50,6 @@ func NewEntityStreamParser(store *Store) *EntityStreamParser {
 */
 
 func (esp *EntityStreamParser) ParseTransaction(reader io.Reader) (*Transaction, error) {
-
 	txn := &Transaction{}
 	txn.DatasetEntities = make(map[string][]*Entity)
 
@@ -66,7 +65,7 @@ func (esp *EntityStreamParser) ParseTransaction(reader io.Reader) (*Transaction,
 	}
 
 	// key @context
-	t, err = decoder.Token()
+	_, err = decoder.Token()
 	if err != nil {
 		return nil, errors.New("parsing error: Bad token at read @context key " + err.Error())
 	}
@@ -82,7 +81,7 @@ func (esp *EntityStreamParser) ParseTransaction(reader io.Reader) (*Transaction,
 	}
 
 	for {
-		t, err = decoder.Token()
+		t, _ = decoder.Token()
 		delimVal, isDelim := t.(json.Delim)
 		if isDelim {
 			if delimVal.String() == "}" {
@@ -130,7 +129,6 @@ func (esp *EntityStreamParser) ParseTransaction(reader io.Reader) (*Transaction,
 }
 
 func (esp *EntityStreamParser) ParseStream(reader io.Reader, emitEntity func(*Entity) error) error {
-
 	decoder := json.NewDecoder(reader)
 
 	// expect start of array
@@ -208,47 +206,48 @@ func (esp *EntityStreamParser) parseEntity(decoder *json.Decoder) (*Entity, erro
 				return e, nil
 			}
 		case string:
-			if v == "id" {
-				val, err := decoder.Token()
-				if err != nil {
-					return nil, errors.New("unable to read token of id value " + err.Error())
+			switch v {
+			case "id":
+				val, err2 := decoder.Token()
+				if err2 != nil {
+					return nil, errors.New("unable to read token of id value " + err2.Error())
 				}
 
 				if val.(string) == "@continuation" {
 					e.ID = "@continuation"
 					isContinuation = true
 				} else {
-					nsId, err := esp.store.GetNamespacedIdentifier(val.(string), esp.localNamespaces)
-					if err != nil {
-						return nil, err
+					nsID, err2 := esp.store.GetNamespacedIdentifier(val.(string), esp.localNamespaces)
+					if err2 != nil {
+						return nil, err2
 					}
-					e.ID = nsId
+					e.ID = nsID
 				}
-			} else if v == "recorded" {
-				val, err := decoder.Token()
-				if err != nil {
-					return nil, errors.New("unable to read token of recorded value " + err.Error())
+			case "recorded":
+				val, err2 := decoder.Token()
+				if err2 != nil {
+					return nil, errors.New("unable to read token of recorded value " + err2.Error())
 				}
 				e.Recorded = uint64(val.(float64))
 
-			} else if v == "deleted" {
-				val, err := decoder.Token()
-				if err != nil {
-					return nil, errors.New("unable to read token of deleted value " + err.Error())
+			case "deleted":
+				val, err2 := decoder.Token()
+				if err2 != nil {
+					return nil, errors.New("unable to read token of deleted value " + err2.Error())
 				}
 				e.IsDeleted = val.(bool)
 
-			} else if v == "props" {
+			case "props":
 				e.Properties, err = esp.parseProperties(decoder)
 				if err != nil {
 					return nil, errors.New("unable to parse properties " + err.Error())
 				}
-			} else if v == "refs" {
+			case "refs":
 				e.References, err = esp.parseReferences(decoder)
 				if err != nil {
 					return nil, errors.New("unable to parse references " + err.Error())
 				}
-			} else if v == "token" {
+			case "token":
 				if !isContinuation {
 					return nil, errors.New("token property found but not a continuation entity")
 				}
@@ -258,7 +257,7 @@ func (esp *EntityStreamParser) parseEntity(decoder *json.Decoder) (*Entity, erro
 				}
 				e.Properties = make(map[string]interface{})
 				e.Properties["token"] = val
-			} else {
+			default:
 				// log named property
 				// read value
 				_, err := decoder.Token()
@@ -413,15 +412,16 @@ func (esp *EntityStreamParser) parseArray(decoder *json.Decoder) ([]interface{},
 
 		switch v := t.(type) {
 		case json.Delim:
-			if v == '{' {
+			switch v {
+			case '{':
 				r, err := esp.parseEntity(decoder)
 				if err != nil {
 					return nil, errors.New("unable to parse array " + err.Error())
 				}
 				array = append(array, r)
-			} else if v == ']' {
+			case ']':
 				return array, nil
-			} else if v == '[' {
+			case '[':
 				r, err := esp.parseArray(decoder)
 				if err != nil {
 					return nil, errors.New("unable to parse array " + err.Error())
@@ -456,9 +456,10 @@ func (esp *EntityStreamParser) parseValue(decoder *json.Decoder) (interface{}, e
 
 		switch v := t.(type) {
 		case json.Delim:
-			if v == '{' {
+			switch v {
+			case '{':
 				return esp.parseEntity(decoder)
-			} else if v == '[' {
+			case '[':
 				return esp.parseArray(decoder)
 			}
 		case string:

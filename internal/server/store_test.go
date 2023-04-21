@@ -17,13 +17,14 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/mimiro-io/datahub/internal"
 	"os"
 	"reflect"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/mimiro-io/datahub/internal"
 
 	"github.com/dgraph-io/badger/v3"
 
@@ -66,23 +67,41 @@ func TestStoreRelations(test *testing.T) {
 		})
 
 		g.It("Should delete the correct old outgoing references in array after entity modified", func() {
-			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
+			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/people/",
+			)
 			friendsDS, _ := dsm.CreateDataset("friends", nil)
 
 			_ = friendsDS.StoreEntities([]*Entity{
 				NewEntityFromMap(map[string]interface{}{
 					"id":    peopleNamespacePrefix + ":person-1",
 					"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Lisa"},
-					"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": []string{peopleNamespacePrefix + ":person-3", peopleNamespacePrefix + ":person-2"}}}),
+					"refs": map[string]interface{}{
+						peopleNamespacePrefix + ":Friend": []string{
+							peopleNamespacePrefix + ":person-3",
+							peopleNamespacePrefix + ":person-2",
+						},
+					},
+				}),
 			})
 
 			// check that we can query outgoing
-			result, err := store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			result, err := store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"},
+				peopleNamespacePrefix+":Friend",
+				false,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(2)
 
 			// check that we can query incoming
-			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-2"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-2"},
+				peopleNamespacePrefix+":Friend",
+				true,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 
@@ -90,39 +109,64 @@ func TestStoreRelations(test *testing.T) {
 			e := NewEntityFromMap(map[string]interface{}{
 				"id":    peopleNamespacePrefix + ":person-1",
 				"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Lisa"},
-				"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-3"}})
+				"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-3"},
+			})
 
 			_ = friendsDS.StoreEntities([]*Entity{
 				e,
 			})
 			// check that outgoing related entities is 0
-			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"},
+				peopleNamespacePrefix+":Friend",
+				false,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 
-			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-3"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-3"},
+				peopleNamespacePrefix+":Friend",
+				true,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 
-			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-2"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-2"},
+				peopleNamespacePrefix+":Friend",
+				true,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(0)
-
 		})
 
 		g.It("Should delete the correct old outgoing references after entity modified", func() {
-			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
+			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/people/",
+			)
 			friendsDS, _ := dsm.CreateDataset("friends", nil)
 
 			_ = friendsDS.StoreEntities([]*Entity{
 				NewEntityFromMap(map[string]interface{}{
 					"id":    peopleNamespacePrefix + ":person-1",
 					"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Lisa"},
-					"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-3"}}),
+					"refs": map[string]interface{}{
+						peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-3",
+					},
+				}),
 			})
 
 			// check that we can query outgoing
-			result, err := store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			result, err := store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"},
+				peopleNamespacePrefix+":Friend",
+				false,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(result[0][1]).Eql(peopleNamespacePrefix + ":Friend")
@@ -132,42 +176,66 @@ func TestStoreRelations(test *testing.T) {
 			e := NewEntityFromMap(map[string]interface{}{
 				"id":    peopleNamespacePrefix + ":person-1",
 				"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Lisa"},
-				"refs":  map[string]interface{}{}})
+				"refs":  map[string]interface{}{},
+			})
 
 			_ = friendsDS.StoreEntities([]*Entity{
 				e,
 			})
 
 			// check that outgoing related entities is 0
-			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"},
+				peopleNamespacePrefix+":Friend",
+				false,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(0)
 		})
 
 		g.It("Should delete the correct incoming and outgoing references after entity deleted", func() {
-			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
+			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/people/",
+			)
 			friendsDS, _ := dsm.CreateDataset("friends", nil)
 
 			_ = friendsDS.StoreEntities([]*Entity{
 				NewEntityFromMap(map[string]interface{}{
 					"id":    peopleNamespacePrefix + ":person-1",
 					"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Lisa"},
-					"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-3"}}),
+					"refs": map[string]interface{}{
+						peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-3",
+					},
+				}),
 				NewEntityFromMap(map[string]interface{}{
 					"id":    peopleNamespacePrefix + ":person-2",
 					"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Homer"},
-					"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-1"}}),
+					"refs": map[string]interface{}{
+						peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-1",
+					},
+				}),
 			})
 
 			// check that we can query outgoing
-			result, err := store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			result, err := store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"},
+				peopleNamespacePrefix+":Friend",
+				false,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(result[0][1]).Eql(peopleNamespacePrefix + ":Friend")
 			g.Assert(result[0][2].(*Entity).ID).Eql(peopleNamespacePrefix + ":person-3")
 
 			// check that we can query incoming
-			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"},
+				peopleNamespacePrefix+":Friend",
+				true,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(result[0][1]).Eql(peopleNamespacePrefix + ":Friend")
@@ -177,7 +245,8 @@ func TestStoreRelations(test *testing.T) {
 			e := NewEntityFromMap(map[string]interface{}{
 				"id":    peopleNamespacePrefix + ":person-1",
 				"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Lisa"},
-				"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-3"}})
+				"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-3"},
+			})
 			e.IsDeleted = true
 
 			_ = friendsDS.StoreEntities([]*Entity{
@@ -185,25 +254,41 @@ func TestStoreRelations(test *testing.T) {
 			})
 
 			// check that outgoing related entities is 0
-			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"},
+				peopleNamespacePrefix+":Friend",
+				false,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(0)
 
 			// check that we can query incoming count to person-3 is 0
-			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-3"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-3"},
+				peopleNamespacePrefix+":Friend",
+				true,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(0)
 
 			// check that we can query incoming count to person-1 is still 1
-			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"},
+				peopleNamespacePrefix+":Friend",
+				true,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
-
 		})
 
 		g.It("Should delete the correct incoming and outgoing references", func() {
 			b := store.database
-			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
+			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/people/",
+			)
 			workPrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/work/")
 			g.Assert(count(b)).Eql(16)
 
@@ -217,23 +302,39 @@ func TestStoreRelations(test *testing.T) {
 				NewEntityFromMap(map[string]interface{}{
 					"id":    peopleNamespacePrefix + ":person-1",
 					"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Lisa"},
-					"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-3"}}),
+					"refs": map[string]interface{}{
+						peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-3",
+					},
+				}),
 				NewEntityFromMap(map[string]interface{}{
 					"id":    peopleNamespacePrefix + ":person-2",
 					"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Lisa"},
-					"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-1"}}),
+					"refs": map[string]interface{}{
+						peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-1",
+					},
+				}),
 			})
 			g.Assert(count(b)).Eql(55)
 
 			// check that we can query outgoing
-			result, err := store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			result, err := store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"},
+				peopleNamespacePrefix+":Friend",
+				false,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(result[0][1]).Eql(peopleNamespacePrefix + ":Friend")
 			g.Assert(result[0][2].(*Entity).ID).Eql(peopleNamespacePrefix + ":person-3")
 
 			// check that we can query incoming
-			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"},
+				peopleNamespacePrefix+":Friend",
+				true,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(result[0][1]).Eql(peopleNamespacePrefix + ":Friend")
@@ -243,72 +344,109 @@ func TestStoreRelations(test *testing.T) {
 				NewEntityFromMap(map[string]interface{}{
 					"id":    peopleNamespacePrefix + ":person-1",
 					"props": map[string]interface{}{workPrefix + ":Wage": "110"},
-					"refs":  map[string]interface{}{workPrefix + ":Coworker": peopleNamespacePrefix + ":person-2"}}),
+					"refs":  map[string]interface{}{workPrefix + ":Coworker": peopleNamespacePrefix + ":person-2"},
+				}),
 				NewEntityFromMap(map[string]interface{}{
 					"id":    peopleNamespacePrefix + ":person-2",
 					"props": map[string]interface{}{workPrefix + ":Wage": "100"},
-					"refs":  map[string]interface{}{workPrefix + ":Coworker": peopleNamespacePrefix + ":person-3"}}),
+					"refs":  map[string]interface{}{workPrefix + ":Coworker": peopleNamespacePrefix + ":person-3"},
+				}),
 			})
 			g.Assert(count(b)).Eql(72)
 
 			// check that we can still query outgoing
-			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"},
+				peopleNamespacePrefix+":Friend",
+				false,
+				nil,
+			)
 			// result, err = store.GetManyRelatedEntities( []string{"http://data.mimiro.io/people/person-1"}, "*", false, nil)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1, "Expected still to find person-3 as a friend")
 			g.Assert(result[0][2].(*Entity).ID).Eql(peopleNamespacePrefix + ":person-3")
 
 			// and incoming
-			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"},
+				peopleNamespacePrefix+":Friend",
+				true,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1, "Expected still to find person-2 as reverse friend")
 			g.Assert(result[0][2].(*Entity).ID).Eql(peopleNamespacePrefix + ":person-2")
 		})
 
 		g.It("Should store references of new deleted entities as deleted", func() {
-			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
+			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/people/",
+			)
 			friendsDS, _ := dsm.CreateDataset("friends", nil)
 
 			p1 := NewEntityFromMap(map[string]interface{}{
 				"id":    peopleNamespacePrefix + ":person-1",
 				"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Lisa"},
-				"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-3"}})
+				"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-3"},
+			})
 			p1.IsDeleted = true
 			_ = friendsDS.StoreEntities([]*Entity{
 				p1,
 				NewEntityFromMap(map[string]interface{}{
 					"id":    peopleNamespacePrefix + ":person-2",
 					"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Homer"},
-					"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-1"}}),
+					"refs": map[string]interface{}{
+						peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-1",
+					},
+				}),
 			})
 			// check that we can not query outgoing from deleted entity
-			result, err := store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			result, err := store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"},
+				peopleNamespacePrefix+":Friend",
+				false,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(0)
 
 			// check that we can query incoming. this relation is owned by Homer
-			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"},
+				peopleNamespacePrefix+":Friend",
+				true,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(result[0][1]).Eql(peopleNamespacePrefix + ":Friend")
 			g.Assert(result[0][2].(*Entity).ID).Eql(peopleNamespacePrefix + ":person-2")
 
 			// inverse query from person-3 should not return anything because person-1 (which owns the relation) is deleted
-			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-3"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-3"},
+				peopleNamespacePrefix+":Friend",
+				true,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(0)
 		})
 
 		g.It("Should build query results", func() {
 			// create dataset
-			ds, err := dsm.CreateDataset("people", nil)
+			ds, _ := dsm.CreateDataset("people", nil)
 
 			batchSize := 5
 			entities := make([]*Entity, batchSize)
 
-			peopleNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
-			modelNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/model/")
-			rdfNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion(RdfNamespaceExpansion)
+			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/people/",
+			)
+			modelNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/model/",
+			)
+			rdfNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(RdfNamespaceExpansion)
 
 			for i := 0; i < batchSize; i++ {
 				entity := NewEntity(peopleNamespacePrefix+":p-"+strconv.Itoa(i), 0)
@@ -320,14 +458,14 @@ func TestStoreRelations(test *testing.T) {
 				entities[i] = entity
 			}
 
-			err = ds.StoreEntities(entities)
+			err := ds.StoreEntities(entities)
 			g.Assert(err).IsNil()
 
-			results, err := store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeUri, false, []string{})
+			results, err := store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeURI, false, []string{})
 			g.Assert(err).IsNil()
 			g.Assert(len(results)).Eql(1)
 
-			invresults, err := store.getRelated("http://data.mimiro.io/model/Person", RdfTypeUri, true, []string{})
+			invresults, err := store.getRelated("http://data.mimiro.io/model/Person", RdfTypeURI, true, []string{})
 			g.Assert(err).IsNil()
 			g.Assert(len(invresults)).Eql(5)
 
@@ -349,11 +487,11 @@ func TestStoreRelations(test *testing.T) {
 
 			time0 := time.Now().UnixNano()
 
-			invresults, err = store.getRelated("http://data.mimiro.io/model/Person", RdfTypeUri, true, []string{})
+			invresults, err = store.getRelated("http://data.mimiro.io/model/Person", RdfTypeURI, true, []string{})
 			g.Assert(err).IsNil()
 			g.Assert(len(invresults)).Eql(0)
 
-			results, err = store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeUri, false, []string{})
+			results, err = store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeURI, false, []string{})
 			g.Assert(err).IsNil()
 			g.Assert(len(results)).Eql(0)
 
@@ -370,21 +508,33 @@ func TestStoreRelations(test *testing.T) {
 			err = ds.StoreEntities(entities)
 			g.Assert(err).IsNil()
 
-			invresults, err = store.getRelated("http://data.mimiro.io/model/Person", RdfTypeUri, true, []string{})
+			invresults, err = store.getRelated("http://data.mimiro.io/model/Person", RdfTypeURI, true, []string{})
 			g.Assert(err).IsNil()
 			g.Assert(len(invresults)).Eql(5)
 
-			results, err = store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeUri, false, []string{})
+			results, err = store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeURI, false, []string{})
 			g.Assert(err).IsNil()
 			g.Assert(len(results)).Eql(1)
 
 			// test at point in time
-			from, err := store.ToRelatedFrom([]string{"http://data.mimiro.io/people/p-1"}, RdfTypeUri, false, nil, time0)
+			from, _ := store.ToRelatedFrom(
+				[]string{"http://data.mimiro.io/people/p-1"},
+				RdfTypeURI,
+				false,
+				nil,
+				time0,
+			)
 			results2, _, err := store.GetRelatedAtTime(from[0], 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(results2)).Eql(0)
 
-			from, err = store.ToRelatedFrom([]string{"http://data.mimiro.io/model/Person"}, RdfTypeUri, true, nil, time0)
+			from, _ = store.ToRelatedFrom(
+				[]string{"http://data.mimiro.io/model/Person"},
+				RdfTypeURI,
+				true,
+				nil,
+				time0,
+			)
 			invresults2, _, err := store.GetRelatedAtTime(from[0], 0)
 			g.Assert(err).IsNil()
 			g.Assert(len(invresults2)).Eql(0)
@@ -423,7 +573,7 @@ func TestStore(test *testing.T) {
 		g.It("Should store the curi id mapping", func() {
 			cache := make(map[string]uint64)
 			id, _, _ := dsm.store.assertIDForURI("ns0:gra", cache)
-			err := dsm.store.commitIdTxn()
+			err := dsm.store.commitIDTxn()
 			g.Assert(err).IsNil()
 			curi, _ := dsm.store.getURIForID(id)
 			g.Assert(curi).Eql("ns0:gra")
@@ -494,28 +644,28 @@ func TestStore(test *testing.T) {
 			entity.References["typed"] = "http://data.mimiro.io/model/Person"
 			entities[0] = entity
 
-			//1. store entity
+			// 1. store entity
 			err := ds.StoreEntities(entities)
 			g.Assert(err).IsNil()
 			// and get first versions of object
 			res, err := ds.GetEntities("", 1)
 			g.Assert(err).IsNil()
-			firstVersionTs := res.Entities[0].Recorded
+			firstVersionTS := res.Entities[0].Recorded
 
-			//2. store again
+			// 2. store again
 			err = ds.StoreEntities(entities)
 			g.Assert(err).IsNil()
 			// and get version again
 			res, _ = ds.GetEntities("", 1)
-			g.Assert(res.Entities[0].Recorded).Eql(firstVersionTs, "Should be unchanged version")
+			g.Assert(res.Entities[0].Recorded).Eql(firstVersionTS, "Should be unchanged version")
 
-			//3. set same name and store again
+			// 3. set same name and store again
 			entity.Properties["Name"] = "homer"
 			err = ds.StoreEntities(entities)
 			g.Assert(err).IsNil()
 			// and get version again
 			res, _ = ds.GetEntities("", 1)
-			g.Assert(res.Entities[0].Recorded).Eql(firstVersionTs, "Should be unchanged version")
+			g.Assert(res.Entities[0].Recorded).Eql(firstVersionTS, "Should be unchanged version")
 
 			// 4. now set a new name and store
 			entity.Properties["Name"] = "homer simpson"
@@ -523,7 +673,7 @@ func TestStore(test *testing.T) {
 			g.Assert(err).IsNil()
 			// version should change
 			res, _ = ds.GetEntities("", 1)
-			g.Assert(res.Entities[0].Recorded != firstVersionTs).IsTrue("Should be new version")
+			g.Assert(res.Entities[0].Recorded != firstVersionTS).IsTrue("Should be new version")
 		})
 
 		g.It("Should track changes", func() {
@@ -579,7 +729,7 @@ func TestStore(test *testing.T) {
 
 			// store modified entities again and then get changes latest true
 			entity1.Properties = map[string]interface{}{"http://test.org/name": "homer"}
-			err = ds.StoreEntities(entities)
+			ds.StoreEntities(entities)
 
 			changes, _ = ds.GetChanges(0, 0, true)
 			g.Assert(len(changes.Entities)).Eql(3)
@@ -590,10 +740,10 @@ func TestStore(test *testing.T) {
 			// create dataset
 			c, _ := dsm.CreateDataset("companies", nil)
 			_, _ = dsm.CreateDataset("animals", nil)
-			ds, _ := dsm.CreateDataset("people", nil)
+			dsm.CreateDataset("people", nil)
 
 			_ = dsm.DeleteDataset("people")
-			ds, _ = dsm.CreateDataset("people", nil)
+			ds, _ := dsm.CreateDataset("people", nil)
 
 			entities := make([]*Entity, 3)
 			entity1 := NewEntity("http://data.mimiro.io/people/homer", 0)
@@ -605,7 +755,7 @@ func TestStore(test *testing.T) {
 
 			err := ds.StoreEntities(entities)
 			g.Assert(err).IsNil()
-			//store same entitites in two datasets. should give merged results
+			// store same entitites in two datasets. should give merged results
 			err = c.StoreEntities(entities)
 			g.Assert(err).IsNil()
 
@@ -697,7 +847,7 @@ func TestStore(test *testing.T) {
 			err = ds.CompleteFullSync()
 			g.Assert(err).IsNil()
 
-			//start 2nd fullsync
+			// start 2nd fullsync
 			err = ds.StartFullSync()
 			g.Assert(err).IsNil()
 
@@ -705,7 +855,7 @@ func TestStore(test *testing.T) {
 			entity := NewEntity("http://data.mimiro.io/people/p-0", 0)
 			entity.Properties["Name"] = "homer"
 			entities[0] = entity
-			//entities[0] = res.Entities[0]
+			// entities[0] = res.Entities[0]
 			err = ds.StoreEntities(entities)
 			g.Assert(err).IsNil()
 
@@ -725,7 +875,6 @@ func TestStore(test *testing.T) {
 			g.Assert(err).IsNil("MapEntities should have worked")
 			g.Assert(len(allEntities)).Eql(1, "There should be one undeleted entity left")
 			g.Assert(len(deletedEntities)).Eql(batchSize-1, "all other entities should be deleted")
-
 		})
 
 		g.It("Should enable iterating over a dataset (MapEntitites)", func() {
@@ -744,7 +893,7 @@ func TestStore(test *testing.T) {
 			g.Assert(err).IsNil()
 
 			var entity *Entity
-			ctoken, err := ds.MapEntities("", 1, func(e *Entity) error {
+			ctoken, _ := ds.MapEntities("", 1, func(e *Entity) error {
 				entity = e
 				return nil
 			})
@@ -752,7 +901,7 @@ func TestStore(test *testing.T) {
 			g.Assert(ctoken).IsNotZero("MapEntities should have given us a token")
 
 			var nextEntity *Entity
-			newtoken, err := ds.MapEntities(ctoken, 1, func(e *Entity) error {
+			newtoken, _ := ds.MapEntities(ctoken, 1, func(e *Entity) error {
 				nextEntity = e
 				return nil
 			})
@@ -762,173 +911,179 @@ func TestStore(test *testing.T) {
 			g.Assert(ctoken != newtoken).IsTrue("We should have a different token")
 		})
 
-		g.Describe("When retrieving data, it can combine multiple entities from different datasets with the same ID", func() {
+		g.Describe(
+			"When retrieving data, it can combine multiple entities from different datasets with the same ID",
+			func() {
+				g.It("Should merge entity data from different entities with same id (partials)", func() {
+					e1 := NewEntity("x:e1", 0)
+					e2 := NewEntity("x:e1", 0)
+					partials := make([]*Entity, 2)
+					partials[0] = e1
+					partials[1] = e2
+					result := store.MergePartials(partials)
+					g.Assert(result).IsNotZero()
+					g.Assert(result.ID).Eql("x:e1")
+					g.Assert(result.Properties["x:name"]).IsNil()
 
-			g.It("Should merge entity data from different entities with same id (partials)", func() {
-				e1 := NewEntity("x:e1", 0)
-				e2 := NewEntity("x:e1", 0)
-				partials := make([]*Entity, 2)
-				partials[0] = e1
-				partials[1] = e2
-				result := store.MergePartials(partials)
-				g.Assert(result).IsNotZero()
-				g.Assert(result.ID).Eql("x:e1")
-				g.Assert(result.Properties["x:name"]).IsNil()
+					e2.Properties["x:name"] = "homer"
+					result = store.MergePartials(partials)
+					g.Assert(result).IsNotZero()
+					g.Assert(result.ID).Eql("x:e1")
+					g.Assert(result.Properties["x:name"]).Eql("homer")
+				})
 
-				e2.Properties["x:name"] = "homer"
-				result = store.MergePartials(partials)
-				g.Assert(result).IsNotZero()
-				g.Assert(result.ID).Eql("x:e1")
-				g.Assert(result.Properties["x:name"]).Eql("homer")
-			})
+				g.It("Should merge partials without error if a source is empty", func() {
+					e1 := NewEntity("x:e1", 0)
+					e2 := NewEntity("x:e1", 0)
+					partials := make([]*Entity, 2)
+					partials[0] = e1
+					partials[1] = e2
 
-			g.It("Should merge partials without error if a source is empty", func() {
-				e1 := NewEntity("x:e1", 0)
-				e2 := NewEntity("x:e1", 0)
-				partials := make([]*Entity, 2)
-				partials[0] = e1
-				partials[1] = e2
+					e1.Properties["x:name"] = "homer"
 
-				e1.Properties["x:name"] = "homer"
+					result := store.MergePartials(partials)
+					g.Assert(result).IsNotZero()
+					g.Assert(result.ID).Eql("x:e1")
+					g.Assert(result.Properties["x:name"]).Eql("homer")
+				})
 
-				result := store.MergePartials(partials)
-				g.Assert(result).IsNotZero()
-				g.Assert(result.ID).Eql("x:e1")
-				g.Assert(result.Properties["x:name"]).Eql("homer")
-			})
+				g.It("Should merge partials if target entity is empty", func() {
+					e1 := NewEntity("x:e1", 0)
+					e2 := NewEntity("x:e1", 0)
+					partials := make([]*Entity, 2)
+					partials[0] = e1
+					partials[1] = e2
 
-			g.It("Should merge partials if target entity is empty", func() {
-				e1 := NewEntity("x:e1", 0)
-				e2 := NewEntity("x:e1", 0)
-				partials := make([]*Entity, 2)
-				partials[0] = e1
-				partials[1] = e2
+					e2.Properties["x:name"] = "homer"
 
-				e2.Properties["x:name"] = "homer"
+					result := store.MergePartials(partials)
+					g.Assert(result).IsNotZero()
+					g.Assert(result.ID).Eql("x:e1")
+					g.Assert(result.Properties["x:name"]).Eql("homer")
+				})
 
-				result := store.MergePartials(partials)
-				g.Assert(result).IsNotZero()
-				g.Assert(result.ID).Eql("x:e1")
-				g.Assert(result.Properties["x:name"]).Eql("homer")
-			})
+				g.It("Should merge single values from 2 partials to a list value", func() {
+					e1 := NewEntity("x:e1", 0)
+					e2 := NewEntity("x:e1", 0)
+					partials := make([]*Entity, 2)
+					partials[0] = e1
+					partials[1] = e2
 
-			g.It("Should merge single values from 2 partials to a list value", func() {
-				e1 := NewEntity("x:e1", 0)
-				e2 := NewEntity("x:e1", 0)
-				partials := make([]*Entity, 2)
-				partials[0] = e1
-				partials[1] = e2
+					e1.Properties["x:name"] = "homer"
+					e2.Properties["x:name"] = "bob"
 
-				e1.Properties["x:name"] = "homer"
-				e2.Properties["x:name"] = "bob"
+					result := store.MergePartials(partials)
+					g.Assert(result).IsNotZero()
+					g.Assert(result.ID).Eql("x:e1")
+					g.Assert(result.Properties["x:name"]).Eql([]interface{}{"homer", "bob"})
+				})
 
-				result := store.MergePartials(partials)
-				g.Assert(result).IsNotZero()
-				g.Assert(result.ID).Eql("x:e1")
-				g.Assert(result.Properties["x:name"]).Eql([]interface{}{"homer", "bob"})
-			})
+				g.It("Should add single values to existing list when merging partials", func() {
+					e1 := NewEntity("x:e1", 0)
+					e2 := NewEntity("x:e1", 0)
+					partials := make([]*Entity, 2)
+					partials[0] = e1
+					partials[1] = e2
 
-			g.It("Should add single values to existing list when merging partials", func() {
-				e1 := NewEntity("x:e1", 0)
-				e2 := NewEntity("x:e1", 0)
-				partials := make([]*Entity, 2)
-				partials[0] = e1
-				partials[1] = e2
+					names := make([]interface{}, 0)
+					names = append(names, "homer")
+					names = append(names, "brian")
+					e1.Properties["x:name"] = names
+					e2.Properties["x:name"] = "bob"
 
-				names := make([]interface{}, 0)
-				names = append(names, "homer")
-				names = append(names, "brian")
-				e1.Properties["x:name"] = names
-				e2.Properties["x:name"] = "bob"
+					result := store.MergePartials(partials)
+					g.Assert(result).IsNotZero()
+					g.Assert(result.ID).Eql("x:e1")
+					g.Assert(result.Properties["x:name"]).Eql([]interface{}{"homer", "brian", "bob"})
+				})
 
-				result := store.MergePartials(partials)
-				g.Assert(result).IsNotZero()
-				g.Assert(result.ID).Eql("x:e1")
-				g.Assert(result.Properties["x:name"]).Eql([]interface{}{"homer", "brian", "bob"})
-			})
+				g.It("Should add list to existing single value when merging partials", func() {
+					e1 := NewEntity("x:e1", 0)
+					e2 := NewEntity("x:e1", 0)
+					partials := make([]*Entity, 2)
+					partials[0] = e1
+					partials[1] = e2
 
-			g.It("Should add list to existing single value when merging partials", func() {
-				e1 := NewEntity("x:e1", 0)
-				e2 := NewEntity("x:e1", 0)
-				partials := make([]*Entity, 2)
-				partials[0] = e1
-				partials[1] = e2
+					names := make([]interface{}, 0)
+					names = append(names, "homer")
+					names = append(names, "brian")
+					e1.Properties["x:name"] = "bob"
+					e2.Properties["x:name"] = names
 
-				names := make([]interface{}, 0)
-				names = append(names, "homer")
-				names = append(names, "brian")
-				e1.Properties["x:name"] = "bob"
-				e2.Properties["x:name"] = names
+					result := store.MergePartials(partials)
+					g.Assert(result).IsNotZero()
+					g.Assert(result.ID).Eql("x:e1")
+					g.Assert(result.Properties["x:name"]).Eql([]interface{}{"bob", "homer", "brian"})
+				})
 
-				result := store.MergePartials(partials)
-				g.Assert(result).IsNotZero()
-				g.Assert(result.ID).Eql("x:e1")
-				g.Assert(result.Properties["x:name"]).Eql([]interface{}{"bob", "homer", "brian"})
-			})
+				g.It("Should combine two value lists when merging partials", func() {
+					e1 := NewEntity("x:e1", 0)
+					e2 := NewEntity("x:e1", 0)
+					partials := make([]*Entity, 2)
+					partials[0] = e1
+					partials[1] = e2
 
-			g.It("Should combine two value lists when merging partials", func() {
-				e1 := NewEntity("x:e1", 0)
-				e2 := NewEntity("x:e1", 0)
-				partials := make([]*Entity, 2)
-				partials[0] = e1
-				partials[1] = e2
+					names := make([]interface{}, 0)
+					names = append(names, "homer")
+					names = append(names, "brian")
+					e1.Properties["x:name"] = names
 
-				names := make([]interface{}, 0)
-				names = append(names, "homer")
-				names = append(names, "brian")
-				e1.Properties["x:name"] = names
+					names1 := make([]interface{}, 0)
+					names1 = append(names1, "bob")
+					names1 = append(names1, "james")
 
-				names1 := make([]interface{}, 0)
-				names1 = append(names1, "bob")
-				names1 = append(names1, "james")
+					e2.Properties["x:name"] = names1
 
-				e2.Properties["x:name"] = names1
+					result := store.MergePartials(partials)
+					g.Assert(result).IsNotZero()
+					g.Assert(result.ID).Eql("x:e1")
+					g.Assert(result.Properties["x:name"]).Eql([]interface{}{"homer", "brian", "bob", "james"})
+				})
 
-				result := store.MergePartials(partials)
-				g.Assert(result).IsNotZero()
-				g.Assert(result.ID).Eql("x:e1")
-				g.Assert(result.Properties["x:name"]).Eql([]interface{}{"homer", "brian", "bob", "james"})
-			})
+				g.It("Should merge 3 partials", func() {
+					e1 := NewEntity("x:e1", 0)
+					e2 := NewEntity("x:e1", 0)
+					e3 := NewEntity("x:e1", 0)
+					partials := make([]*Entity, 3)
+					partials[0] = e1
+					partials[1] = e2
+					partials[2] = e3
 
-			g.It("Should merge 3 partials", func() {
-				e1 := NewEntity("x:e1", 0)
-				e2 := NewEntity("x:e1", 0)
-				e3 := NewEntity("x:e1", 0)
-				partials := make([]*Entity, 3)
-				partials[0] = e1
-				partials[1] = e2
-				partials[2] = e3
+					e1.Properties["x:name"] = "bob"
 
-				e1.Properties["x:name"] = "bob"
+					e2.Properties["x:name"] = "brian"
+					e2.Properties["x:dob"] = "01-01-2001"
 
-				e2.Properties["x:name"] = "brian"
-				e2.Properties["x:dob"] = "01-01-2001"
+					e3.Properties["x:name"] = "james"
 
-				e3.Properties["x:name"] = "james"
+					partials = make([]*Entity, 3)
+					partials[0] = e1
+					partials[1] = e2
+					partials[2] = e3
 
-				partials = make([]*Entity, 3)
-				partials[0] = e1
-				partials[1] = e2
-				partials[2] = e3
-
-				result := store.MergePartials(partials)
-				g.Assert(result).IsNotZero()
-				g.Assert(result.ID).Eql("x:e1")
-				g.Assert(result.Properties["x:name"]).Eql([]interface{}{"bob", "brian", "james"})
-				g.Assert(result.Properties["x:dob"]).Eql("01-01-2001")
-			})
-		})
+					result := store.MergePartials(partials)
+					g.Assert(result).IsNotZero()
+					g.Assert(result.ID).Eql("x:e1")
+					g.Assert(result.Properties["x:name"]).Eql([]interface{}{"bob", "brian", "james"})
+					g.Assert(result.Properties["x:dob"]).Eql("01-01-2001")
+				})
+			},
+		)
 
 		g.It("Should build query results", func() {
 			// create dataset
-			ds, err := dsm.CreateDataset("people", nil)
+			ds, _ := dsm.CreateDataset("people", nil)
 
 			batchSize := 5
 			entities := make([]*Entity, batchSize)
 
-			peopleNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
-			modelNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/model/")
-			rdfNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion(RdfNamespaceExpansion)
+			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/people/",
+			)
+			modelNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/model/",
+			)
+			rdfNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(RdfNamespaceExpansion)
 
 			for i := 0; i < batchSize; i++ {
 				entity := NewEntity(peopleNamespacePrefix+":p-"+strconv.Itoa(i), 0)
@@ -940,14 +1095,14 @@ func TestStore(test *testing.T) {
 				entities[i] = entity
 			}
 
-			err = ds.StoreEntities(entities)
+			err := ds.StoreEntities(entities)
 			g.Assert(err).IsNil()
 
-			results, err := store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeUri, false, []string{})
+			results, err := store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeURI, false, []string{})
 			g.Assert(err).IsNil()
 			g.Assert(len(results)).Eql(1)
 
-			invresults, err := store.getRelated("http://data.mimiro.io/model/Person", RdfTypeUri, true, []string{})
+			invresults, err := store.getRelated("http://data.mimiro.io/model/Person", RdfTypeURI, true, []string{})
 			g.Assert(err).IsNil()
 			g.Assert(len(invresults)).Eql(5)
 
@@ -967,11 +1122,11 @@ func TestStore(test *testing.T) {
 			err = ds.StoreEntities(entities)
 			g.Assert(err).IsNil()
 
-			invresults, err = store.getRelated("http://data.mimiro.io/model/Person", RdfTypeUri, true, []string{})
+			invresults, err = store.getRelated("http://data.mimiro.io/model/Person", RdfTypeURI, true, []string{})
 			g.Assert(err).IsNil()
 			g.Assert(len(invresults)).Eql(0)
 
-			results, err = store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeUri, false, []string{})
+			results, err = store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeURI, false, []string{})
 			g.Assert(err).IsNil()
 			g.Assert(len(results)).Eql(0)
 
@@ -988,14 +1143,13 @@ func TestStore(test *testing.T) {
 			err = ds.StoreEntities(entities)
 			g.Assert(err).IsNil()
 
-			invresults, err = store.getRelated("http://data.mimiro.io/model/Person", RdfTypeUri, true, []string{})
+			invresults, err = store.getRelated("http://data.mimiro.io/model/Person", RdfTypeURI, true, []string{})
 			g.Assert(err).IsNil()
 			g.Assert(len(invresults)).Eql(5)
 
-			results, err = store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeUri, false, []string{})
+			results, err = store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeURI, false, []string{})
 			g.Assert(err).IsNil()
 			g.Assert(len(results)).Eql(1)
-
 		})
 
 		g.It("Should perform batch updates without error with concurrent requests", func() {
@@ -1029,7 +1183,6 @@ func TestStore(test *testing.T) {
 		})
 
 		g.It("Should store and replace large batches without error", func() {
-
 			// create dataset
 			ds, _ := dsm.CreateDataset("people", nil)
 
@@ -1091,10 +1244,16 @@ func TestStore(test *testing.T) {
 
 		g.It("Should build correct query results with large number of entities", func() {
 			// namespaces
-			peopleNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
-			companyNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/company/")
-			modelNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/model/")
-			rdfNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion(RdfNamespaceExpansion)
+			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/people/",
+			)
+			companyNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/company/",
+			)
+			modelNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/model/",
+			)
+			rdfNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(RdfNamespaceExpansion)
 
 			// create dataset
 			peopleDataset, _ := dsm.CreateDataset("people", nil)
@@ -1105,7 +1264,7 @@ func TestStore(test *testing.T) {
 			companies := make([]*Entity, 0)
 			people := make([]*Entity, 0)
 			queryIds := make([]string, 0)
-			empId := 0
+			empID := 0
 
 			for i := 0; i < numOfCompanies; i++ {
 
@@ -1113,44 +1272,64 @@ func TestStore(test *testing.T) {
 				c.References[rdfNamespacePrefix+":type"] = modelNamespacePrefix + ":Company"
 
 				for j := 0; j < numOfEmployees; j++ {
-					person := NewEntity(peopleNamespacePrefix+":person-"+strconv.Itoa(empId), 0)
+					person := NewEntity(peopleNamespacePrefix+":person-"+strconv.Itoa(empID), 0)
 					person.Properties[peopleNamespacePrefix+":Name"] = "person " + strconv.Itoa(i)
 					person.References[rdfNamespacePrefix+":type"] = modelNamespacePrefix + ":Person"
-					person.References[peopleNamespacePrefix+":worksfor"] = companyNamespacePrefix + ":company-" + strconv.Itoa(i)
+					person.References[peopleNamespacePrefix+":worksfor"] = companyNamespacePrefix + ":company-" + strconv.Itoa(
+						i,
+					)
 					people = append(people, person)
 
-					if empId < 100 {
-						queryIds = append(queryIds, "http://data.mimiro.io/people/person-"+strconv.Itoa(empId))
+					if empID < 100 {
+						queryIds = append(queryIds, "http://data.mimiro.io/people/person-"+strconv.Itoa(empID))
 					}
 
-					empId++
+					empID++
 				}
 
 				companies = append(companies, c)
 			}
-			err = companiesDataset.StoreEntities(companies)
+			err := companiesDataset.StoreEntities(companies)
 			g.Assert(err).IsNil()
 
 			err = peopleDataset.StoreEntities(people)
 			g.Assert(err).IsNil()
 			// query
-			result, err := store.GetManyRelatedEntities(queryIds, "http://data.mimiro.io/people/worksfor", false, []string{})
+			result, err := store.GetManyRelatedEntities(
+				queryIds,
+				"http://data.mimiro.io/people/worksfor",
+				false,
+				[]string{},
+			)
+			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(100)
 
 			// check inverse
 			queryIds = make([]string, 0)
 			queryIds = append(queryIds, "http://data.mimiro.io/company/company-1")
 			queryIds = append(queryIds, "http://data.mimiro.io/company/company-2")
-			result, err = store.GetManyRelatedEntities(queryIds, "http://data.mimiro.io/people/worksfor", true, []string{})
+			result, err = store.GetManyRelatedEntities(
+				queryIds,
+				"http://data.mimiro.io/people/worksfor",
+				true,
+				[]string{},
+			)
+			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(numOfEmployees * 2)
 		})
 
 		g.It("Should return entity placeholders (links) in queries", func() {
 			// namespaces
-			peopleNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
-			companyNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/company/")
-			modelNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/model/")
-			rdfNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion(RdfNamespaceExpansion)
+			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/people/",
+			)
+			companyNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/company/",
+			)
+			modelNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/model/",
+			)
+			rdfNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(RdfNamespaceExpansion)
 
 			// create dataset
 			peopleDataset, _ := dsm.CreateDataset("people", nil)
@@ -1165,12 +1344,18 @@ func TestStore(test *testing.T) {
 			person.References[peopleNamespacePrefix+":worksfor"] = companyNamespacePrefix + ":company-3"
 			people = append(people, person)
 
-			err = peopleDataset.StoreEntities(people)
+			err := peopleDataset.StoreEntities(people)
 			g.Assert(err).IsNil()
 
 			queryIds = append(queryIds, "http://data.mimiro.io/people/person-"+strconv.Itoa(1))
 			// query
-			result, err := store.GetManyRelatedEntities(queryIds, "http://data.mimiro.io/people/worksfor", false, []string{})
+			result, err := store.GetManyRelatedEntities(
+				queryIds,
+				"http://data.mimiro.io/people/worksfor",
+				false,
+				[]string{},
+			)
+			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 		})
 	})
@@ -1205,9 +1390,15 @@ func TestDatasetScope(test *testing.T) {
 			g.Assert(err).IsNil()
 
 			// namespaces
-			peopleNamespacePrefix, _ = store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
-			companyNamespacePrefix, _ = store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/company/")
-			modelNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/model/")
+			peopleNamespacePrefix, _ = store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/people/",
+			)
+			companyNamespacePrefix, _ = store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/company/",
+			)
+			modelNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/model/",
+			)
 			rdfNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(RdfNamespaceExpansion)
 			// create dataset
 			peopleDataset, _ := dsm.CreateDataset(PEOPLE, nil)
@@ -1222,43 +1413,54 @@ func TestDatasetScope(test *testing.T) {
 			{person: 5, workhistory: []int{3}, currentwork: 1},
 			*/
 			//insert companies
-			for _, companyId := range []int{1, 2, 3} {
-				cid := companyNamespacePrefix + ":company-" + strconv.Itoa(companyId)
+			for _, companyID := range []int{1, 2, 3} {
+				cid := companyNamespacePrefix + ":company-" + strconv.Itoa(companyID)
 				_ = companiesDataset.StoreEntities([]*Entity{NewEntityFromMap(map[string]interface{}{
-					"id":    cid,
-					"props": map[string]interface{}{companyNamespacePrefix + ":Name": "Company " + strconv.Itoa(companyId)},
-					"refs":  map[string]interface{}{rdfNamespacePrefix + ":type": modelNamespacePrefix + ":Company"}})})
+					"id": cid,
+					"props": map[string]interface{}{
+						companyNamespacePrefix + ":Name": "Company " + strconv.Itoa(companyID),
+					},
+					"refs": map[string]interface{}{rdfNamespacePrefix + ":type": modelNamespacePrefix + ":Company"},
+				})})
 			}
 
 			// insert people with worksfor relations
 			currentWork := []int{1, 2, 1, 3, 1}
-			for personId, workId := range currentWork {
-				pid := peopleNamespacePrefix + ":person-" + strconv.Itoa(personId+1)
+			for personID, workID := range currentWork {
+				pid := peopleNamespacePrefix + ":person-" + strconv.Itoa(personID+1)
 				_ = peopleDataset.StoreEntities([]*Entity{NewEntityFromMap(map[string]interface{}{
-					"id":    pid,
-					"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Person " + strconv.Itoa(personId+1)},
+					"id": pid,
+					"props": map[string]interface{}{
+						peopleNamespacePrefix + ":Name": "Person " + strconv.Itoa(personID+1),
+					},
 					"refs": map[string]interface{}{
-						rdfNamespacePrefix + ":type":        modelNamespacePrefix + ":Person",
-						peopleNamespacePrefix + ":worksfor": companyNamespacePrefix + ":company-" + strconv.Itoa(workId),
-					}})})
+						rdfNamespacePrefix + ":type": modelNamespacePrefix + ":Person",
+						peopleNamespacePrefix + ":worksfor": companyNamespacePrefix + ":company-" + strconv.Itoa(
+							workID,
+						),
+					},
+				})})
 			}
 
-			//insert workHistory
-			for personId, workHistIds := range [][]int{{}, {1}, {2}, {1, 2}, {3}} {
+			// insert workHistory
+			for personID, workHistIds := range [][]int{{}, {1}, {2}, {1, 2}, {3}} {
 				var workHistory []string
-				for _, histId := range workHistIds {
-					workHistory = append(workHistory, companyNamespacePrefix+":company-"+strconv.Itoa(histId))
+				for _, histID := range workHistIds {
+					workHistory = append(workHistory, companyNamespacePrefix+":company-"+strconv.Itoa(histID))
 				}
-				pid := peopleNamespacePrefix + ":person-" + strconv.Itoa(personId+1)
+				pid := peopleNamespacePrefix + ":person-" + strconv.Itoa(personID+1)
 				entity := NewEntityFromMap(map[string]interface{}{
 					"id":    pid,
 					"props": map[string]interface{}{},
 					"refs": map[string]interface{}{
-						rdfNamespacePrefix + ":type":         modelNamespacePrefix + ":Employment",
-						peopleNamespacePrefix + ":Employee":  strconv.Itoa(personId + 1),
-						peopleNamespacePrefix + ":worksfor":  companyNamespacePrefix + ":company-" + strconv.Itoa(currentWork[personId]),
+						rdfNamespacePrefix + ":type":        modelNamespacePrefix + ":Employment",
+						peopleNamespacePrefix + ":Employee": strconv.Itoa(personID + 1),
+						peopleNamespacePrefix + ":worksfor": companyNamespacePrefix + ":company-" + strconv.Itoa(
+							currentWork[personID],
+						),
 						peopleNamespacePrefix + ":workedfor": workHistory,
-					}})
+					},
+				})
 				_ = employmentHistoryDataset.StoreEntities([]*Entity{entity})
 			}
 		})
@@ -1271,8 +1473,14 @@ func TestDatasetScope(test *testing.T) {
 		})
 
 		g.It("Should return all of an entity's relations when no dataset constraints are applied", func() {
-			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"}, "http://data.mimiro.io/people/worksfor", false, []string{})
-			g.Assert(len(result)).Eql(1, "expected 1 relation to be found. both the people and workhistory datasets point to the same company.")
+			result, _ := store.GetManyRelatedEntities(
+				[]string{peopleNamespacePrefix + ":person-1"},
+				"http://data.mimiro.io/people/worksfor",
+				false,
+				[]string{},
+			)
+			g.Assert(len(result)).
+				Eql(1, "expected 1 relation to be found. both the people and workhistory datasets point to the same company.")
 
 			entity := findEntity(result, "ns4:company-1")
 			g.Assert(entity).IsNotNil()
@@ -1281,9 +1489,14 @@ func TestDatasetScope(test *testing.T) {
 		})
 
 		g.It("Should return only relation ID if access to relation dataset is not given", func() {
-			//constraint on "people" only. we should find the relation to a company in "people",
-			//but resolving the company should be omitted because we lack access to the "companies" dataset
-			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"}, "http://data.mimiro.io/people/worksfor", false, []string{PEOPLE})
+			// constraint on "people" only. we should find the relation to a company in "people",
+			// but resolving the company should be omitted because we lack access to the "companies" dataset
+			result, _ := store.GetManyRelatedEntities(
+				[]string{peopleNamespacePrefix + ":person-1"},
+				"http://data.mimiro.io/people/worksfor",
+				false,
+				[]string{PEOPLE},
+			)
 			g.Assert(len(result)).Eql(1, "expected 1 relation to be found in people dataset (not in workHistory)")
 
 			entity := findEntity(result, "ns4:company-1")
@@ -1293,15 +1506,25 @@ func TestDatasetScope(test *testing.T) {
 		})
 
 		g.It("Should not find outgoing relations if the datasets owning these relations are disallowed", func() {
-			//constraint on "companies". we cannot access outgoing refs in the "people" or "history" datasets, therefore we should not find anything
-			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"}, "http://data.mimiro.io/people/worksfor", false, []string{COMPANIES})
+			// constraint on "companies". we cannot access outgoing refs in the "people" or "history" datasets, therefore we should not find anything
+			result, _ := store.GetManyRelatedEntities(
+				[]string{peopleNamespacePrefix + ":person-1"},
+				"http://data.mimiro.io/people/worksfor",
+				false,
+				[]string{COMPANIES},
+			)
 			g.Assert(len(result)).Eql(0, "expected 0 relation to be found (people and history are excluded)")
 		})
 
 		g.It("Should treat a list of (all) unknown datasets like an empty scope list", func() {
-			//constraint on bogus dataset. due to implementation, this dataset filter will be ignored, query behaves as unrestricted
-			//TODO: this can be discussed. Producing an error would make Queries less unpredictable. But ignoring invalid input makes the API more approachable
-			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"}, "http://data.mimiro.io/people/worksfor", false, []string{"bogus"})
+			// constraint on bogus dataset. due to implementation, this dataset filter will be ignored, query behaves as unrestricted
+			// TODO: this can be discussed. Producing an error would make Queries less unpredictable. But ignoring invalid input makes the API more approachable
+			result, _ := store.GetManyRelatedEntities(
+				[]string{peopleNamespacePrefix + ":person-1"},
+				"http://data.mimiro.io/people/worksfor",
+				false,
+				[]string{"bogus"},
+			)
 			g.Assert(len(result)).Eql(1, "expected 1 relation (company-1)")
 
 			entity := findEntity(result, "ns4:company-1")
@@ -1311,61 +1534,86 @@ func TestDatasetScope(test *testing.T) {
 		})
 
 		g.It("Should find relations in secondary datasets if main dataset is disallowed", func() {
-			//constraint on history dataset. we should find an outgoing relation from history to a company,
-			//but company resolving should be disabled since we lack access to the companies dataset
-			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-1"}, "http://data.mimiro.io/people/worksfor", false, []string{HISTORY})
+			// constraint on history dataset. we should find an outgoing relation from history to a company,
+			// but company resolving should be disabled since we lack access to the companies dataset
+			result, _ := store.GetManyRelatedEntities(
+				[]string{peopleNamespacePrefix + ":person-1"},
+				"http://data.mimiro.io/people/worksfor",
+				false,
+				[]string{HISTORY},
+			)
 			g.Assert(len(result)).Eql(1, "expected 1 relation to be found in people dataset (not in workHistory)")
 
 			entity := findEntity(result, "ns4:company-1")
 			g.Assert(entity).IsNotNil()
 			g.Assert(entity.ID).Eql("ns4:company-1", "first relation ID should be found")
 			g.Assert(entity.Properties["ns4:Name"]).IsNil("first relation property should NOT be resolved")
-
 		})
 
 		g.It("Should return all incoming relations of an entity in inverse query, when no scope is given", func() {
-			//inverse query for "company-1", no datasets restriction. should find 3 people with resolved entities
-			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-1"}, "http://data.mimiro.io/people/worksfor", true, []string{})
-			g.Assert(len(result)).Eql(3, "there are 6 relations, 3 in dataset people and 3 owned by history. all relations come from total of 3 people")
+			// inverse query for "company-1", no datasets restriction. should find 3 people with resolved entities
+			result, _ := store.GetManyRelatedEntities(
+				[]string{companyNamespacePrefix + ":company-1"},
+				"http://data.mimiro.io/people/worksfor",
+				true,
+				[]string{},
+			)
+			g.Assert(len(result)).
+				Eql(3, "there are 6 relations, 3 in dataset people and 3 owned by history. all relations come from total of 3 people")
 			entity := findEntity(result, "ns3:person-5")
 			g.Assert(entity).IsNotNil()
 			g.Assert(entity.Properties["ns3:Name"]).Eql("Person 5", "first relation property should be resolved")
 			g.Assert(len(entity.References)).Eql(4)
-			//verify that history entity has been merged in by checking for "workedfor"
+			// verify that history entity has been merged in by checking for "workedfor"
 			g.Assert(entity.References["ns3:workedfor"].([]interface{})[0]).Eql("ns4:company-3",
 				"inverse query should find company-3 in history following 'worksfor' to person-5's employment enity")
-			//verify that worksfor is duplicated - since the relation is merged together from people and history
+			// verify that worksfor is duplicated - since the relation is merged together from people and history
 			g.Assert(entity.References["ns3:worksfor"]).Eql([]interface{}{"ns4:company-1", "ns4:company-1"})
 		})
 
 		g.It("Should omit disallowed datasets when resolving found entities", func() {
-			//inverse query for "company-1" with only "people" accessible.
-			//should still find 3 people (incoming relation is owned by people dataset, which we have access to)
-			//people should be resolved
-			//but resolved relations in people should only be "people" data with no "history" refs merged in
-			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-1"}, "http://data.mimiro.io/people/worksfor", true, []string{PEOPLE})
+			// inverse query for "company-1" with only "people" accessible.
+			// should still find 3 people (incoming relation is owned by people dataset, which we have access to)
+			// people should be resolved
+			// but resolved relations in people should only be "people" data with no "history" refs merged in
+			result, _ := store.GetManyRelatedEntities(
+				[]string{companyNamespacePrefix + ":company-1"},
+				"http://data.mimiro.io/people/worksfor",
+				true,
+				[]string{PEOPLE},
+			)
 			g.Assert(len(result)).Eql(3, "expected 3 relations to be found in people dataset (not in workHistory)")
 
 			entity := findEntity(result, "ns3:person-5")
 			g.Assert(entity).IsNotNil()
 			g.Assert(entity.ID).Eql("ns3:person-5", "first relation ID should be found")
 			g.Assert(entity.Properties["ns3:Name"]).Eql("Person 5", "first relation property should be resolved")
-			//make sure we only have two refs returned (worksfor + type), confirming that history refs have not been accessed
+			// make sure we only have two refs returned (worksfor + type), confirming that history refs have not been accessed
 			g.Assert(len(entity.References)).Eql(2)
 		})
 
 		g.It("Should not return results if the relation-owning datasets are disallowed", func() {
-			//inverse query for "company-1" with restriction to "companies" dataset.
-			//all incoming relations are stored in either history or people dataset.
-			//with access limited to companies dataset, we should not find incoming relations
-			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-1"}, "http://data.mimiro.io/people/worksfor", true, []string{COMPANIES})
+			// inverse query for "company-1" with restriction to "companies" dataset.
+			// all incoming relations are stored in either history or people dataset.
+			// with access limited to companies dataset, we should not find incoming relations
+			result, _ := store.GetManyRelatedEntities(
+				[]string{companyNamespacePrefix + ":company-1"},
+				"http://data.mimiro.io/people/worksfor",
+				true,
+				[]string{COMPANIES},
+			)
 			g.Assert(len(result)).Eql(0)
 		})
 
 		g.It("Should resolve all elements in relation arrays, when no scope restriction is given", func() {
-			//find person-4 and follow its workedfor relations without restriction
-			//should find 2 companies in "history" dataset, and fully resolve the company entities
-			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-4"}, "http://data.mimiro.io/people/workedfor", false, []string{})
+			// find person-4 and follow its workedfor relations without restriction
+			// should find 2 companies in "history" dataset, and fully resolve the company entities
+			result, _ := store.GetManyRelatedEntities(
+				[]string{peopleNamespacePrefix + ":person-4"},
+				"http://data.mimiro.io/people/workedfor",
+				false,
+				[]string{},
+			)
 			g.Assert(len(result)).Eql(2, "expected 2 relations to be found in history dataset")
 
 			entity := findEntity(result, "ns4:company-2")
@@ -1375,63 +1623,94 @@ func TestDatasetScope(test *testing.T) {
 		})
 
 		g.It("Should find, but not resolve all relations in an array if relation dataset is disallowed", func() {
-			//find person-4 and follow its workedfor relations in dataset "history"
-			//should find 2 companies in "history" dataset,
-			//but not fully resolve the company entities because we lack access to "company"
-			result, _ := store.GetManyRelatedEntities([]string{peopleNamespacePrefix + ":person-4"}, "http://data.mimiro.io/people/workedfor", false, []string{HISTORY})
+			// find person-4 and follow its workedfor relations in dataset "history"
+			// should find 2 companies in "history" dataset,
+			// but not fully resolve the company entities because we lack access to "company"
+			result, _ := store.GetManyRelatedEntities(
+				[]string{peopleNamespacePrefix + ":person-4"},
+				"http://data.mimiro.io/people/workedfor",
+				false,
+				[]string{HISTORY},
+			)
 			g.Assert(len(result)).Eql(2, "expected 2 relations to be found in history dataset")
 
 			entity := findEntity(result, "ns4:company-2")
 			g.Assert(entity).IsNotNil()
 			g.Assert(entity.ID).Eql("ns4:company-2", "first relation ID should be found")
-			g.Assert(entity.Properties["ns4:Name"]).IsNil("companies dataset is not accessible, therefor name should be nil")
+			g.Assert(entity.Properties["ns4:Name"]).
+				IsNil("companies dataset is not accessible, therefor name should be nil")
 		})
 
 		g.It("Should inversely find all relations in an array", func() {
-			//find company-2 and inversely follow workedfor relations without restriction
-			//should find person 3 and 4 in "history" dataset, and fully resolve the person entities
-			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-2"}, "http://data.mimiro.io/people/workedfor", true, []string{})
+			// find company-2 and inversely follow workedfor relations without restriction
+			// should find person 3 and 4 in "history" dataset, and fully resolve the person entities
+			result, _ := store.GetManyRelatedEntities(
+				[]string{companyNamespacePrefix + ":company-2"},
+				"http://data.mimiro.io/people/workedfor",
+				true,
+				[]string{},
+			)
 			g.Assert(len(result)).Eql(2, "expected 2 people to be found from history dataset")
 
 			entity := findEntity(result, "ns3:person-4")
 			g.Assert(entity).IsNotNil()
 			g.Assert(entity.ID).Eql("ns3:person-4", "first relation ID should be found")
 			g.Assert(entity.Properties["ns3:Name"]).Eql("Person 4", "first relation property should be resolved")
-			//There should be 4 references both from history and people
-			g.Assert(len(entity.References)).Eql(4, "Expected 4 refs in inversly found person from people and history datasets")
-			//check that reference values are merged from all datasets. type should be list of type refs from both people and history
+			// There should be 4 references both from history and people
+			g.Assert(len(entity.References)).
+				Eql(4, "Expected 4 refs in inversly found person from people and history datasets")
+			// check that reference values are merged from all datasets. type should be list of type refs from both people and history
 			if reflect.DeepEqual(entity.References["ns2:type"], []string{"ns5:Person", "ns5:Employment"}) {
 				g.Failf("Expected Person+Employment as type ref values, but found %v", entity.References["ns2:type"])
 			}
 		})
 
-		g.It("Should inversely find all relations in array, but not resolve the relation-intities if no access", func() {
-			//find company-2 and inversely follow workedfor relations with filter on history
-			//should find person 3 and 4 in "history" dataset, but not fully resolve the person entities
-			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-2"}, "http://data.mimiro.io/people/workedfor", true, []string{HISTORY})
-			g.Assert(len(result)).Eql(2, "expected 2 people to be found from history dataset")
+		g.It(
+			"Should inversely find all relations in array, but not resolve the relation-intities if no access",
+			func() {
+				// find company-2 and inversely follow workedfor relations with filter on history
+				// should find person 3 and 4 in "history" dataset, but not fully resolve the person entities
+				result, _ := store.GetManyRelatedEntities(
+					[]string{companyNamespacePrefix + ":company-2"},
+					"http://data.mimiro.io/people/workedfor",
+					true,
+					[]string{HISTORY},
+				)
+				g.Assert(len(result)).Eql(2, "expected 2 people to be found from history dataset")
 
-			entity := findEntity(result, "ns3:person-4")
-			g.Assert(entity).IsNotNil()
-			g.Assert(entity.ID).Eql("ns3:person-4", "first relation ID should be found")
-			g.Assert(entity.Properties["ns3:Name"]).IsNil("Person 4 should not be resolved since access to people is missing")
-			//There should be 4 references both from history and people
-			g.Assert(len(entity.References)).Eql(4, "Expected 4 refs in inversly found person from history dataset")
-			//check that reference values are merged from all datasets. type should be list of type refs from both people and history
-			g.Assert(entity.References["ns2:type"]).Eql("ns5:Employment", "Expected only Employment type, not Person type")
-		})
+				entity := findEntity(result, "ns3:person-4")
+				g.Assert(entity).IsNotNil()
+				g.Assert(entity.ID).Eql("ns3:person-4", "first relation ID should be found")
+				g.Assert(entity.Properties["ns3:Name"]).
+					IsNil("Person 4 should not be resolved since access to people is missing")
+				// There should be 4 references both from history and people
+				g.Assert(len(entity.References)).Eql(4, "Expected 4 refs in inversly found person from history dataset")
+				// check that reference values are merged from all datasets. type should be list of type refs from both people and history
+				g.Assert(entity.References["ns2:type"]).
+					Eql("ns5:Employment", "Expected only Employment type, not Person type")
+			},
+		)
 
 		g.It("Should not inversly find array relations if relation-owning dataset is disallowed", func() {
-			//find company-2 and inversely follow workedfor relations with filter on people and companies
-			//should not find any relations since history access is not allowed, and workedfor is only stored there
-			result, _ := store.GetManyRelatedEntities([]string{companyNamespacePrefix + ":company-2"}, "http://data.mimiro.io/people/workedfor", true, []string{PEOPLE, COMPANIES})
+			// find company-2 and inversely follow workedfor relations with filter on people and companies
+			// should not find any relations since history access is not allowed, and workedfor is only stored there
+			result, _ := store.GetManyRelatedEntities(
+				[]string{companyNamespacePrefix + ":company-2"},
+				"http://data.mimiro.io/people/workedfor",
+				true,
+				[]string{PEOPLE, COMPANIES},
+			)
 			g.Assert(len(result)).Eql(0)
 		})
 
 		g.It("Should respect dataset scope in GetEntity (single lookup query)", func() {
 			// namespaces
-			employeeNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/employee/")
-			modelNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/model/")
+			employeeNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/employee/",
+			)
+			modelNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/model/",
+			)
 			rdfNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(RdfNamespaceExpansion)
 
 			// create dataset
@@ -1447,14 +1726,16 @@ func TestDatasetScope(test *testing.T) {
 					"refs": map[string]interface{}{
 						rdfNamespacePrefix + ":type":     modelNamespacePrefix + ":Person",
 						peopleNamespacePrefix + ":knows": peopleNamespacePrefix + "person-2",
-					}}),
+					},
+				}),
 				NewEntityFromMap(map[string]interface{}{
 					"id":    peopleNamespacePrefix + ":person-2",
 					"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Bob"},
 					"refs": map[string]interface{}{
 						rdfNamespacePrefix + ":type":     modelNamespacePrefix + ":Person",
 						peopleNamespacePrefix + ":knows": peopleNamespacePrefix + "person-1",
-					}}),
+					},
+				}),
 			})
 
 			_ = employeeDataset.StoreEntities([]*Entity{
@@ -1463,30 +1744,33 @@ func TestDatasetScope(test *testing.T) {
 					"props": map[string]interface{}{employeeNamespacePrefix + ":Title": "President"},
 					"refs": map[string]interface{}{
 						rdfNamespacePrefix + ":type": modelNamespacePrefix + ":Employee",
-					}}),
+					},
+				}),
 				NewEntityFromMap(map[string]interface{}{
 					"id":    peopleNamespacePrefix + ":person-2",
 					"props": map[string]interface{}{employeeNamespacePrefix + ":Title": "Vice President"},
 					"refs": map[string]interface{}{
 						rdfNamespacePrefix + ":type":            modelNamespacePrefix + ":Employee",
 						employeeNamespacePrefix + ":Supervisor": peopleNamespacePrefix + ":person-1",
-					}})})
+					},
+				}),
+			})
 
-			//first no datasets restriction, check that props from both employee and people dataset are merged
+			// first no datasets restriction, check that props from both employee and people dataset are merged
 			result, err := store.GetEntity(peopleNamespacePrefix+":person-1", []string{})
 			g.Assert(err).IsNil()
 			g.Assert(result.Properties[employeeNamespacePrefix+":Title"]).Eql("President",
 				"expected to merge property employees:Title into result with value 'President'")
 			g.Assert(result.Properties[peopleNamespacePrefix+":Name"]).Eql("Lisa")
 
-			//now, restrict on dataset "people"
+			// now, restrict on dataset "people"
 			result, _ = store.GetEntity(peopleNamespacePrefix+":person-2", []string{PEOPLE})
-			//we should not find the Title from the employees dataset
+			// we should not find the Title from the employees dataset
 			g.Assert(result.Properties[employeeNamespacePrefix+":Title"]).IsNil()
-			//people:Name should be found though
+			// people:Name should be found though
 			g.Assert(result.Properties[peopleNamespacePrefix+":Name"]).Eql("Bob")
 
-			//now, restrict on dataset "employees". now Name should be gone but title should be found
+			// now, restrict on dataset "employees". now Name should be gone but title should be found
 			result, _ = store.GetEntity(peopleNamespacePrefix+":person-2", []string{EMPLOYEES})
 			g.Assert(result.Properties[employeeNamespacePrefix+":Title"]).Eql("Vice President",
 				"expected to merge property employees:Title into result with value 'Vice President'")
@@ -1525,11 +1809,12 @@ func TestDatasetScope(test *testing.T) {
 			people := dsm.GetDataset("people")
 			peopleEntities, _ := people.GetEntities("", 100)
 			g.Assert(len(peopleEntities.Entities)).Eql(6)
-
 		})
 
 		g.It("should find deleted version of entity with lookup", func() {
-			peopleNamespacePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
+			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/people/",
+			)
 
 			// create dataset
 			ds, err := dsm.CreateDataset("people", nil)
@@ -1585,12 +1870,12 @@ func count(b *badger.DB) int {
 
 		for it.Rewind(); it.Valid(); it.Next() {
 			items++
-			//os.Stdout.Write([]byte(fmt.Sprintf("%v\n",it.Item())))
+			// os.Stdout.Write([]byte(fmt.Sprintf("%v\n",it.Item())))
 		}
 
 		it.Close()
 		return nil
 	})
-	//os.Stdout.Write([]byte(fmt.Sprintf("%v\n\n\n",items)))
+	// os.Stdout.Write([]byte(fmt.Sprintf("%v\n\n\n",items)))
 	return items
 }

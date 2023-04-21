@@ -55,7 +55,7 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 	runner := job.runner
 
 	syncJobState := &SyncJobState{}
-	err := runner.store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+	err := runner.store.GetObject(server.JobDataIndex, job.id, syncJobState)
 	if err != nil {
 		return err
 	}
@@ -160,7 +160,7 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 	//Exception is when used with MultiSource... MultiSource only operates on changes. also in fullsync mode.
 	//   Difference there between fullsync and incremental is whether dependencies are processed
 	if pipeline.sink.GetConfig()["Type"] != "HttpDatasetSink" || pipeline.source.GetConfig()["Type"] == "MultiSource" {
-		err = runner.store.StoreObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+		err = runner.store.StoreObject(server.JobDataIndex, job.id, syncJobState)
 		if err != nil {
 			return err
 		}
@@ -180,7 +180,7 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 	runner := job.runner
 
 	syncJobState := &SyncJobState{}
-	err := runner.store.GetObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+	err := runner.store.GetObject(server.JobDataIndex, job.id, syncJobState)
 	if err != nil {
 		return err
 	}
@@ -287,7 +287,7 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 						return err
 					}
 
-					err = runner.store.StoreObject(server.JOB_DATA_INDEX, job.id, syncJobState)
+					err = runner.store.StoreObject(server.JobDataIndex, job.id, syncJobState)
 					if err != nil {
 						return err
 					}

@@ -60,7 +60,7 @@ func NewContentHandler(
 func (handler *contentHandler) contentList(c echo.Context) error {
 	res, err := handler.content.ListContents()
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, server.HttpGenericErr(err).Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, server.HTTPGenericErr(err).Error())
 	}
 
 	return c.JSON(http.StatusOK, res)
@@ -70,18 +70,18 @@ func (handler *contentHandler) contentAdd(c echo.Context) error {
 	// read json
 	body, err := ioutil.ReadAll(c.Request().Body)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpBodyMissingErr(err).Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HTTPBodyMissingErr(err).Error())
 	}
 
 	content := &content.Content{}
 	err = json.Unmarshal(body, content)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpJsonParsingErr(err).Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HTTPJsonParsingErr(err).Error())
 	}
 
 	err = handler.content.AddContent(content.ID, content)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpContentStoreErr(err).Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HTTPContentStoreErr(err).Error())
 	}
 
 	return c.NoContent(http.StatusOK)
@@ -103,18 +103,18 @@ func (handler *contentHandler) contentShow(c echo.Context) error {
 func (handler *contentHandler) contentUpdate(c echo.Context) error {
 	body, err := ioutil.ReadAll(c.Request().Body)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpBodyMissingErr(err).Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HTTPBodyMissingErr(err).Error())
 	}
 	contentID := c.Param("contentId")
 	payload := &content.Content{}
 	err = json.Unmarshal(body, payload)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpJsonParsingErr(err).Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HTTPJsonParsingErr(err).Error())
 	}
 
 	err = handler.content.UpdateContent(contentID, payload)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpContentStoreErr(err).Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HTTPContentStoreErr(err).Error())
 	}
 
 	return c.NoContent(http.StatusOK)
@@ -129,7 +129,7 @@ func (handler *contentHandler) contentDelete(c echo.Context) error {
 
 	err = handler.content.DeleteContent(contentID)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpContentStoreErr(err).Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HTTPContentStoreErr(err).Error())
 	}
 
 	return c.NoContent(http.StatusOK)

@@ -1359,7 +1359,7 @@ func TestMultiSource(t *testing.T) {
 				// create main dataset as proxy dataset
 				_, err := dsm.CreateDataset("people", &server.CreateDatasetConfig{
 					ProxyDatasetConfig: &server.ProxyDatasetConfig{
-						RemoteUrl: "http://localhost:7777/datasets/people",
+						RemoteURL: "http://localhost:7777/datasets/people",
 					},
 				})
 				g.Assert(err).IsNil()
@@ -1388,7 +1388,7 @@ func TestMultiSource(t *testing.T) {
 				// create dependency dataset as proxy dataset
 				_, err := dsm.CreateDataset("address", &server.CreateDatasetConfig{
 					ProxyDatasetConfig: &server.ProxyDatasetConfig{
-						RemoteUrl: "http://localhost:7777/datasets/address",
+						RemoteURL: "http://localhost:7777/datasets/address",
 					},
 				})
 				g.Assert(err).IsNil()

@@ -58,11 +58,11 @@ func NewProviderHandler(
 func (handler *providerHandler) loginCreate(c echo.Context) error {
 	var provider security.ProviderConfig
 	if err := c.Bind(&provider); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpGenericErr(err).Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HTTPGenericErr(err).Error())
 	}
 
 	if err := handler.tokenProviders.Add(provider); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, server.HttpGenericErr(err).Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, server.HTTPGenericErr(err).Error())
 	}
 
 	return c.NoContent(http.StatusOK)
@@ -71,15 +71,15 @@ func (handler *providerHandler) loginCreate(c echo.Context) error {
 func (handler *providerHandler) loginUpdate(c echo.Context) error {
 	providerName, err := url.QueryUnescape(c.Param("providerName"))
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpGenericErr(err).Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HTTPGenericErr(err).Error())
 	}
 	var provider security.ProviderConfig
 	if err := c.Bind(&provider); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpGenericErr(err).Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HTTPGenericErr(err).Error())
 	}
 
 	if err := handler.tokenProviders.UpdateProvider(providerName, provider); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, server.HttpGenericErr(err).Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, server.HTTPGenericErr(err).Error())
 	}
 
 	return c.NoContent(http.StatusOK)
@@ -87,7 +87,7 @@ func (handler *providerHandler) loginUpdate(c echo.Context) error {
 
 func (handler *providerHandler) loginList(c echo.Context) error {
 	if providers, err := handler.tokenProviders.ListProviders(); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, server.HttpGenericErr(err).Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, server.HTTPGenericErr(err).Error())
 	} else {
 		return c.JSON(http.StatusOK, providers)
 	}
@@ -96,7 +96,7 @@ func (handler *providerHandler) loginList(c echo.Context) error {
 func (handler *providerHandler) loginGet(c echo.Context) error {
 	providerName, err := url.QueryUnescape(c.Param("providerName"))
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpGenericErr(err).Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HTTPGenericErr(err).Error())
 	}
 	if provider, err := handler.tokenProviders.GetProviderConfig(providerName); err != nil {
 		return c.NoContent(http.StatusNotFound)
@@ -108,7 +108,7 @@ func (handler *providerHandler) loginGet(c echo.Context) error {
 func (handler *providerHandler) loginDelete(c echo.Context) error {
 	providerName, err := url.QueryUnescape(c.Param("providerName"))
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpGenericErr(err).Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HTTPGenericErr(err).Error())
 	}
 	if err := handler.tokenProviders.DeleteProvider(providerName); err != nil {
 		return c.NoContent(http.StatusNotFound)

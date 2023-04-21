@@ -147,7 +147,7 @@ func (s *Scheduler) AddJob(jobConfig *JobConfiguration) error {
 		return err
 	}
 
-	err = s.Store.StoreObject(server.JOB_CONFIGS_INDEX, jobConfig.ID, jobConfig) // store it for the future
+	err = s.Store.StoreObject(server.JobConfigIndex, jobConfig.ID, jobConfig) // store it for the future
 	if err != nil {
 		return err
 	}
@@ -230,7 +230,7 @@ func (s *Scheduler) DeleteJob(jobID string) error {
 // works, it will not return nil when not found, but an empty jobConfig object.
 func (s *Scheduler) LoadJob(jobID string) (*JobConfiguration, error) {
 	jobConfig := &JobConfiguration{}
-	err := s.Store.GetObject(server.JOB_CONFIGS_INDEX, jobID, jobConfig)
+	err := s.Store.GetObject(server.JobConfigIndex, jobID, jobConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +325,7 @@ func (s *Scheduler) GetRunningJob(jobid string) *JobStatus {
 // Each job stores its Start and End time, together with the last error if any.
 func (s *Scheduler) GetJobHistory() []*jobResult {
 	results := make([]*jobResult, 0)
-	_ = s.Store.IterateObjectsRaw(server.JOB_RESULT_INDEX_BYTES, func(jsonData []byte) error {
+	_ = s.Store.IterateObjectsRaw(server.JobResultIndexBytes, func(jsonData []byte) error {
 		jobResult := &jobResult{}
 		err := json.Unmarshal(jsonData, jobResult)
 		if err != nil {
@@ -369,7 +369,7 @@ func (s *Scheduler) ResetJob(jobid string, since string) error {
 	s.Logger.Infof("Resetting since token for job with id '%s' (%s)", jobid, jobTitle)
 
 	syncJobState := &SyncJobState{}
-	err := s.Store.GetObject(server.JOB_DATA_INDEX, jobid, syncJobState)
+	err := s.Store.GetObject(server.JobDataIndex, jobid, syncJobState)
 	if err != nil {
 		return err
 	}
@@ -379,7 +379,7 @@ func (s *Scheduler) ResetJob(jobid string, since string) error {
 	}
 
 	syncJobState.ContinuationToken = since
-	err = s.Store.StoreObject(server.JOB_DATA_INDEX, jobid, syncJobState)
+	err = s.Store.StoreObject(server.JobDataIndex, jobid, syncJobState)
 	if err != nil {
 		return err
 	}
@@ -440,7 +440,7 @@ func (s *Scheduler) changeStatus(jobid string, pause bool) error {
 func (s *Scheduler) loadConfigurations() []*JobConfiguration {
 	jobConfigs := []*JobConfiguration{}
 
-	_ = s.Store.IterateObjectsRaw(server.JOB_CONFIGS_INDEX_BYTES, func(jsonData []byte) error {
+	_ = s.Store.IterateObjectsRaw(server.JobConfigsIndexBytes, func(jsonData []byte) error {
 		jobConfig := &JobConfiguration{}
 		err := json.Unmarshal(jsonData, jobConfig)
 		if err != nil {

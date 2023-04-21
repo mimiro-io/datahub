@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datahub
+package datahub_test
 
 import (
 	"bytes"
@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -36,6 +35,7 @@ import (
 	"github.com/franela/goblin"
 	"go.uber.org/fx"
 
+	"github.com/mimiro-io/datahub"
 	"github.com/mimiro-io/datahub/internal/server"
 )
 
@@ -64,7 +64,7 @@ func TestHttp(t *testing.T) {
 			devNull, _ := os.Open("/dev/null")
 			os.Stdout = devNull
 			os.Stderr = devNull
-			app, _ = Start(context.Background())
+			app, _ = datahub.Start(context.Background())
 			os.Stdout = oldOut
 			os.Stderr = oldErr
 			mockLayer = NewMockLayer()
@@ -73,7 +73,7 @@ func TestHttp(t *testing.T) {
 			}()
 		})
 		g.After(func() {
-			mockLayer.echo.Shutdown(context.Background())
+			_ = mockLayer.echo.Shutdown(context.Background())
 			ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 			err := app.Stop(ctx)
 			defer cancel()
@@ -175,7 +175,7 @@ func TestHttp(t *testing.T) {
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 
-				bodyBytes, err := ioutil.ReadAll(res.Body)
+				bodyBytes, err := io.ReadAll(res.Body)
 				g.Assert(err).IsNil()
 				var entities []*server.Entity
 				err = json.Unmarshal(bodyBytes, &entities)
@@ -203,7 +203,7 @@ func TestHttp(t *testing.T) {
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
-				bodyBytes, _ := ioutil.ReadAll(res.Body)
+				bodyBytes, _ := io.ReadAll(res.Body)
 				_ = res.Body.Close()
 				var entities []*server.Entity
 				err = json.Unmarshal(bodyBytes, &entities)
@@ -223,7 +223,7 @@ func TestHttp(t *testing.T) {
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
-				bodyBytes, _ := ioutil.ReadAll(res.Body)
+				bodyBytes, _ := io.ReadAll(res.Body)
 				_ = res.Body.Close()
 				var entities []*server.Entity
 				err = json.Unmarshal(bodyBytes, &entities)
@@ -238,7 +238,7 @@ func TestHttp(t *testing.T) {
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
-				bodyBytes, _ = ioutil.ReadAll(res.Body)
+				bodyBytes, _ = io.ReadAll(res.Body)
 				_ = res.Body.Close()
 				entities = nil
 				err = json.Unmarshal(bodyBytes, &entities)
@@ -283,7 +283,7 @@ func TestHttp(t *testing.T) {
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
-				bodyBytes, _ := ioutil.ReadAll(res.Body)
+				bodyBytes, _ := io.ReadAll(res.Body)
 				_ = res.Body.Close()
 				var entities []*server.Entity
 				err = json.Unmarshal(bodyBytes, &entities)
@@ -297,7 +297,7 @@ func TestHttp(t *testing.T) {
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
-				bodyBytes, _ = ioutil.ReadAll(res.Body)
+				bodyBytes, _ = io.ReadAll(res.Body)
 				_ = res.Body.Close()
 				entities = nil
 				err = json.Unmarshal(bodyBytes, &entities)
@@ -380,7 +380,7 @@ func TestHttp(t *testing.T) {
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
-				bodyBytes, _ := ioutil.ReadAll(res.Body)
+				bodyBytes, _ := io.ReadAll(res.Body)
 				_ = res.Body.Close()
 				var entities []*server.Entity
 				err = json.Unmarshal(bodyBytes, &entities)
@@ -489,12 +489,12 @@ func TestHttp(t *testing.T) {
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
-				bodyBytes, _ := ioutil.ReadAll(res.Body)
+				bodyBytes, _ := io.ReadAll(res.Body)
 				_ = res.Body.Close()
 				var entities []*server.Entity
 				err = json.Unmarshal(bodyBytes, &entities)
 				var m []map[string]interface{}
-				json.Unmarshal(bodyBytes, &m)
+				_ = json.Unmarshal(bodyBytes, &m)
 				g.Assert(err).IsNil()
 				g.Assert(len(entities)).Eql(12, "expected 10 entities plus @context and @continuation")
 				g.Assert(entities[1].ID).Eql("ns3:1")
@@ -505,10 +505,10 @@ func TestHttp(t *testing.T) {
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
-				bodyBytes, _ = ioutil.ReadAll(res.Body)
+				bodyBytes, _ = io.ReadAll(res.Body)
 				_ = res.Body.Close()
 				err = json.Unmarshal(bodyBytes, &entities)
-				json.Unmarshal(bodyBytes, &m)
+				_ = json.Unmarshal(bodyBytes, &m)
 				g.Assert(err).IsNil()
 				g.Assert(len(entities)).Eql(92, "expected 90 entities plus @context and @continuation")
 				g.Assert(entities[1].ID).Eql("ns3:11")
@@ -519,10 +519,10 @@ func TestHttp(t *testing.T) {
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
-				bodyBytes, _ = ioutil.ReadAll(res.Body)
+				bodyBytes, _ = io.ReadAll(res.Body)
 				_ = res.Body.Close()
 				err = json.Unmarshal(bodyBytes, &entities)
-				json.Unmarshal(bodyBytes, &m)
+				_ = json.Unmarshal(bodyBytes, &m)
 				g.Assert(err).IsNil()
 				g.Assert(len(entities)).Eql(2, "expected 0 entities plus @context and @continuation")
 				g.Assert(entities[1].ID).Eql("@continuation")
@@ -1023,7 +1023,7 @@ type MockLayer struct {
 }
 
 type Continuation struct {
-	Id    string `json:"id"`
+	ID    string `json:"id"`
 	Token string `json:"token"`
 }
 
@@ -1045,7 +1045,7 @@ func NewMockLayer() *MockLayer {
 	e.POST("/datasets/tomatoes/entities", func(context echo.Context) error {
 		b, _ := io.ReadAll(context.Request().Body)
 		entities := []*server.Entity{}
-		json.Unmarshal(b, &entities)
+		_ = json.Unmarshal(b, &entities)
 		result.RecordedEntities["tomatoes"] = entities
 		result.RecordedBytes["tomatoes"] = b
 		result.RecordedHeaders = context.Request().Header
@@ -1078,24 +1078,25 @@ func NewMockLayer() *MockLayer {
 		if limit, ok := strconv.Atoi(l); ok == nil {
 			cnt = limit
 		}
-		if since == "" {
+		switch since {
+		case "":
 			// add some objects
 			for i := 0; i < cnt; i++ {
 				e := server.NewEntity("ex:c-"+strconv.Itoa(i), 0)
 				r = append(r, e)
 			}
-			c := &Continuation{Id: "@continuation", Token: "nextplease"}
+			c := &Continuation{ID: "@continuation", Token: "nextplease"}
 			r = append(r, c)
-		} else if since == "lastpage" {
-			c := &Continuation{Id: "@continuation", Token: "lastpage"}
+		case "lastpage":
+			c := &Continuation{ID: "@continuation", Token: "lastpage"}
 			r = append(r, c)
-		} else {
+		default:
 			// return more objects
 			for i := 100; i < 100+cnt; i++ {
 				e := server.NewEntity("ex:c-"+strconv.Itoa(i), 0)
 				r = append(r, e)
 			}
-			c := &Continuation{Id: "@continuation", Token: "lastpage"}
+			c := &Continuation{ID: "@continuation", Token: "lastpage"}
 			r = append(r, c)
 		}
 

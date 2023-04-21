@@ -12,19 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datahub
+package datahub_test
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/mimiro-io/datahub"
 
 	"github.com/mimiro-io/datahub/internal/security"
 
@@ -62,7 +63,7 @@ func TestNodeSecurity(t *testing.T) {
 			devNull, _ := os.Open("/dev/null")
 			os.Stdout = devNull
 			os.Stderr = devNull
-			app, _ = Start(context.Background())
+			app, _ = datahub.Start(context.Background())
 			os.Stdout = oldOut
 			os.Stderr = oldErr
 		})
@@ -481,11 +482,11 @@ func TestNodeSecurity(t *testing.T) {
 			clientInfo.ClientID = "node1"
 
 			// read the node private and public keys for use in this interaction
-			_, err = ioutil.ReadFile(securityLocation + string(os.PathSeparator) + "node_key")
+			_, err = os.ReadFile(securityLocation + string(os.PathSeparator) + "node_key")
 			g.Assert(err).IsNil()
 			// clientPrivateKey, err := security.ParseRsaPrivateKeyFromPem(content)
 
-			content, err := ioutil.ReadFile(securityLocation + string(os.PathSeparator) + "node_key.pub")
+			content, err := os.ReadFile(securityLocation + string(os.PathSeparator) + "node_key.pub")
 			g.Assert(err).IsNil()
 			publicKey, err := security.ParseRsaPublicKeyFromPem(content)
 			g.Assert(err).IsNil()
@@ -611,9 +612,9 @@ func TestNodeSecurity(t *testing.T) {
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotNil()
 				g.Assert(res.StatusCode).Eql(200)
-				body, _ := ioutil.ReadAll(res.Body)
+				body, _ := io.ReadAll(res.Body)
 				var hist []map[string]interface{}
-				json.Unmarshal(body, &hist)
+				_ = json.Unmarshal(body, &hist)
 				// t.Log(hist)
 				if len(hist) != 0 {
 					g.Assert(hist[0]["lastError"]).IsZero("no error expected")

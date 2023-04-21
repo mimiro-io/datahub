@@ -40,16 +40,16 @@ func (e *StorageError) Error() string {
 var (
 	AttemptStoreEntitiesErr = func(detail error) error { return fmt.Errorf("failed when attempting to store entities: %w", detail) }
 	SinceParseErr           = func(detail error) error { return fmt.Errorf("since should be an integer number: %w", detail) }
-	HttpBodyMissingErr      = func(detail error) error { return fmt.Errorf("body is missing or could not read: %w", detail) }
-	HttpJobParsingErr       = func(detail error) error { return fmt.Errorf("failed at parsing the job definition: %w", detail) }
-	HttpJobSchedulingErr    = func(detail error) error { return fmt.Errorf("failed at scheduling the job definition: %w", detail) }
-	HttpJsonParsingErr      = func(detail error) error { return fmt.Errorf("failed parsing the json body: %w", detail) }
-	HttpContentStoreErr     = func(detail error) error { return fmt.Errorf("failed updating the content: %w", detail) }
-	HttpQueryParamErr       = func(detail error) error {
+	HTTPBodyMissingErr      = func(detail error) error { return fmt.Errorf("body is missing or could not read: %w", detail) }
+	HTTPJobParsingErr       = func(detail error) error { return fmt.Errorf("failed at parsing the job definition: %w", detail) }
+	HTTPJobSchedulingErr    = func(detail error) error { return fmt.Errorf("failed at scheduling the job definition: %w", detail) }
+	HTTPJsonParsingErr      = func(detail error) error { return fmt.Errorf("failed parsing the json body: %w", detail) }
+	HTTPContentStoreErr     = func(detail error) error { return fmt.Errorf("failed updating the content: %w", detail) }
+	HTTPQueryParamErr       = func(detail error) error {
 		return fmt.Errorf("one or more of the query parameters failed its validation: %w", detail)
 	}
-	HttpGenericErr  = func(detail error) error { return fmt.Errorf("internal failure: %w", detail) }
-	HttpFullsyncErr = func(detail error) error {
+	HTTPGenericErr  = func(detail error) error { return fmt.Errorf("internal failure: %w", detail) }
+	HTTPFullsyncErr = func(detail error) error {
 		return fmt.Errorf("an error occured trying to start or update a full sync: %w", detail)
 	}
 )

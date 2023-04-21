@@ -17,16 +17,17 @@ package server
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/franela/goblin"
 	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
-	"os"
-	"path/filepath"
-	"testing"
-	"time"
 )
 
 func TestBackup(t *testing.T) {
@@ -69,12 +70,12 @@ func TestBackup(t *testing.T) {
 
 		g.It("Should perform native backup", func() {
 			var err error
-			backup.lastID, err = backup.LoadLastId()
+			backup.lastID, err = backup.LoadLastID()
 			g.Assert(err).IsNil()
 			backup.Run()
 			// check backup id file is synced
-			storageIdFile := filepath.Join(backupLocation, StorageIdFileName)
-			if _, err := os.Stat(storageIdFile); errors.Is(err, os.ErrNotExist) {
+			storageIDFile := filepath.Join(backupLocation, StorageIDFileName)
+			if _, err := os.Stat(storageIDFile); errors.Is(err, os.ErrNotExist) {
 				g.Errorf("expected backup id file to be copied")
 				g.FailNow()
 			}
@@ -89,7 +90,7 @@ func TestBackup(t *testing.T) {
 			s.Close()
 			s.Open()
 			backup.Run()
-			if _, err := os.Stat(storageIdFile); errors.Is(err, os.ErrNotExist) {
+			if _, err := os.Stat(storageIDFile); errors.Is(err, os.ErrNotExist) {
 				g.Errorf("expected backup id file to be copied")
 				g.FailNow()
 			}
@@ -98,38 +99,37 @@ func TestBackup(t *testing.T) {
 			g.Timeout(2 * time.Minute)
 			backup.useRsync = true
 			var err error
-			backup.lastID, err = backup.LoadLastId()
+			backup.lastID, err = backup.LoadLastID()
 			g.Assert(err).IsNil()
 			backup.Run()
 			// check backup id file is synced
-			storageIdFile := filepath.Join(backupLocation, StorageIdFileName)
-			if _, err := os.Stat(storageIdFile); errors.Is(err, os.ErrNotExist) {
+			storageIDFile := filepath.Join(backupLocation, StorageIDFileName)
+			if _, err := os.Stat(storageIDFile); errors.Is(err, os.ErrNotExist) {
 				g.Errorf("expected backup id file to be copied")
 				g.FailNow()
 			}
-
 		})
 		g.It("Should stop datahub if backup to invalid location", func() {
 			g.Timeout(2 * time.Minute)
 			backup.useRsync = true
 			backup.Run()
 			// check backup id file is synced
-			storageIdFile := filepath.Join(backupLocation, StorageIdFileName)
-			if _, err := os.Stat(storageIdFile); errors.Is(err, os.ErrNotExist) {
+			storageIDFile := filepath.Join(backupLocation, StorageIDFileName)
+			if _, err := os.Stat(storageIDFile); errors.Is(err, os.ErrNotExist) {
 				g.Errorf("expected backup id file to be copied")
 				g.FailNow()
 			}
 			// stop store, remove id file and start again - a new id file should be generated
 			s.Close()
-			os.Remove(filepath.Join(storeLocation, StorageIdFileName))
+			os.Remove(filepath.Join(storeLocation, StorageIDFileName))
 			s.Open()
 
 			// backup should fail now
 			assertPanic(g, func() { backup.Run() })
 		})
-
 	})
 }
+
 func assertPanic(g *goblin.G, f func()) {
 	defer func() {
 		if r := recover(); r == nil {

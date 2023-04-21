@@ -22,9 +22,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/conf"
 )
 
 const datasetCore = "core.Dataset"
@@ -47,7 +48,7 @@ func NewDsManager(lc fx.Lifecycle, env *conf.Env, store *Store, eb EventBus) *Ds
 	}
 
 	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
+		OnStart: func(_ context.Context) error {
 			eb.Init(dsm.GetDatasetNames())
 			// if we are missing core datasets, we add these here
 			_, err := dsm.CreateDataset(datasetCore, nil)
@@ -61,8 +62,11 @@ func NewDsManager(lc fx.Lifecycle, env *conf.Env, store *Store, eb EventBus) *Ds
 	return dsm
 }
 
-func (dsm *DsManager) NewDatasetEntity(name string, proxyDatasetConfig *ProxyDatasetConfig, publicNamespaces []string) *Entity {
-
+func (dsm *DsManager) NewDatasetEntity(
+	name string,
+	proxyDatasetConfig *ProxyDatasetConfig,
+	publicNamespaces []string,
+) *Entity {
 	prefix, _ := dsm.store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/core/dataset/")
 	core, _ := dsm.store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/core/")
 	rdfNamespacePrefix, _ := dsm.store.NamespaceManager.AssertPrefixMappingForExpansion(RdfNamespaceExpansion)
@@ -71,9 +75,9 @@ func (dsm *DsManager) NewDatasetEntity(name string, proxyDatasetConfig *ProxyDat
 	entity.Properties[prefix+":items"] = 0
 	entity.References[rdfNamespacePrefix+":type"] = core + ":dataset"
 
-	if proxyDatasetConfig != nil && proxyDatasetConfig.RemoteUrl != "" {
+	if proxyDatasetConfig != nil && proxyDatasetConfig.RemoteURL != "" {
 		entity.References[rdfNamespacePrefix+":type"] = core + ":proxy-dataset"
-		entity.Properties[prefix+":remoteUrl"] = proxyDatasetConfig.RemoteUrl
+		entity.Properties[prefix+":remoteUrl"] = proxyDatasetConfig.RemoteURL
 		entity.Properties[prefix+":authProviderName"] = proxyDatasetConfig.AuthProviderName
 		entity.Properties[prefix+":downstreamTransform"] = proxyDatasetConfig.DownstreamTransform
 		entity.Properties[prefix+":upstreamTransform"] = proxyDatasetConfig.UpstreamTransform
@@ -117,7 +121,7 @@ func (dsm *DsManager) CreateDataset(name string, createDatasetConfig *CreateData
 	dsm.store.nextDatasetID++
 	nextDatasetIDBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(nextDatasetIDBytes, dsm.store.nextDatasetID)
-	err := dsm.store.storeValue(STORE_NEXT_DATASET_ID_BYTES, nextDatasetIDBytes)
+	err := dsm.store.storeValue(StoreNextDatasetIDBytes, nextDatasetIDBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +180,7 @@ func (dsm *DsManager) UpdateDataset(name string, config *UpdateDatasetConfig) (*
 		dsm.logger.Infof("renaming dataset %v to %v", name, newName)
 
 		oldKey := ds.getStorageKey()
-		//update stored datasets
+		// update stored datasets
 		ds.ID = newName
 		ds.SubjectIdentifier = "http://data.mimiro.io/datasets/" + newName
 		jsonData, _ := json.Marshal(ds)
@@ -186,7 +190,7 @@ func (dsm *DsManager) UpdateDataset(name string, config *UpdateDatasetConfig) (*
 			return nil, err
 		}
 
-		//update in local cache
+		// update in local cache
 		dsm.store.datasets.Delete(name)
 		dsm.store.datasets.Store(newName, ds)
 
@@ -208,6 +212,9 @@ func (dsm *DsManager) UpdateDataset(name string, config *UpdateDatasetConfig) (*
 		}
 		entity.IsDeleted = true
 		err = dsm.storeEntity(core, entity)
+		if err != nil {
+			return nil, err
+		}
 		entity.IsDeleted = false
 		entity.ID = dsInfo.DatasetPrefix + ":" + newName
 		entity.Properties[dsInfo.NameKey] = newName
@@ -252,7 +259,7 @@ func (dsm *DsManager) DeleteDataset(name string) error {
 	}
 	newDeletedDatasets[existingDataset.InternalID] = true
 	dsm.store.deletedDatasets = newDeletedDatasets
-	err = dsm.store.StoreObject(STORE_META_INDEX, "deleteddatasets", dsm.store.deletedDatasets)
+	err = dsm.store.StoreObject(StoreMetaIndex, "deleteddatasets", dsm.store.deletedDatasets)
 	if err != nil {
 		return err
 	}
@@ -281,7 +288,7 @@ func (dsm *DsManager) DeleteDataset(name string) error {
 // GetDatasetNames returns a list of the dataset names
 func (dsm *DsManager) GetDatasetNames() []DatasetName {
 	names := make([]DatasetName, 0)
-	dsm.store.datasets.Range(func(k interface{}, val interface{}) bool {
+	dsm.store.datasets.Range(func(k interface{}, _ interface{}) bool {
 		names = append(names, DatasetName{Name: k.(string)})
 		return true
 	})
@@ -327,9 +334,5 @@ func (dsm *DsManager) GetDatasetDetails(name string) (*Entity, bool, error) {
 }
 
 func (dsm *DsManager) IsDataset(name string) bool {
-	dataset := dsm.GetDataset(name)
-	if dataset != nil {
-		return true
-	}
-	return false
+	return dsm.GetDataset(name) != nil
 }

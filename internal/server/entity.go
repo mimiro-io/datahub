@@ -96,7 +96,7 @@ func (e *Entity) ExpandIdentifiers(store *Store) error {
 
 // GetName returns a human readable Name
 func (e *Entity) GetName() string {
-	name := e.GetStringProperty(RdfsLabelUri)
+	name := e.GetStringProperty(RdfsLabelURI)
 
 	if name == "" {
 		index := strings.LastIndex(e.ID, "/")
@@ -133,9 +133,9 @@ func (e *Entity) GetStringProperty(propName string) string {
 // GetProperty returns the value of the named property as an interface
 func (e *Entity) GetProperty(propName string) interface{} {
 	prop := e.Properties[propName]
-	switch prop.(type) {
+	switch p := prop.(type) {
 	case map[string]interface{}:
-		return NewEntityFromMap(prop.(map[string]interface{}))
+		return NewEntityFromMap(p)
 	default:
 		return prop
 	}
