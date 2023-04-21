@@ -17,7 +17,6 @@ package server_test
 import (
 	"context"
 	"fmt"
-	"github.com/mimiro-io/datahub/internal"
 	"net/http"
 	"os"
 	"reflect"
@@ -25,6 +24,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/mimiro-io/datahub/internal"
 
 	"github.com/labstack/echo/v4"
 
@@ -58,7 +59,7 @@ func TestEvents(t *testing.T) {
 		var peopleDs *server.Dataset
 		g.BeforeEach(func() {
 			testCnt += 1
-			//since we wire up our actual web server, we need to provide a file matching 'views/*html' to avoid errors
+			// since we wire up our actual web server, we need to provide a file matching 'views/*html' to avoid errors
 			_ = os.MkdirAll("./views", os.ModePerm)
 			_, _ = os.Create("./views/x.html")
 
@@ -71,7 +72,8 @@ func TestEvents(t *testing.T) {
 				StoreLocation: storeLocation,
 				Port:          "5555",
 				Auth:          &conf.AuthConfig{Middleware: "noop"},
-				RunnerConfig:  &conf.RunnerConfig{PoolIncremental: 10, PoolFull: 5}}
+				RunnerConfig:  &conf.RunnerConfig{PoolIncremental: 10, PoolFull: 5},
+			}
 
 			devNull, _ := os.Open("/dev/null")
 			oldOut := os.Stdout
@@ -116,7 +118,7 @@ func TestEvents(t *testing.T) {
 		g.It("Should have a topic for each existing dataset", func() {
 			allTopics := eventBus.Bus.Topics()
 			for _, dsn := range dsm.GetDatasetNames() {
-				var seen = false
+				seen := false
 				for _, registeredTopic := range allTopics {
 					if registeredTopic == "dataset."+dsn.Name {
 						seen = true
@@ -176,14 +178,14 @@ func TestEvents(t *testing.T) {
 			err = scheduler.AddJob(sj)
 			g.Assert(err).IsNil()
 
-			_, err = scheduler.RunJob(sj.Id, jobs.JobTypeIncremental)
+			_, err = scheduler.RunJob(sj.ID, jobs.JobTypeIncremental)
 			g.Assert(err).IsNil()
 			wg.Wait()
 			g.Assert(eventReceived).IsTrue("Should have observed event for people dataset")
 		})
 
 		g.It("Should trigger jobs that listen on the dataset's topic", func() {
-			//add a extra listener for this test to know when the job is done
+			// add a extra listener for this test to know when the job is done
 			var wg sync.WaitGroup
 			wg.Add(1)
 			eventBus.SubscribeToDataset("people", "*", func(e *bus.Event) {
@@ -192,13 +194,13 @@ func TestEvents(t *testing.T) {
 				}
 			})
 
-			//add data to people dataset
+			// add data to people dataset
 			err := peopleDs.StoreEntities([]*server.Entity{server.NewEntity("homer", 0)})
 			g.Assert(err).IsNil()
 			target, err := dsm.CreateDataset("peoplecopy", nil)
 			g.Assert(err).IsNil()
 
-			//setup job
+			// setup job
 			sj, err := scheduler.Parse([]byte((`{
 				"id" : "job1",
 				"title" : "job1",
@@ -216,7 +218,7 @@ func TestEvents(t *testing.T) {
 			err = scheduler.AddJob(sj)
 			g.Assert(err).IsNil()
 
-			//verify that target is empty before event
+			// verify that target is empty before event
 			res, err := target.GetEntities("", 1)
 			g.Assert(err).IsNil()
 			g.Assert(len(res.Entities)).Eql(0, "target dataset should be empty")
@@ -226,7 +228,7 @@ func TestEvents(t *testing.T) {
 
 			wg.Wait()
 
-			//verify that the job is done
+			// verify that the job is done
 			res, err = target.GetEntities("", 1)
 			g.Assert(err).IsNil()
 			g.Assert(len(res.Entities)).Eql(1, "Job should have copied entity to target dataset")

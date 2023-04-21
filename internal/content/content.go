@@ -24,7 +24,7 @@ import (
 )
 
 type Content struct {
-	Id   string                 `json:"id"`
+	ID   string                 `json:"id"`
 	Data map[string]interface{} `json:"data"`
 }
 
@@ -53,14 +53,14 @@ func (contentConfig *Config) UpdateContent(id string, payload *Content) error {
 	return contentConfig.AddContent(id, payload)
 }
 
-// GetContentById returns a single content by its id
-func (contentConfig *Config) GetContentById(id string) (*Content, error) {
+// GetContentByID returns a single content by its id
+func (contentConfig *Config) GetContentByID(id string) (*Content, error) {
 	content := &Content{}
 	err := contentConfig.store.GetObject(server.CONTENT_INDEX, id, &content)
 	if err != nil {
 		return nil, err
 	}
-	if content.Id == "" {
+	if content.ID == "" {
 		return nil, nil
 	}
 	return content, nil

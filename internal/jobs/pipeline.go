@@ -44,8 +44,10 @@ type PipelineSpec struct {
 	transform Transform
 	batchSize int
 }
-type FullSyncPipeline struct{ PipelineSpec }
-type IncrementalPipeline struct{ PipelineSpec }
+type (
+	FullSyncPipeline    struct{ PipelineSpec }
+	IncrementalPipeline struct{ PipelineSpec }
+)
 
 func (pipeline *FullSyncPipeline) spec() PipelineSpec { return pipeline.PipelineSpec }
 func (pipeline *FullSyncPipeline) isFullSync() bool   { return true }
@@ -61,14 +63,14 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 
 	keepReading := true
 
-	//dont call source.startFullSync, just sink.startFullSync. to make sure we run on changes.
-	//exception is when the sink is http(we want to process entities instead of changes)
-	//or source is multisource (we need to grab watermarks at beginning of fullsync)
+	// dont call source.startFullSync, just sink.startFullSync. to make sure we run on changes.
+	// exception is when the sink is http(we want to process entities instead of changes)
+	// or source is multisource (we need to grab watermarks at beginning of fullsync)
 	if pipeline.sink.GetConfig()["Type"] == "HttpDatasetSink" ||
 		pipeline.source.GetConfig()["Type"] == "MultiSource" {
-		if pipeline.source.GetConfig()["Type"] == "MultiSource" {
-			//return errors.New("MultiSource can only produce changes and must therefore not be used with HttpDatasetSink")
-		}
+		// if pipeline.source.GetConfig()["Type"] == "MultiSource" {
+		// 	return errors.New("MultiSource can only produce changes and must therefore not be used with HttpDatasetSink")
+		// }
 		pipeline.source.StartFullSync()
 	}
 	err = pipeline.sink.startFullSync(runner)
@@ -88,34 +90,34 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 				keepReading = false
 				return errors.New("got job interrupt")
 			default:
-				var err error
+				var err2 error
 				incomingEntityCount := len(entities)
 
 				if incomingEntityCount > 0 {
 					// apply transform if it exists
 					if pipeline.transform != nil {
-						transformTs := time.Now()
-						entities, err = pipeline.transform.transformEntities(runner, entities, job.title)
-						_ = runner.statsdClient.Timing("pipeline.transform.batch", time.Since(transformTs), tags, 1)
-						if err != nil {
-							return err
+						transformTS := time.Now()
+						entities, err2 = pipeline.transform.transformEntities(runner, entities, job.title)
+						_ = runner.statsdClient.Timing("pipeline.transform.batch", time.Since(transformTS), tags, 1)
+						if err2 != nil {
+							return err2
 						}
 					}
 
 					// write to sink
-					sinkTs := time.Now()
-					err = pipeline.sink.processEntities(runner, entities)
-					_ = runner.statsdClient.Timing("pipeline.sink.batch", time.Since(sinkTs), tags, 1)
-					if err != nil {
-						return err
+					sinkTS := time.Now()
+					err2 = pipeline.sink.processEntities(runner, entities)
+					_ = runner.statsdClient.Timing("pipeline.sink.batch", time.Since(sinkTS), tags, 1)
+					if err2 != nil {
+						return err2
 					}
 				}
 
 				// capture token if there is one
 				if continuationToken.GetToken() != "" {
-					syncJobState.ContinuationToken, err = continuationToken.Encode()
-					if err != nil {
-						return err
+					syncJobState.ContinuationToken, err2 = continuationToken.Encode()
+					if err2 != nil {
+						return err2
 					}
 				}
 
@@ -127,17 +129,17 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 			return nil
 		}
 
-		readTs := time.Now()
-		token, err := jobSource.DecodeToken(pipeline.source.GetConfig()["Type"], syncJobState.ContinuationToken)
-		if err != nil {
-			return err
+		readTS := time.Now()
+		token, err2 := jobSource.DecodeToken(pipeline.source.GetConfig()["Type"], syncJobState.ContinuationToken)
+		if err2 != nil {
+			return err2
 		}
 
 		err = pipeline.source.ReadEntities(token, pipeline.batchSize,
 			func(entities []*server.Entity, c jobSource.DatasetContinuation) error {
-				_ = runner.statsdClient.Timing("pipeline.source.batch", time.Since(readTs), tags, 1)
+				_ = runner.statsdClient.Timing("pipeline.source.batch", time.Since(readTS), tags, 1)
 				result := processEntities(entities, c)
-				readTs = time.Now()
+				readTS = time.Now()
 				return result
 			})
 
@@ -204,7 +206,7 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 				if incomingEntityCount > 0 {
 					// apply transform if it exists
 					if pipeline.transform != nil {
-						transformTs := time.Now()
+						transformTS := time.Now()
 
 						parallelisms := pipeline.transform.getParallelism()
 						if len(entities) < parallelisms {
@@ -263,16 +265,16 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 							entities = append(entities, res.entities...)
 						}
 
-						err = runner.statsdClient.Timing("pipeline.transform.batch", time.Since(transformTs), tags, 1)
+						err = runner.statsdClient.Timing("pipeline.transform.batch", time.Since(transformTS), tags, 1)
 						if err != nil {
 							return err
 						}
 					}
 
 					// write to sink
-					sinkTs := time.Now()
+					sinkTS := time.Now()
 					err = pipeline.sink.processEntities(runner, entities)
-					_ = runner.statsdClient.Timing("pipeline.sink.batch", time.Since(sinkTs), tags, 1)
+					_ = runner.statsdClient.Timing("pipeline.sink.batch", time.Since(sinkTS), tags, 1)
 					if err != nil {
 						return err
 					}
@@ -299,7 +301,7 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 			return nil
 		}
 
-		readTs := time.Now()
+		readTS := time.Now()
 		since, err := jobSource.DecodeToken(pipeline.source.GetConfig()["Type"], syncJobState.ContinuationToken)
 		if err != nil {
 			return err
@@ -307,9 +309,9 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 		err = pipeline.source.ReadEntities(since,
 			pipeline.batchSize,
 			func(entities []*server.Entity, c jobSource.DatasetContinuation) error {
-				_ = runner.statsdClient.Timing("pipeline.source.batch", time.Since(readTs), tags, 1)
+				_ = runner.statsdClient.Timing("pipeline.source.batch", time.Since(readTS), tags, 1)
 				result := processEntities(entities, c)
-				readTs = time.Now()
+				readTS = time.Now()
 				return result
 			})
 

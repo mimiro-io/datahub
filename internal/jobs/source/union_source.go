@@ -17,8 +17,9 @@ package source
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/mimiro-io/datahub/internal/server"
 	"strconv"
+
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 type UnionDatasetSource struct {
@@ -26,11 +27,15 @@ type UnionDatasetSource struct {
 }
 
 func (s *UnionDatasetSource) ReadEntities(token DatasetContinuation, batchSize int,
-	processEntities func(entities []*server.Entity, token DatasetContinuation) error) error {
-
+	processEntities func(entities []*server.Entity, token DatasetContinuation) error,
+) error {
 	d, ok := token.(*UnionDatasetContinuation)
 	if !ok {
-		return fmt.Errorf("continuation in UnionDatasetSource is not a *UnionDatasetContinuation, but %t, %w", token, ErrTokenType)
+		return fmt.Errorf(
+			"continuation in UnionDatasetSource is not a *UnionDatasetContinuation, but %t, %w",
+			token,
+			ErrTokenType,
+		)
 	}
 
 	d.activeIdx = 0
@@ -43,12 +48,12 @@ func (s *UnionDatasetSource) ReadEntities(token DatasetContinuation, batchSize i
 
 	if len(d.Tokens) != len(s.DatasetSources) {
 		return fmt.Errorf("UnionDatasetSource has %v datasets, but UnionDatasetContinuation "+
-			"has %v tokens.", len(s.DatasetSources), len(d.Tokens))
+			"has %v tokens", len(s.DatasetSources), len(d.Tokens))
 	}
 
 	for i, n := range d.DatasetNames {
 		if s.DatasetSources[i].DatasetName != n {
-			return fmt.Errorf("UnionDatasetSource: detected change in dataset order. Must reset token.")
+			return fmt.Errorf("UnionDatasetSource: detected change in dataset order. Must reset token")
 		}
 	}
 	var err error
@@ -64,21 +69,21 @@ func (s *UnionDatasetSource) ReadEntities(token DatasetContinuation, batchSize i
 
 		entities := make([]*server.Entity, 0)
 		if datasetSource.isFullSync {
-			cont, err := dataset.MapEntities(d.GetToken(), batchSize, func(entity *server.Entity) error {
+			cont, err2 := dataset.MapEntities(d.GetToken(), batchSize, func(entity *server.Entity) error {
 				entities = append(entities, entity)
 				return nil
 			})
-			if err != nil {
-				return err
+			if err2 != nil {
+				return err2
 			}
 			keepGoing = d.Update(cont)
 		} else {
-			cont, err := dataset.ProcessChanges(d.AsIncrToken(), batchSize, datasetSource.LatestOnly,
+			cont, err2 := dataset.ProcessChanges(d.AsIncrToken(), batchSize, datasetSource.LatestOnly,
 				func(entity *server.Entity) {
 					entities = append(entities, entity)
 				})
-			if err != nil {
-				return err
+			if err2 != nil {
+				return err2
 			}
 			keepGoing = d.Update(strconv.Itoa(int(cont)))
 		}
@@ -104,6 +109,7 @@ func (s *UnionDatasetSource) StartFullSync() {
 		ds.StartFullSync()
 	}
 }
+
 func (s *UnionDatasetSource) GetConfig() map[string]interface{} {
 	name := ""
 	for i, s := range s.DatasetSources {

@@ -19,13 +19,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"github.com/labstack/echo/v4"
-	"go.uber.org/fx"
-	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"net/url"
+
+	"github.com/labstack/echo/v4"
+	"go.uber.org/fx"
+	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/jobs"
 	"github.com/mimiro-io/datahub/internal/server"
@@ -47,7 +47,7 @@ type Hop struct {
 }
 
 type Query struct {
-	EntityId         string   `json:"entityId"`
+	EntityID         string   `json:"entityId"`
 	StartingEntities []string `json:"startingEntities"`
 	Predicate        string   `json:"predicate"`
 	Inverse          bool     `json:"inverse"`
@@ -63,7 +63,7 @@ type NamespacePrefix struct {
 }
 
 type EmptyEntity struct {
-	Id string `json:"id"`
+	ID string `json:"id"`
 }
 
 type queryHandler struct {
@@ -88,7 +88,7 @@ func NewQueryHandler(
 	}
 
 	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
+		OnStart: func(_ context.Context) error {
 			// query
 			e.GET("/query", handler.queryHandler, mw.authorizer(log, datahubRead))
 			e.POST("/query", handler.queryHandler, mw.authorizer(log, datahubRead))
@@ -120,19 +120,19 @@ type JavascriptQuery struct {
 }
 
 // Implements interface for query response writer
-type HttpQueryResponseWriter struct {
+type HTTPQueryResponseWriter struct {
 	context      echo.Context
 	writtenFirst bool
 }
 
-func NewHttpQueryResponseWriter(context echo.Context) *HttpQueryResponseWriter {
-	return &HttpQueryResponseWriter{
+func NewHTTPQueryResponseWriter(context echo.Context) *HTTPQueryResponseWriter {
+	return &HTTPQueryResponseWriter{
 		context:      context,
 		writtenFirst: false,
 	}
 }
 
-func (w *HttpQueryResponseWriter) WriteObject(object interface{}) error {
+func (w *HTTPQueryResponseWriter) WriteObject(object interface{}) error {
 	if !w.writtenFirst {
 		jsonObject, _ := json.Marshal(object)
 		_, _ = w.context.Response().Write(jsonObject)
@@ -173,7 +173,7 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 		c.Response().WriteHeader(http.StatusOK)
 		c.Response().Write([]byte("["))
 
-		writer := NewHttpQueryResponseWriter(c)
+		writer := NewHTTPQueryResponseWriter(c)
 		err = jsQuery.ExecuteQuery(writer)
 		if err != nil {
 			handler.logger.Warn("Error executing javascript query " + err.Error())
@@ -198,14 +198,14 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, server.HttpJsonParsingErr(err).Error())
 	}
 	includeContinuation := true
-	//conservative default
+	// conservative default
 	if query.Limit == 0 {
 		query.Limit = 100
 		includeContinuation = false
 	}
 
-	if query.EntityId != "" {
-		entity, err := handler.store.GetEntity(query.EntityId, query.Datasets)
+	if query.EntityID != "" {
+		entity, err := handler.store.GetEntity(query.EntityID, query.Datasets)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
@@ -218,12 +218,12 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 
 		if entity == nil {
 			entity := &EmptyEntity{}
-			entity.Id = query.EntityId
+			entity.ID = query.EntityID
 			result[1] = entity
 		} else {
 			if query.Details {
 				l, _ := ent.NewLookup(server.NewBadgerAccess(handler.store, handler.datasetManager))
-				details, _ := l.Details(query.EntityId, query.Datasets)
+				details, _ := l.Details(query.EntityID, query.Datasets)
 				entity.Properties["datahub_details"] = details
 			}
 			result[1] = entity
@@ -233,6 +233,9 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 		return c.JSON(http.StatusOK, result)
 	} else if query.Continuations != nil {
 		cont, err := decodeCont(query.Continuations)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
 		queryresult, err := handler.store.GetManyRelatedEntitiesAtTime(cont, query.Limit)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -249,7 +252,6 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 		}
 		return c.JSON(http.StatusOK, result)
 	} else {
-		fmt.Printf("query: %+v", query)
 		// do query
 		queryresult, err := handler.store.GetManyRelatedEntitiesBatch(query.StartingEntities, query.Predicate, query.Inverse, query.Datasets, query.Limit)
 		if err != nil {

@@ -16,12 +16,13 @@ package conf
 
 import (
 	"context"
-	"github.com/DataDog/datadog-go/v5/statsd"
 	"math"
 	"runtime"
 	"runtime/metrics"
 	"strings"
 	"time"
+
+	"github.com/DataDog/datadog-go/v5/statsd"
 
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -44,7 +45,7 @@ func NewMetricsClient(lc fx.Lifecycle, env *Env, logger *zap.SugaredLogger) (sta
 	}
 
 	lc.Append(fx.Hook{
-		OnStop: func(ctx context.Context) error {
+		OnStop: func(_ context.Context) error {
 			env.Logger.Infof("Flushing statsd")
 			return client.Flush()
 		},
@@ -64,7 +65,7 @@ func NewMemoryReporter(lc fx.Lifecycle, statsd statsd.ClientInterface, logger *z
 		logger: logger,
 	}
 	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
+		OnStart: func(_ context.Context) error {
 			mr.init()
 			return nil
 		},
@@ -87,11 +88,9 @@ func (mr *memoryReporter) init() {
 			mr.run(samples)
 		}
 	}()
-
 }
 
 func (mr *memoryReporter) run(samples []metrics.Sample) {
-
 	// Sample the metrics. Re-use the samples slice if you can!
 	metrics.Read(samples)
 

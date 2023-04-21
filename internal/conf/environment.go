@@ -39,7 +39,7 @@ type Env struct {
 	MaxCompactionLevels     int
 	AdminUserName           string
 	AdminPassword           string
-	NodeId                  string
+	NodeID                  string
 	SecurityStorageLocation string
 	BackupSourceLocation    string
 	RunnerConfig            *RunnerConfig
@@ -53,7 +53,7 @@ type AuthConfig struct {
 }
 
 type DatalayerJwtConfig struct {
-	ClientId     string
+	ClientID     string
 	ClientSecret string
 	Audience     string
 	GrantType    string

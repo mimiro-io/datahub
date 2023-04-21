@@ -15,9 +15,10 @@
 package conf
 
 import (
-	"github.com/mimiro-io/datahub/internal"
 	"reflect"
 	"testing"
+
+	"github.com/mimiro-io/datahub/internal"
 
 	"github.com/franela/goblin"
 	"go.uber.org/fx"

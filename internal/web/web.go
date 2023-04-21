@@ -16,10 +16,11 @@ package web
 
 import (
 	"context"
-	"github.com/DataDog/datadog-go/v5/statsd"
 	"html/template"
 	"io"
 	"net/http"
+
+	"github.com/DataDog/datadog-go/v5/statsd"
 
 	"github.com/labstack/echo/v4"
 	"github.com/mimiro-io/datahub/internal/conf"
@@ -70,7 +71,12 @@ func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Con
 	return t.templates.ExecuteTemplate(w, name, data)
 }
 
-func NewWebServer(lc fx.Lifecycle, env *conf.Env, logger *zap.SugaredLogger, statsd statsd.ClientInterface) (*WebHandler, *echo.Echo) {
+func NewWebServer(
+	lc fx.Lifecycle,
+	env *conf.Env,
+	logger *zap.SugaredLogger,
+	statsd statsd.ClientInterface,
+) (*WebHandler, *echo.Echo) {
 	e := echo.New()
 	e.HideBanner = true
 
@@ -84,7 +90,7 @@ func NewWebServer(lc fx.Lifecycle, env *conf.Env, logger *zap.SugaredLogger, sta
 	}
 
 	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
+		OnStart: func(_ context.Context) error {
 			l.Infof("Starting Http server on :%s", env.Port)
 			go func() {
 				_ = e.Start(":" + env.Port)

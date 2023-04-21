@@ -32,7 +32,7 @@ import (
 // gets transformed. This should probably be done with Source and Sink as well
 
 type JobResponse struct {
-	JobId string `json:"jobId"`
+	JobID string `json:"jobId"`
 }
 
 type jobsHandler struct {
@@ -46,7 +46,7 @@ func NewJobsHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, mw
 	}
 
 	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
+		OnStart: func(_ context.Context) error {
 			// jobs
 			e.GET("/jobs", handler.jobsList, mw.authorizer(log, datahubRead)) // list of all defined jobs
 
@@ -55,14 +55,17 @@ func NewJobsHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, mw
 			e.GET("/jobs/_/status", handler.jobsListStatus, mw.authorizer(log, datahubRead))
 			e.GET("/jobs/_/history", handler.jobsListHistory, mw.authorizer(log, datahubRead))
 
-			e.GET("/jobs/:jobid", handler.jobsGetDefinition, mw.authorizer(log, datahubRead)) // the json used to define it
-			e.DELETE("/jobs/:jobid", handler.jobsDelete, mw.authorizer(log, datahubWrite))    // remove an existing job
+			e.GET(
+				"/jobs/:jobid",
+				handler.jobsGetDefinition,
+				mw.authorizer(log, datahubRead),
+			) // the json used to define it
+			e.DELETE("/jobs/:jobid", handler.jobsDelete, mw.authorizer(log, datahubWrite)) // remove an existing job
 			e.POST("/jobs", handler.jobsAdd, mw.authorizer(log, datahubWrite))
 
 			return nil
 		},
 	})
-
 }
 
 func (handler *jobsHandler) jobsList(c echo.Context) error {
@@ -86,19 +89,18 @@ func (handler *jobsHandler) jobsAdd(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	return c.JSON(http.StatusCreated, &JobResponse{JobId: config.Id})
+	return c.JSON(http.StatusCreated, &JobResponse{JobID: config.ID})
 }
 
 func (handler *jobsHandler) jobsGetDefinition(c echo.Context) error {
-	jobId := c.Param("jobid")
+	jobID := c.Param("jobid")
 
-	res, err := handler.jobScheduler.LoadJob(jobId)
-	if err != nil || res.Id == "" {
+	res, err := handler.jobScheduler.LoadJob(jobID)
+	if err != nil || res.ID == "" {
 		return c.NoContent(http.StatusNotFound)
 	}
 
 	return c.JSON(http.StatusOK, res)
-
 }
 
 func (handler *jobsHandler) jobsListSchedules(c echo.Context) error {
@@ -117,9 +119,9 @@ func (handler *jobsHandler) jobsListHistory(c echo.Context) error {
 // it should return 200 OK when successful, but 404 if the job id
 // does not exists
 func (handler *jobsHandler) jobsDelete(c echo.Context) error {
-	jobId, _ := url.QueryUnescape(c.Param("jobid"))
+	jobID, _ := url.QueryUnescape(c.Param("jobid"))
 
-	err := handler.jobScheduler.DeleteJob(jobId)
+	err := handler.jobScheduler.DeleteJob(jobID)
 	if err != nil {
 		return c.NoContent(http.StatusNotFound)
 	}

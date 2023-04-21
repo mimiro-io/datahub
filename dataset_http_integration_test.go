@@ -46,10 +46,10 @@ func TestHttp(t *testing.T) {
 	var mockLayer *MockLayer
 
 	location := "./http_integration_test"
-	queryUrl := "http://localhost:24997/query"
-	dsUrl := "http://localhost:24997/datasets/bananas"
-	proxyDsUrl := "http://localhost:24997/datasets/cucumbers"
-	datasetsUrl := "http://localhost:24997/datasets"
+	queryURL := "http://localhost:24997/query"
+	dsURL := "http://localhost:24997/datasets/bananas"
+	proxyDsURL := "http://localhost:24997/datasets/cucumbers"
+	datasetsURL := "http://localhost:24997/datasets"
 
 	g.Describe("The dataset endpoint", func() {
 		g.Before(func() {
@@ -87,16 +87,15 @@ func TestHttp(t *testing.T) {
 		})
 
 		g.Describe("The dataset root API", func() {
-
 			g.It("Should create a regular dataset", func() {
 				// create new dataset
-				res, err := http.Post(dsUrl, "application/json", strings.NewReader(""))
+				res, err := http.Post(dsURL, "application/json", strings.NewReader(""))
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 			})
 			g.It("Should retrieve a regular dataset", func() {
-				res, err := http.Get(dsUrl)
+				res, err := http.Get(dsURL)
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -122,14 +121,14 @@ func TestHttp(t *testing.T) {
 						DownstreamTransform string `json:"downstreamTransform"`
 					}
 				*/
-				res, err := http.Post(proxyDsUrl+"?proxy=true", "application/json", strings.NewReader(
+				res, err := http.Post(proxyDsURL+"?proxy=true", "application/json", strings.NewReader(
 					`{"proxyDatasetConfig": {"remoteUrl": "http://localhost:7778/datasets/tomatoes"}}`))
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 			})
 			g.It("Should reject a proxy dataset if misconfigured", func() {
-				res, err := http.Post(proxyDsUrl+"2?proxy=true", "application/json", strings.NewReader(
+				res, err := http.Post(proxyDsURL+"2?proxy=true", "application/json", strings.NewReader(
 					`{"proxyDatasetConfig": {"remoteUrl": ""}}`))
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
@@ -138,7 +137,7 @@ func TestHttp(t *testing.T) {
 				g.Assert(string(b)).Eql("{\"message\":\"invalid proxy configuration provided\"}\n")
 			})
 			g.It("Should retrieve a proxy dataset", func() {
-				res, err := http.Get(proxyDsUrl)
+				res, err := http.Get(proxyDsURL)
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -150,7 +149,7 @@ func TestHttp(t *testing.T) {
 				g.Assert(refs["ns2:type"]).Eql("ns1:proxy-dataset")
 			})
 			g.It("Should list both regular and proxy datasets", func() {
-				res, err := http.Get(datasetsUrl)
+				res, err := http.Get(datasetsURL)
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -161,23 +160,23 @@ func TestHttp(t *testing.T) {
 			})
 		})
 		g.Describe("The /entities and /changes API endpoints for regular datasets", func() {
-
 			g.It("Should accept a single batch of changes", func() {
 				// populate dataset
 				payload := strings.NewReader(bananasFromTo(1, 10, false))
-				res, err := http.Post(dsUrl+"/entities", "application/json", payload)
+				res, err := http.Post(dsURL+"/entities", "application/json", payload)
 
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 
 				// read it back
-				res, err = http.Get(dsUrl + "/changes")
+				res, err = http.Get(dsURL + "/changes")
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 
 				bodyBytes, err := ioutil.ReadAll(res.Body)
+				g.Assert(err).IsNil()
 				var entities []*server.Entity
 				err = json.Unmarshal(bodyBytes, &entities)
 				g.Assert(err).IsNil()
@@ -187,20 +186,20 @@ func TestHttp(t *testing.T) {
 			g.It("Should accept multiple overlapping batches of changes", func() {
 				// replace 5-10 and add 11-15
 				payload := strings.NewReader(bananasFromTo(5, 15, false))
-				res, err := http.Post(dsUrl+"/entities", "application/json", payload)
+				res, err := http.Post(dsURL+"/entities", "application/json", payload)
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 
 				// replace 10-15 and add 16-20
 				payload = strings.NewReader(bananasFromTo(10, 20, false))
-				res, err = http.Post(dsUrl+"/entities", "application/json", payload)
+				res, err = http.Post(dsURL+"/entities", "application/json", payload)
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 
 				// read it back
-				res, err = http.Get(dsUrl + "/changes")
+				res, err = http.Get(dsURL + "/changes")
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -214,13 +213,13 @@ func TestHttp(t *testing.T) {
 
 			g.It("Should record deleted states", func() {
 				payload := strings.NewReader(bananasFromTo(7, 8, true))
-				res, err := http.Post(dsUrl+"/entities", "application/json", payload)
+				res, err := http.Post(dsURL+"/entities", "application/json", payload)
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 
 				// read changes back
-				res, err = http.Get(dsUrl + "/changes")
+				res, err = http.Get(dsURL + "/changes")
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -229,12 +228,13 @@ func TestHttp(t *testing.T) {
 				var entities []*server.Entity
 				err = json.Unmarshal(bodyBytes, &entities)
 				g.Assert(err).IsNil()
-				g.Assert(len(entities)).Eql(24, "expected 20 entities plus 2 deleted-changes plus @context and @continuation")
+				g.Assert(len(entities)).
+					Eql(24, "expected 20 entities plus 2 deleted-changes plus @context and @continuation")
 				g.Assert(entities[7].IsDeleted).IsFalse("original change 7 is still undeleted")
 				g.Assert(entities[22].IsDeleted).IsTrue("deleted state for 7  is a new change at end of list")
 
 				// read entities back
-				res, err = http.Get(dsUrl + "/entities")
+				res, err = http.Get(dsURL + "/entities")
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -254,7 +254,7 @@ func TestHttp(t *testing.T) {
 				// first batch with "start" header
 				payload := strings.NewReader(bananasFromTo(4, 8, false))
 				ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ := http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+				req, _ := http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
 				req.Header.Add("universal-data-api-full-sync-start", "true")
 				req.Header.Add("universal-data-api-full-sync-id", "42")
 				_, err := http.DefaultClient.Do(req)
@@ -264,7 +264,7 @@ func TestHttp(t *testing.T) {
 				// 2nd batch
 				payload = strings.NewReader(bananasFromTo(9, 12, false))
 				ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ = http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+				req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
 				req.Header.Add("universal-data-api-full-sync-id", "42")
 				_, _ = http.DefaultClient.Do(req)
 				cancel()
@@ -272,14 +272,14 @@ func TestHttp(t *testing.T) {
 				// last batch with "end" signal
 				payload = strings.NewReader(bananasFromTo(13, 16, false))
 				ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ = http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+				req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
 				req.Header.Add("universal-data-api-full-sync-id", "42")
 				req.Header.Add("universal-data-api-full-sync-end", "true")
 				_, _ = http.DefaultClient.Do(req)
 				cancel()
 
 				// read changes back
-				res, err := http.Get(dsUrl + "/changes")
+				res, err := http.Get(dsURL + "/changes")
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -293,7 +293,7 @@ func TestHttp(t *testing.T) {
 				g.Assert(entities[21].IsDeleted).IsTrue("deleted state for 7  is a new change at end of list")
 
 				// read entities back
-				res, err = http.Get(dsUrl + "/entities")
+				res, err = http.Get(dsURL + "/entities")
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -323,7 +323,7 @@ func TestHttp(t *testing.T) {
 				// first batch with "start" header
 				payload := strings.NewReader(bananasFromTo(4, 4, false))
 				ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ := http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+				req, _ := http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
 				req.Header.Add("universal-data-api-full-sync-start", "true")
 				req.Header.Add("universal-data-api-full-sync-id", "43")
 				_, _ = http.DefaultClient.Do(req)
@@ -332,17 +332,19 @@ func TestHttp(t *testing.T) {
 				// next, updated id 5 with wrong sync-id. should not be registered as "seen" and therefore be deleted after fs
 				payload = strings.NewReader(bananasFromTo(5, 5, false))
 				ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ = http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+				req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
 				req.Header.Add("universal-data-api-full-sync-id", "44")
 				res, err := http.DefaultClient.Do(req)
+				g.Assert(err).IsNil()
 				cancel()
 				g.Assert(res.StatusCode).Eql(409, "request should be rejected because fullsync is going on")
 
 				// also try to add id 5 without sync-id. should still be rejected
 				payload = strings.NewReader(bananasFromTo(5, 5, false))
 				ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ = http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+				req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
 				res, err = http.DefaultClient.Do(req)
+				g.Assert(err).IsNil()
 				cancel()
 				g.Assert(res.StatusCode).Eql(409, "request should be rejected because fullsync is going on")
 
@@ -352,12 +354,12 @@ func TestHttp(t *testing.T) {
 					wg.Add(1)
 					id := i
 					go func() {
-						payload := strings.NewReader(bananasFromTo(id, id, false))
-						ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-						req, _ := http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
-						req.Header.Add("universal-data-api-full-sync-id", "43")
-						_, _ = http.DefaultClient.Do(req)
-						cancel()
+						payloadLocal := strings.NewReader(bananasFromTo(id, id, false))
+						ctxLocal, cancelLocal := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+						reqLocal, _ := http.NewRequestWithContext(ctxLocal, "POST", dsURL+"/entities", payloadLocal)
+						reqLocal.Header.Add("universal-data-api-full-sync-id", "43")
+						_, _ = http.DefaultClient.Do(reqLocal)
+						cancelLocal()
 						wg.Done()
 					}()
 				}
@@ -367,14 +369,14 @@ func TestHttp(t *testing.T) {
 				// last batch with "end" signal
 				payload = strings.NewReader(bananasFromTo(16, 16, false))
 				ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ = http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+				req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
 				req.Header.Add("universal-data-api-full-sync-id", "43")
 				req.Header.Add("universal-data-api-full-sync-end", "true")
 				_, _ = http.DefaultClient.Do(req)
 				cancel()
 
 				// read changes back
-				res, err = http.Get(dsUrl + "/changes")
+				res, err = http.Get(dsURL + "/changes")
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -383,14 +385,15 @@ func TestHttp(t *testing.T) {
 				var entities []*server.Entity
 				err = json.Unmarshal(bodyBytes, &entities)
 				g.Assert(err).IsNil()
-				g.Assert(len(entities)).Eql(34, "expected 31 changes from before plus deletion of id5 and @context and @continuation")
+				g.Assert(len(entities)).
+					Eql(34, "expected 31 changes from before plus deletion of id5 and @context and @continuation")
 				g.Assert(entities[32].IsDeleted).IsTrue("deleted state for 5  is a new change at end of list")
 			})
 			g.It("should abandon fullsync when new fullsync is started", func() {
 				// start a fullsync
 				payload := strings.NewReader(bananasFromTo(1, 1, false))
 				ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ := http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+				req, _ := http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
 				req.Header.Add("universal-data-api-full-sync-start", "true")
 				req.Header.Add("universal-data-api-full-sync-id", "45")
 				res, err := http.DefaultClient.Do(req)
@@ -402,7 +405,7 @@ func TestHttp(t *testing.T) {
 				// start another fullsync
 				payload = strings.NewReader(bananasFromTo(1, 1, false))
 				ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ = http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+				req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
 				req.Header.Add("universal-data-api-full-sync-start", "true")
 				req.Header.Add("universal-data-api-full-sync-id", "46")
 				res, err = http.DefaultClient.Do(req)
@@ -414,7 +417,7 @@ func TestHttp(t *testing.T) {
 				// try to append to first fullsync, should be rejected
 				payload = strings.NewReader(bananasFromTo(2, 2, false))
 				ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ = http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+				req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
 				req.Header.Add("universal-data-api-full-sync-id", "45")
 				res, err = http.DefaultClient.Do(req)
 				cancel()
@@ -425,7 +428,7 @@ func TestHttp(t *testing.T) {
 				// complete second sync
 				payload = strings.NewReader(bananasFromTo(16, 16, false))
 				ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ = http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+				req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
 				req.Header.Add("universal-data-api-full-sync-id", "46")
 				req.Header.Add("universal-data-api-full-sync-end", "true")
 				res, err = http.DefaultClient.Do(req)
@@ -438,7 +441,7 @@ func TestHttp(t *testing.T) {
 				// start a fullsync
 				payload := strings.NewReader(bananasFromTo(1, 1, false))
 				ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ := http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+				req, _ := http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
 				req.Header.Add("universal-data-api-full-sync-start", "true")
 				req.Header.Add("universal-data-api-full-sync-id", "47")
 				res, err := http.DefaultClient.Do(req)
@@ -453,7 +456,7 @@ func TestHttp(t *testing.T) {
 				// send next fullsync batch. should be OK even though lease is timed out
 				payload = strings.NewReader(bananasFromTo(2, 2, false))
 				ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ = http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+				req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
 				req.Header.Add("universal-data-api-full-sync-id", "47")
 				res, err = http.DefaultClient.Do(req)
 				cancel()
@@ -464,7 +467,7 @@ func TestHttp(t *testing.T) {
 				// send next end signal. should produce error since lease should have timed out
 				payload = strings.NewReader(bananasFromTo(3, 3, false))
 				ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ = http.NewRequestWithContext(ctx, "POST", dsUrl+"/entities", payload)
+				req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
 				req.Header.Add("universal-data-api-full-sync-end", "true")
 				req.Header.Add("universal-data-api-full-sync-id", "47")
 				res, err = http.DefaultClient.Do(req)
@@ -476,13 +479,13 @@ func TestHttp(t *testing.T) {
 
 			g.It("Should pageinate over entities with continuation token", func() {
 				payload := strings.NewReader(bananasFromTo(1, 100, false))
-				res, err := http.Post(dsUrl+"/entities", "application/json", payload)
+				res, err := http.Post(dsURL+"/entities", "application/json", payload)
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 
 				// read first page of 10 entities back
-				res, err = http.Get(dsUrl + "/entities?limit=10")
+				res, err = http.Get(dsURL + "/entities?limit=10")
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -498,7 +501,7 @@ func TestHttp(t *testing.T) {
 				token := m[11]["token"].(string)
 
 				// read next page
-				res, err = http.Get(dsUrl + "/entities?limit=90&from=" + url.QueryEscape(token))
+				res, err = http.Get(dsURL + "/entities?limit=90&from=" + url.QueryEscape(token))
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -512,7 +515,7 @@ func TestHttp(t *testing.T) {
 				token = m[91]["token"].(string)
 
 				// read next page after all consumed
-				res, err = http.Get(dsUrl + "/entities?limit=10&from=" + url.QueryEscape(token))
+				res, err = http.Get(dsURL + "/entities?limit=10&from=" + url.QueryEscape(token))
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -527,13 +530,14 @@ func TestHttp(t *testing.T) {
 		})
 		g.Describe("The /changes and /entities endpoints for proxy datasets", func() {
 			g.It("Should fetch from remote for GET /changes without token", func() {
-				res, err := http.Get(proxyDsUrl + "/changes")
+				res, err := http.Get(proxyDsURL + "/changes")
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 				b, _ := io.ReadAll(res.Body)
 				var entities []*server.Entity
 				err = json.Unmarshal(b, &entities)
+				g.Assert(err).IsNil()
 				g.Assert(len(entities)).Eql(12, "context, 10 entities and continuation")
 				g.Assert(entities[1].ID).Eql("ns4:c-0", "first page id range starts with 0")
 				g.Assert(mockLayer.RecordedURI).Eql("/datasets/tomatoes/changes")
@@ -542,48 +546,55 @@ func TestHttp(t *testing.T) {
 				g.Assert(m[11]["token"]).Eql("nextplease")
 			})
 			g.It("Should fetch from remote for GET /changes with token and limit", func() {
-				res, err := http.Get(proxyDsUrl + "/changes?since=theweekend&limit=3")
+				res, err := http.Get(proxyDsURL + "/changes?since=theweekend&limit=3")
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 				b, _ := io.ReadAll(res.Body)
 				var entities []*server.Entity
 				err = json.Unmarshal(b, &entities)
+				g.Assert(err).IsNil()
 				g.Assert(len(entities)).Eql(5, "context, 3 entities and continuation")
 				g.Assert(entities[1].ID).Eql("ns4:c-100", "later page mock id range starts with 100")
 				g.Assert(mockLayer.RecordedURI).Eql("/datasets/tomatoes/changes?limit=3&since=theweekend")
 				var m []map[string]interface{}
 				_ = json.Unmarshal(b, &m)
 				g.Assert(m[4]["token"]).Eql("lastpage")
-				g.Assert(m[0]["namespaces"]).Eql(map[string]interface{}{"ns0": "http://data.mimiro.io/core/dataset/",
+				g.Assert(m[0]["namespaces"]).Eql(map[string]interface{}{
+					"ns0": "http://data.mimiro.io/core/dataset/",
 					"ns1": "http://data.mimiro.io/core/",
 					"ns2": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
 					"ns3": "http://example.com",
-					"ns4": "http://example.mimiro.io/"})
+					"ns4": "http://example.mimiro.io/",
+				})
 			})
 			g.It("Should fetch from remote for GET /entities", func() {
-				res, err := http.Get(proxyDsUrl + "/entities?from=theweekend&limit=3")
+				res, err := http.Get(proxyDsURL + "/entities?from=theweekend&limit=3")
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 				b, _ := io.ReadAll(res.Body)
 				var entities []*server.Entity
 				err = json.Unmarshal(b, &entities)
-				g.Assert(len(entities)).Eql(11, "context, 10 entities (remote ignored limit) and no continuation (none returned from remote)")
+				g.Assert(err).IsNil()
+				g.Assert(len(entities)).
+					Eql(11, "context, 10 entities (remote ignored limit) and no continuation (none returned from remote)")
 				g.Assert(entities[1].ID).Eql("ns4:e-0")
 				g.Assert(mockLayer.RecordedURI).Eql("/datasets/tomatoes/entities?from=theweekend&limit=3")
 				var m []map[string]interface{}
 				_ = json.Unmarshal(b, &m)
-				g.Assert(m[0]["namespaces"]).Eql(map[string]interface{}{"ns0": "http://data.mimiro.io/core/dataset/",
+				g.Assert(m[0]["namespaces"]).Eql(map[string]interface{}{
+					"ns0": "http://data.mimiro.io/core/dataset/",
 					"ns1": "http://data.mimiro.io/core/",
 					"ns2": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
 					"ns3": "http://example.com",
-					"ns4": "http://example.mimiro.io/"})
+					"ns4": "http://example.mimiro.io/",
+				})
 			})
 			g.It("Should push to remote for POST /entities", func() {
 				payload := strings.NewReader(bananasFromTo(1, 3, false))
 				ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ := http.NewRequestWithContext(ctx, "POST", proxyDsUrl+"/entities", payload)
+				req, _ := http.NewRequestWithContext(ctx, "POST", proxyDsURL+"/entities", payload)
 				res, err := http.DefaultClient.Do(req)
 				cancel()
 				g.Assert(err).IsNil()
@@ -598,12 +609,11 @@ func TestHttp(t *testing.T) {
 				var m []map[string]interface{}
 				_ = json.Unmarshal(mockLayer.RecordedBytes["tomatoes"], &m)
 				g.Assert(m[0]["namespaces"]).Eql(map[string]interface{}{"_": "http://example.com"})
-
 			})
 			g.It("Should forward fullsync headers for POST /entities", func() {
 				payload := strings.NewReader(bananasFromTo(1, 17, false))
 				ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ := http.NewRequestWithContext(ctx, "POST", proxyDsUrl+"/entities", payload)
+				req, _ := http.NewRequestWithContext(ctx, "POST", proxyDsURL+"/entities", payload)
 				req.Header.Add("universal-data-api-full-sync-start", "true")
 				req.Header.Add("universal-data-api-full-sync-id", "46")
 				req.Header.Add("universal-data-api-full-sync-end", "true")
@@ -617,24 +627,23 @@ func TestHttp(t *testing.T) {
 				g.Assert(mockLayer.RecordedHeaders.Get("universal-data-api-full-sync-id")).Eql("46")
 				g.Assert(mockLayer.RecordedHeaders.Get("universal-data-api-full-sync-end")).Eql("true")
 				g.Assert(len(recorded)).Eql(18, "context and 17 entities")
-
 			})
 			g.It("Should expose publicNamespaces if configured on proxy dataset", func() {
 				// delete proxy ds
-				req, _ := http.NewRequest("DELETE", proxyDsUrl, nil)
+				req, _ := http.NewRequest("DELETE", proxyDsURL, nil)
 				res, err := http.DefaultClient.Do(req)
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 
 				// make sure it's gone
-				res, err = http.Get(proxyDsUrl)
+				res, err = http.Get(proxyDsURL)
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(404)
 
 				// recreate with publicNamespaces
-				res, err = http.Post(proxyDsUrl+"?proxy=true", "application/json", strings.NewReader(
+				res, err = http.Post(proxyDsURL+"?proxy=true", "application/json", strings.NewReader(
 					`{
 							"proxyDatasetConfig": {
 								"remoteUrl": "http://localhost:7778/datasets/tomatoes",
@@ -647,13 +656,14 @@ func TestHttp(t *testing.T) {
 				g.Assert(res.StatusCode).Eql(200)
 
 				// read it back, hopefully with with publicNamespaces applied
-				res, err = http.Get(proxyDsUrl + "/changes?limit=1")
+				res, err = http.Get(proxyDsURL + "/changes?limit=1")
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 				b, _ := io.ReadAll(res.Body)
 				var entities []*server.Entity
 				err = json.Unmarshal(b, &entities)
+				g.Assert(err).IsNil()
 				g.Assert(len(entities)).Eql(3, "context, 1 entity and continuation")
 				g.Assert(entities[1].ID).Eql("ns4:c-0")
 				g.Assert(mockLayer.RecordedURI).Eql("/datasets/tomatoes/changes?limit=1")
@@ -661,7 +671,8 @@ func TestHttp(t *testing.T) {
 				_ = json.Unmarshal(b, &m)
 				g.Assert(m[0]["namespaces"]).Eql(map[string]interface{}{
 					"ns3": "http://example.com",
-					"ns4": "http://example.mimiro.io/"})
+					"ns4": "http://example.mimiro.io/",
+				})
 				g.Assert(mockLayer.RecordedHeaders.Get("Authorization")).IsZero(
 					"there is no authProvider, fallback to unauthed")
 			})
@@ -683,13 +694,14 @@ func TestHttp(t *testing.T) {
 				g.Assert(res.StatusCode).Eql(200)
 
 				// read changes and verify auth is applied
-				res, err = http.Get(proxyDsUrl + "/changes?limit=1")
+				res, err = http.Get(proxyDsURL + "/changes?limit=1")
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 				b, _ := io.ReadAll(res.Body)
 				var entities []*server.Entity
 				err = json.Unmarshal(b, &entities)
+				g.Assert(err).IsNil()
 				g.Assert(len(entities)).Eql(3, "context, 1 entity and continuation")
 				g.Assert(entities[1].ID).Eql("ns4:c-0")
 				g.Assert(mockLayer.RecordedURI).Eql("/datasets/tomatoes/changes?limit=1")
@@ -713,18 +725,17 @@ func TestHttp(t *testing.T) {
 				query := map[string]any{"query": queryEncoded}
 				queryBytes, _ := json.Marshal(query)
 
-				res, err := http.Post(queryUrl, "application/x-javascript-query", bytes.NewReader(queryBytes))
+				res, err := http.Post(queryURL, "application/x-javascript-query", bytes.NewReader(queryBytes))
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 				body, _ := io.ReadAll(res.Body)
 				g.Assert(string(body)).Eql("[{\"bananaCount\":100}]")
-
 			})
 			g.It("can find single ids", func() {
 				query := map[string]any{"entityId": "ns3:16"}
 				queryBytes, _ := json.Marshal(query)
-				res, err := http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				res, err := http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -737,19 +748,18 @@ func TestHttp(t *testing.T) {
 				g.Assert(rMap[1]["recorded"]).IsNotZero()
 			})
 			g.It("can find outgoing relations from startUri", func() {
-
 				payload := strings.NewReader(bananaRelations(
 					bananaRel{fromBanana: 1, toBananas: []int{2, 3}},
 					bananaRel{fromBanana: 2, toBananas: []int{3, 4, 5, 6, 7}},
 				))
-				res, err := http.Post(dsUrl+"/entities", "application/json", payload)
+				res, err := http.Post(dsURL+"/entities", "application/json", payload)
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 
 				query := map[string]any{"startingEntities": []string{"ns3:2"}, "predicate": "*"}
 				queryBytes, _ := json.Marshal(query)
-				res, err = http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -767,19 +777,18 @@ func TestHttp(t *testing.T) {
 				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:7")
 			})
 			g.It("can page through queried outgoing relations", func() {
-
 				payload := strings.NewReader(bananaRelations(
 					bananaRel{fromBanana: 1, toBananas: []int{2, 3}},
 					bananaRel{fromBanana: 2, toBananas: []int{3, 4, 5, 6, 7}},
 				))
-				res, err := http.Post(dsUrl+"/entities", "application/json", payload)
+				res, err := http.Post(dsURL+"/entities", "application/json", payload)
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 
 				query := map[string]any{"startingEntities": []string{"ns3:2"}, "predicate": "*", "limit": 2}
 				queryBytes, _ := json.Marshal(query)
-				res, err = http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -795,7 +804,7 @@ func TestHttp(t *testing.T) {
 				cont := rArr[2]
 				query = map[string]any{"continuations": cont, "limit": 2}
 				queryBytes, _ = json.Marshal(query)
-				res, err = http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -812,7 +821,7 @@ func TestHttp(t *testing.T) {
 				cont = rArr[2]
 				query = map[string]any{"continuations": cont, "limit": 2}
 				queryBytes, _ = json.Marshal(query)
-				res, err = http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -828,20 +837,19 @@ func TestHttp(t *testing.T) {
 				g.Assert(len(cont.([]any))).Eql(0)
 			})
 			g.It("can find inverse relations from startUri", func() {
-
 				payload := strings.NewReader(bananaRelations(
 					bananaRel{fromBanana: 1, toBananas: []int{2, 3}},
 					bananaRel{fromBanana: 2, toBananas: []int{3, 4}},
 					bananaRel{fromBanana: 4, toBananas: []int{3, 2, 1}},
 				))
-				res, err := http.Post(dsUrl+"/entities", "application/json", payload)
+				res, err := http.Post(dsURL+"/entities", "application/json", payload)
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 
 				query := map[string]any{"startingEntities": []string{"ns3:3"}, "predicate": "*", "inverse": true}
 				queryBytes, _ := json.Marshal(query)
-				res, err = http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -867,14 +875,19 @@ func TestHttp(t *testing.T) {
 					bananaRel{fromBanana: 6, toBananas: []int{3, 2, 1}},
 					bananaRel{fromBanana: 7, toBananas: []int{3, 2, 1}},
 				))
-				res, err := http.Post(dsUrl+"/entities", "application/json", payload)
+				res, err := http.Post(dsURL+"/entities", "application/json", payload)
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
 
-				query := map[string]any{"startingEntities": []string{"ns3:3"}, "predicate": "*", "inverse": true, "limit": 2}
+				query := map[string]any{
+					"startingEntities": []string{"ns3:3"},
+					"predicate":        "*",
+					"inverse":          true,
+					"limit":            2,
+				}
 				queryBytes, _ := json.Marshal(query)
-				res, err = http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -892,7 +905,7 @@ func TestHttp(t *testing.T) {
 				savedCont := cont
 				query = map[string]any{"continuations": cont, "limit": 2}
 				queryBytes, _ = json.Marshal(query)
-				res, err = http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -909,7 +922,7 @@ func TestHttp(t *testing.T) {
 				cont = rArr[2]
 				query = map[string]any{"continuations": cont, "limit": 2}
 				queryBytes, _ = json.Marshal(query)
-				res, err = http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -926,7 +939,7 @@ func TestHttp(t *testing.T) {
 				// go through last pages with different batch sizes
 				query = map[string]any{"continuations": savedCont, "limit": 3}
 				queryBytes, _ = json.Marshal(query)
-				res, err = http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -944,7 +957,7 @@ func TestHttp(t *testing.T) {
 				cont = rArr[2]
 				query = map[string]any{"continuations": cont, "limit": 2}
 				queryBytes, _ = json.Marshal(query)
-				res, err = http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
 				g.Assert(err).IsNil()
 				g.Assert(res).IsNotZero()
 				g.Assert(res.StatusCode).Eql(200)
@@ -978,7 +991,6 @@ func bananaRelations(rels ...bananaRel) string {
 	}
 
 	return prefix + strings.Join(bananas, ",") + "]"
-
 }
 
 func bananasFromTo(from, to int, deleted bool) string {

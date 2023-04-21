@@ -88,7 +88,7 @@ func TestScheduler(t *testing.T) {
 			err = scheduler.AddJob(sj)
 			g.Assert(err).IsNil("Could add job to scheduler")
 
-			_, ok := runner.scheduledJobs[sj.Id]
+			_, ok := runner.scheduledJobs[sj.ID]
 			g.Assert(ok).IsFalse("Does not have job id, because it is paused")
 
 			//register callback to get notified when job is done
@@ -100,14 +100,14 @@ func TestScheduler(t *testing.T) {
 				}
 			}
 
-			id, err := scheduler.RunJob(sj.Id, JobTypeIncremental)
+			id, err := scheduler.RunJob(sj.ID, JobTypeIncremental)
 			g.Assert(err).IsNil("RunJob returns no error")
-			g.Assert(id).Eql(sj.Id, "Correct job id is returned from RunJob")
+			g.Assert(id).Eql(sj.ID, "Correct job id is returned from RunJob")
 
 			wg.Wait()
 			history := scheduler.GetJobHistory()
 			g.Assert(len(history)).IsNotZero("We found something in the job history")
-			g.Assert(history[0].Id).Eql(sj.Id, "History contains only our job in first place")
+			g.Assert(history[0].ID).Eql(sj.ID, "History contains only our job in first place")
 		})
 
 		g.It("Should reset a job when asked to", func() {
@@ -164,18 +164,18 @@ func TestScheduler(t *testing.T) {
 				}
 			}
 
-			_, err = scheduler.RunJob(sj.Id, JobTypeIncremental)
+			_, err = scheduler.RunJob(sj.ID, JobTypeIncremental)
 			g.Assert(err).IsNil()
 
 			startWg.Wait()
 
-			g.Assert(scheduler.GetRunningJob(sj.Id)).IsNotNil("Our job is running now")
+			g.Assert(scheduler.GetRunningJob(sj.ID)).IsNotNil("Our job is running now")
 
-			scheduler.KillJob(sj.Id)
+			scheduler.KillJob(sj.ID)
 
 			//wait until our job is not running anymore
 			doneWg.Wait()
-			g.Assert(scheduler.GetRunningJob(sj.Id)).IsNil("Our job is killed now")
+			g.Assert(scheduler.GetRunningJob(sj.ID)).IsNil("Our job is killed now")
 		})
 
 		g.It("Should pause a job when asked to", func() {
@@ -195,13 +195,13 @@ func TestScheduler(t *testing.T) {
 			err = scheduler.AddJob(sj)
 			g.Assert(err).IsNil("Could add job to scheduler")
 
-			_, ok := runner.scheduledJobs[sj.Id]
+			_, ok := runner.scheduledJobs[sj.ID]
 			g.Assert(ok).IsTrue("Our job is registered as schedule")
 
-			err = scheduler.PauseJob(sj.Id)
+			err = scheduler.PauseJob(sj.ID)
 			g.Assert(err).IsNil("we could call PauseJob without error")
 
-			_, ok = runner.scheduledJobs[sj.Id]
+			_, ok = runner.scheduledJobs[sj.ID]
 			g.Assert(ok).IsFalse("Our job is no longer registered as schedule")
 		})
 
@@ -223,13 +223,13 @@ func TestScheduler(t *testing.T) {
 			err = scheduler.AddJob(sj)
 			g.Assert(err).IsNil("Could add job to scheduler")
 
-			_, ok := runner.scheduledJobs[sj.Id]
+			_, ok := runner.scheduledJobs[sj.ID]
 			g.Assert(ok).IsFalse("Our job is not registered as schedule (paused in json)")
 
-			err = scheduler.UnpauseJob(sj.Id)
+			err = scheduler.UnpauseJob(sj.ID)
 			g.Assert(err).IsNil("we could call UnpauseJob without error")
 
-			_, ok = runner.scheduledJobs[sj.Id]
+			_, ok = runner.scheduledJobs[sj.ID]
 			g.Assert(ok).IsTrue("Our job is registered as schedule now")
 		})
 		g.It("Should immediately run a job when asked to", func() {
@@ -251,7 +251,7 @@ func TestScheduler(t *testing.T) {
 			err = scheduler.AddJob(sj)
 			g.Assert(err).IsNil("Could add job to scheduler")
 
-			_, ok := runner.scheduledJobs[sj.Id]
+			_, ok := runner.scheduledJobs[sj.ID]
 			g.Assert(ok).IsFalse("Our job is not registered as schedule (paused in json)")
 
 			_, _ = dsm.CreateDataset("People", nil)
@@ -265,9 +265,9 @@ func TestScheduler(t *testing.T) {
 				}
 			}
 
-			id, err := scheduler.RunJob(sj.Id, JobTypeIncremental)
+			id, err := scheduler.RunJob(sj.ID, JobTypeIncremental)
 			g.Assert(err).IsNil("We could invoke RunJob without error")
-			g.Assert(id).Eql(sj.Id, "RunJob returned the correct job id")
+			g.Assert(id).Eql(sj.ID, "RunJob returned the correct job id")
 
 			wg.Wait()
 
@@ -295,21 +295,21 @@ func TestScheduler(t *testing.T) {
 			err = scheduler.AddJob(sj)
 			g.Assert(err).IsNil("Could add job to scheduler")
 
-			job, err := scheduler.LoadJob(sj.Id)
+			job, err := scheduler.LoadJob(sj.ID)
 			g.Assert(err).IsNil()
 			g.Assert(job).IsNotNil()
-			g.Assert(job.Id).Eql("sync-samplesource-to-datasetsink", "We could read back the job")
-			_, ok := runner.scheduledJobs[job.Id]
+			g.Assert(job.ID).Eql("sync-samplesource-to-datasetsink", "We could read back the job")
+			_, ok := runner.scheduledJobs[job.ID]
 			g.Assert(ok).IsTrue("our job is registered as schedule")
 
-			err = scheduler.DeleteJob(job.Id)
+			err = scheduler.DeleteJob(job.ID)
 			g.Assert(err).IsNil("Could invoke DeleteJob without error")
 
-			job, err = scheduler.LoadJob(sj.Id)
+			job, err = scheduler.LoadJob(sj.ID)
 			g.Assert(err).IsNil()
 			g.Assert(job).IsNotNil() // not ideal detail - we get an empty object back if not found
 			g.Assert(*job).IsZero("We get an empty configuration back, confirming deletion")
-			_, ok = runner.scheduledJobs[job.Id]
+			_, ok = runner.scheduledJobs[job.ID]
 			g.Assert(ok).IsFalse("our job is no longer registered as schedule")
 		})
 
@@ -330,7 +330,7 @@ func TestScheduler(t *testing.T) {
 			} }`)))
 			g.Assert(err).IsNil("Error free parsing of jobConfiguration json")
 			g.Assert(sj).IsNotNil("Could parse jobConfiguration json")
-			g.Assert(sj.Id).Eql("sync-customer-from-adventure-works-to-datahub",
+			g.Assert(sj.ID).Eql("sync-customer-from-adventure-works-to-datahub",
 				"The produced configuration object is not empty")
 			g.Assert(len(sj.Triggers)).Eql(2)
 		})
@@ -351,7 +351,7 @@ func TestScheduler(t *testing.T) {
 			g.Assert(err).IsNil("Error free parsing of jobConfiguration json")
 			err = scheduler.AddJob(sj)
 			g.Assert(err).IsNil("Could add job to scheduler")
-			g.Assert(runner.scheduledJobs[sj.Id]).Eql([]cron.EntryID{cron.EntryID(1)}, "Our job has received internal id 1")
+			g.Assert(runner.scheduledJobs[sj.ID]).Eql([]cron.EntryID{cron.EntryID(1)}, "Our job has received internal id 1")
 
 			// close
 			runner.Stop()
@@ -360,7 +360,7 @@ func TestScheduler(t *testing.T) {
 
 			// reopen
 			scheduler, store, runner, dsm, statsdClient = setupScheduler(storeLocation, t)
-			g.Assert(runner.scheduledJobs[sj.Id]).Eql([]cron.EntryID{cron.EntryID(1)}, "Our job has received internal id 1")
+			g.Assert(runner.scheduledJobs[sj.ID]).Eql([]cron.EntryID{cron.EntryID(1)}, "Our job has received internal id 1")
 		})
 
 		g.It("Should marshal entities back and forth without data loss", func() {
@@ -383,7 +383,7 @@ func TestScheduler(t *testing.T) {
 		g.Describe("Should handle concurrent run requests", func() {
 			g.It("Should ignore RunJob (return an error message), if job is running", func() {
 				config := &JobConfiguration{
-					Id:     "j1",
+					ID:     "j1",
 					Title:  "j1",
 					Sink:   map[string]interface{}{"Type": "DevNullSink"},
 					Source: map[string]interface{}{"Type": "SlowSource", "Sleep": "300ms"},
@@ -429,7 +429,7 @@ func TestScheduler(t *testing.T) {
 
 			g.It("Should skip a scheduled run, while a RunJob is active", func() {
 				config := &JobConfiguration{
-					Id:     "j1",
+					ID:     "j1",
 					Title:  "j1",
 					Sink:   map[string]interface{}{"Type": "DevNullSink"},
 					Source: map[string]interface{}{"Type": "SlowSource", "Sleep": "100ms"},
@@ -482,7 +482,7 @@ func TestScheduler(t *testing.T) {
 			})
 			g.It("Should update the syncState and history of an incremental job after RunJob", func() {
 				config := &JobConfiguration{
-					Id:     "j1",
+					ID:     "j1",
 					Title:  "j1",
 					Sink:   map[string]interface{}{"Type": "DevNullSink"},
 					Source: map[string]interface{}{"Type": "SampleSource"},
@@ -518,7 +518,7 @@ func TestScheduler(t *testing.T) {
 			})
 			g.It("Should let a fullsync  RunJob fail, while a scheduled run is active (user can try again soon)", func() {
 				config := &JobConfiguration{
-					Id:     "j1",
+					ID:     "j1",
 					Title:  "j1",
 					Sink:   map[string]interface{}{"Type": "DevNullSink"},
 					Source: map[string]interface{}{"Type": "SlowSource", "Sleep": "300ms"},
@@ -565,7 +565,7 @@ func TestScheduler(t *testing.T) {
 			g.It("Should start a scheduled fullsync after a RunJob if the schedule triggers during RunJob", func() {
 				_ = os.Setenv("JOB_FULLSYNC_RETRY_INTERVAL", "100ms")
 				config := &JobConfiguration{
-					Id:     "j1",
+					ID:     "j1",
 					Title:  "j1",
 					Sink:   map[string]interface{}{"Type": "DevNullSink"},
 					Source: map[string]interface{}{"Type": "SlowSource", "Sleep": "200ms"},
@@ -665,7 +665,7 @@ func TestScheduler(t *testing.T) {
 				//also set it larger than runtime of complete testsuite to avoid that it kicks in while other tests run
 				_ = os.Setenv("JOB_FULLSYNC_RETRY_INTERVAL", "5m")
 				config := &JobConfiguration{
-					Id:     "j1",
+					ID:     "j1",
 					Title:  "j1",
 					Sink:   map[string]interface{}{"Type": "DevNullSink"},
 					Source: map[string]interface{}{"Type": "SlowSource", "Sleep": "200ms"},
@@ -704,18 +704,18 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if title is missing", func() {
-				err := scheduler.AddJob(&JobConfiguration{Id: "x"})
+				err := scheduler.AddJob(&JobConfiguration{ID: "x"})
 				g.Assert(err).Eql(errors.New("job configuration needs a title"))
 			})
 
 			g.It("Should fail if source is missing", func() {
-				err := scheduler.AddJob(&JobConfiguration{Id: "x", Title: "x"})
+				err := scheduler.AddJob(&JobConfiguration{ID: "x", Title: "x"})
 				g.Assert(err).Eql(errors.New("you must configure a source"))
 			})
 
 			g.It("Should fail if sink is missing", func() {
 				err := scheduler.AddJob(&JobConfiguration{
-					Id:     "x",
+					ID:     "x",
 					Title:  "x",
 					Source: validSource,
 				})
@@ -724,7 +724,7 @@ func TestScheduler(t *testing.T) {
 
 			g.It("Should fail if TriggerType is missing", func() {
 				err := scheduler.AddJob(&JobConfiguration{
-					Id:       "x",
+					ID:       "x",
 					Title:    "x",
 					Triggers: []JobTrigger{{}},
 					Source:   validSource,
@@ -734,7 +734,7 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if JobType is missing", func() {
-				err := scheduler.AddJob(&JobConfiguration{Id: "x", Title: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{ID: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeCron},
 					},
@@ -743,7 +743,7 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if trigger type is unknown", func() {
-				err := scheduler.AddJob(&JobConfiguration{Id: "x", Title: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{ID: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: "foo"},
 					},
@@ -751,7 +751,7 @@ func TestScheduler(t *testing.T) {
 				g.Assert(err).Eql(errors.New("need to set 'triggerType'. must be one of: cron, onchange"))
 			})
 			g.It("Should fail if sync type is unknown", func() {
-				err := scheduler.AddJob(&JobConfiguration{Id: "x", Title: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{ID: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeCron, JobType: "foo"},
 					},
@@ -760,7 +760,7 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if schedule is missing", func() {
-				err := scheduler.AddJob(&JobConfiguration{Id: "x", Title: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{ID: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeCron, JobType: JobTypeIncremental},
 					},
@@ -770,7 +770,7 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if source is unknown type", func() {
-				err := scheduler.AddJob(&JobConfiguration{Id: "x", Title: "x",
+				err := scheduler.AddJob(&JobConfiguration{ID: "x", Title: "x",
 					Source: map[string]interface{}{"Type": "foo"},
 					Sink:   validSink,
 					Triggers: []JobTrigger{
@@ -781,7 +781,7 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if sink is unknown type", func() {
-				err := scheduler.AddJob(&JobConfiguration{Id: "x", Title: "x", Source: validSource,
+				err := scheduler.AddJob(&JobConfiguration{ID: "x", Title: "x", Source: validSource,
 					Sink: map[string]interface{}{"Type": "foo"},
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeCron, JobType: JobTypeIncremental, Schedule: "@midnight"},
@@ -791,7 +791,7 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if transform is unknown type", func() {
-				err := scheduler.AddJob(&JobConfiguration{Id: "x", Title: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{ID: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeOnChange, JobType: JobTypeIncremental, MonitoredDataset: "foo"},
 					},
@@ -801,7 +801,7 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if job type is 'event', but schedule is set", func() {
-				err := scheduler.AddJob(&JobConfiguration{Id: "x", Title: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{ID: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeOnChange, JobType: JobTypeIncremental, Schedule: "@midnight"},
 					},
@@ -810,7 +810,7 @@ func TestScheduler(t *testing.T) {
 			})
 
 			g.It("Should fail if schedule is not parsable", func() {
-				err := scheduler.AddJob(&JobConfiguration{Id: "x", Title: "x", Source: validSource, Sink: validSink,
+				err := scheduler.AddJob(&JobConfiguration{ID: "x", Title: "x", Source: validSource, Sink: validSink,
 					Triggers: []JobTrigger{
 						{TriggerType: TriggerTypeCron, JobType: JobTypeIncremental, Schedule: "midnight"},
 					},

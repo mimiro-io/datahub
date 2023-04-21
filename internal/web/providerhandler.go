@@ -16,13 +16,14 @@ package web
 
 import (
 	"context"
+	"net/http"
+	"net/url"
+
 	"github.com/labstack/echo/v4"
 	"github.com/mimiro-io/datahub/internal/security"
 	"github.com/mimiro-io/datahub/internal/server"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
-	"net/http"
-	"net/url"
 )
 
 type providerHandler struct {
@@ -30,14 +31,20 @@ type providerHandler struct {
 	tokenProviders *security.TokenProviders
 }
 
-func NewProviderHandler(lc fx.Lifecycle, e *echo.Echo, log *zap.SugaredLogger, mw *Middleware, tokenProviders *security.TokenProviders) {
+func NewProviderHandler(
+	lc fx.Lifecycle,
+	e *echo.Echo,
+	log *zap.SugaredLogger,
+	mw *Middleware,
+	tokenProviders *security.TokenProviders,
+) {
 	handler := &providerHandler{
 		log:            log.Named("web"),
 		tokenProviders: tokenProviders,
 	}
 
 	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
+		OnStart: func(_ context.Context) error {
 			e.POST("/provider/logins", handler.loginCreate, mw.authorizer(log, datahubWrite))
 			e.GET("/provider/logins", handler.loginList, mw.authorizer(log, datahubRead))
 			e.POST("/provider/login/:providerName", handler.loginUpdate, mw.authorizer(log, datahubWrite))

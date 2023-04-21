@@ -240,7 +240,7 @@ func (namespaceManager *NamespaceManager) GetDatasetNamespaceInfo() (DsNsInfo, e
 	}, nil
 }
 
-func getUrlParts(url string) (string, string, error) {
+func getURLParts(url string) (string, string, error) {
 	index := strings.LastIndex(url, "#")
 	if index > -1 {
 		return url[:index+1], url[index+1:], nil
@@ -258,9 +258,9 @@ func (s *Store) ExpandCurie(curie string) (string, error) {
 	return s.NamespaceManager.ExpandCurie(curie)
 }
 
-func (s *Store) GetNamespacedIdentifierFromUri(val string) (string, error) {
+func (s *Store) GetNamespacedIdentifierFromURI(val string) (string, error) {
 	if strings.HasPrefix(val, "http://") || strings.HasPrefix(val, "https://") {
-		expansion, lastPathPart, err := getUrlParts(val)
+		expansion, lastPathPart, err := getURLParts(val)
 		if err != nil {
 			return "", err
 		}
@@ -280,7 +280,7 @@ func (s *Store) GetNamespacedIdentifier(val string, localNamespaces map[string]s
 	}
 
 	if strings.HasPrefix(val, "http://") {
-		expansion, lastPathPart, err := getUrlParts(val)
+		expansion, lastPathPart, err := getURLParts(val)
 		if err != nil {
 			return "", err
 		}
@@ -294,7 +294,7 @@ func (s *Store) GetNamespacedIdentifier(val string, localNamespaces map[string]s
 	}
 
 	if strings.HasPrefix(val, "https://") {
-		expansion, lastPathPart, err := getUrlParts(val)
+		expansion, lastPathPart, err := getURLParts(val)
 		if err != nil {
 			return "", err
 		}
@@ -377,9 +377,9 @@ func (s *Store) Open() error {
 
 	// if new storage, create unique storage id file. BackupManager can use this id to ensure it does not overwrite
 	// a backup belonging to a different storage
-	storageIdFile := filepath.Join(s.storeLocation, "DATAHUB_BACKUPID")
-	if _, err := os.Stat(storageIdFile); errors.Is(err, os.ErrNotExist) {
-		err = os.WriteFile(storageIdFile, []byte(fmt.Sprintf("%v", time.Now().UnixNano())), 0o644)
+	storageIDFile := filepath.Join(s.storeLocation, "DATAHUB_BACKUPID")
+	if _, err = os.Stat(storageIDFile); errors.Is(err, os.ErrNotExist) {
+		err = os.WriteFile(storageIDFile, []byte(fmt.Sprintf("%v", time.Now().UnixNano())), 0o644)
 		if err != nil {
 			s.logger.Error(err)
 		}
@@ -546,7 +546,7 @@ func (s *Store) GetEntity(uri string, datasets []string) (*Entity, error) {
 	if strings.HasPrefix(uri, "ns") {
 		curie = uri
 	} else {
-		curie, err = s.GetNamespacedIdentifierFromUri(uri)
+		curie, err = s.GetNamespacedIdentifierFromURI(uri)
 		if err != nil {
 			return nil, err
 		}
@@ -554,7 +554,7 @@ func (s *Store) GetEntity(uri string, datasets []string) (*Entity, error) {
 
 	rtxn := s.database.NewTransaction(false)
 	defer rtxn.Discard()
-	internalId, exists, err := s.getIDForURI(rtxn, curie)
+	internalID, exists, err := s.getIDForURI(rtxn, curie)
 	if err != nil {
 		return nil, err
 	}
@@ -562,7 +562,7 @@ func (s *Store) GetEntity(uri string, datasets []string) (*Entity, error) {
 		return nil, nil // todo: maybe an empty entity
 	}
 	scope := s.DatasetsToInternalIDs(datasets)
-	entity, err := s.GetEntityWithInternalId(internalId, scope)
+	entity, err := s.GetEntityWithInternalID(internalID, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -570,7 +570,7 @@ func (s *Store) GetEntity(uri string, datasets []string) (*Entity, error) {
 }
 
 func (s *Store) GetEntityAtPointInTimeWithInternalID(
-	internalId uint64,
+	internalID uint64,
 	at int64,
 	targetDatasetIds []uint32,
 ) (*Entity, error) {
@@ -588,7 +588,7 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 
 	entityLocatorPrefixBuffer := make([]byte, 10)
 	binary.BigEndian.PutUint16(entityLocatorPrefixBuffer, ENTITY_ID_TO_JSON_INDEX_ID)
-	binary.BigEndian.PutUint64(entityLocatorPrefixBuffer[2:], internalId)
+	binary.BigEndian.PutUint64(entityLocatorPrefixBuffer[2:], internalID)
 
 	opts1 := badger.DefaultIteratorOptions
 	// opts1.PrefetchSize = 1
@@ -600,8 +600,8 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 	partials := make([]*Entity, 0) // there may be more one representation that is valid
 
 	var prevValueBytes []byte
-	var previousDatasetId uint32 = 0
-	var currentDatasetId uint32 = 0
+	var previousDatasetID uint32 = 0
+	var currentDatasetID uint32 = 0
 	for entityLocatorIterator.Seek(entityLocatorPrefixBuffer); entityLocatorIterator.ValidForPrefix(entityLocatorPrefixBuffer); entityLocatorIterator.Next() {
 		item := entityLocatorIterator.Item()
 		key := item.Key()
@@ -610,16 +610,16 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 		if at < recordedTime {
 			continue
 		}
-		currentDatasetId = binary.BigEndian.Uint32(key[10:])
+		currentDatasetID = binary.BigEndian.Uint32(key[10:])
 
 		// check if dataset has been deleted, or must be excluded
-		datasetDeleted := s.deletedDatasets[currentDatasetId]
+		datasetDeleted := s.deletedDatasets[currentDatasetID]
 		datasetIncluded := len(
 			targetDatasetIds,
 		) == 0 // no specified datasets means no restriction - all datasets are allowed
 		if !datasetIncluded {
 			for _, id := range targetDatasetIds {
-				if id == currentDatasetId {
+				if id == currentDatasetID {
 					datasetIncluded = true
 					break
 				}
@@ -629,8 +629,8 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 			continue
 		}
 
-		if previousDatasetId != 0 {
-			if currentDatasetId != previousDatasetId {
+		if previousDatasetID != 0 {
+			if currentDatasetID != previousDatasetID {
 				e := &Entity{}
 				e.Properties = make(map[string]interface{})
 				e.References = make(map[string]interface{})
@@ -642,13 +642,13 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 			}
 		}
 
-		previousDatasetId = currentDatasetId
+		previousDatasetID = currentDatasetID
 
 		// fixme: pre alloc big ish buffer once and use value size
 		prevValueBytes, _ = item.ValueCopy(nil)
 	}
 
-	if previousDatasetId != 0 {
+	if previousDatasetID != 0 {
 		e := &Entity{}
 		err := json.Unmarshal(prevValueBytes, e)
 		if err != nil {
@@ -671,8 +671,8 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 		mergedEntity.Properties = make(map[string]interface{})
 		mergedEntity.References = make(map[string]interface{})
 
-		mergedEntity.InternalID = internalId
-		uri, err := s.getURIForID(internalId)
+		mergedEntity.InternalID = internalID
+		uri, err := s.getURIForID(internalID)
 		if err != nil {
 			return nil, err
 		}
@@ -682,13 +682,13 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 	return mergedEntity, nil
 }
 
-func (s *Store) GetEntityWithInternalId(internalId uint64, targetDatasetIds []uint32) (*Entity, error) {
-	return s.GetEntityAtPointInTimeWithInternalID(internalId, time.Now().UnixNano(), targetDatasetIds)
+func (s *Store) GetEntityWithInternalID(internalID uint64, targetDatasetIds []uint32) (*Entity, error) {
+	return s.GetEntityAtPointInTimeWithInternalID(internalID, time.Now().UnixNano(), targetDatasetIds)
 }
 
 type RelatedEntityResult struct {
-	StartUri      string
-	PredicateUri  string
+	StartURI      string
+	PredicateURI  string
 	RelatedEntity *Entity
 }
 type RelatedEntitiesResult struct {
@@ -735,8 +735,8 @@ func ToLegacyQueryResult(res RelatedEntitiesQueryResult) [][]any {
 		tmpRes := make([][]any, len(uriRes.Relations))
 		for k, r := range uriRes.Relations {
 			item := make([]any, 3)
-			item[0] = r.StartUri
-			item[1] = r.PredicateUri
+			item[0] = r.StartURI
+			item[1] = r.PredicateURI
 			item[2] = r.RelatedEntity
 			tmpRes[k] = item
 		}
@@ -760,7 +760,13 @@ func (s *Store) GetManyRelatedEntitiesBatch(
 	return s.GetManyRelatedEntitiesAtTime(from, limit)
 }
 
-func (s *Store) ToRelatedFrom(startPoints []string, predicate string, inverse bool, datasets []string, queryTime int64) ([]RelatedFrom, error) {
+func (s *Store) ToRelatedFrom(
+	startPoints []string,
+	predicate string,
+	inverse bool,
+	datasets []string,
+	queryTime int64,
+) ([]RelatedFrom, error) {
 	targetDatasetIds := s.DatasetsToInternalIDs(datasets)
 	from := make([]RelatedFrom, len(startPoints))
 	var resourceCurie string
@@ -776,7 +782,7 @@ func (s *Store) ToRelatedFrom(startPoints []string, predicate string, inverse bo
 		if strings.HasPrefix(uri, "ns") {
 			resourceCurie = uri
 		} else {
-			resourceCurie, err = s.GetNamespacedIdentifierFromUri(uri)
+			resourceCurie, err = s.GetNamespacedIdentifierFromURI(uri)
 			if err != nil {
 				return nil, err
 			}
@@ -819,7 +825,7 @@ func (s *Store) GetPredicateID(predicate string, txn *badger.Txn) (uint64, error
 		if strings.HasPrefix(predicate, "ns") {
 			predCurie = predicate
 		} else {
-			predCurie, err = s.GetNamespacedIdentifierFromUri(predicate)
+			predCurie, err = s.GetNamespacedIdentifierFromURI(predicate)
 			if err != nil {
 				return 0, err
 			}
@@ -863,7 +869,7 @@ func (s *Store) getRelatedEntitiesAtTime(from RelatedFrom, limit int) (RelatedEn
 		return RelatedEntitiesResult{}, err
 	}
 	result := make([]RelatedEntityResult, len(relations))
-	startUri, err := s.getURIForID(binary.BigEndian.Uint64(from.RelationIndexFromKey[2:10]))
+	startURI, err := s.getURIForID(binary.BigEndian.Uint64(from.RelationIndexFromKey[2:10]))
 	if err != nil {
 		return RelatedEntitiesResult{}, err
 	}
@@ -873,14 +879,14 @@ func (s *Store) getRelatedEntitiesAtTime(from RelatedFrom, limit int) (RelatedEn
 			return RelatedEntitiesResult{}, err
 		}
 
-		relatedEntity, err := s.GetEntityWithInternalId(r.EntityID, from.Datasets)
+		relatedEntity, err := s.GetEntityWithInternalID(r.EntityID, from.Datasets)
 		if err != nil {
 			return RelatedEntitiesResult{}, err
 		}
 
 		r := RelatedEntityResult{
-			StartUri:      startUri,
-			PredicateUri:  predicateURI,
+			StartURI:      startURI,
+			PredicateURI:  predicateURI,
 			RelatedEntity: relatedEntity,
 		}
 
@@ -927,9 +933,9 @@ func (s *Store) GetRelatedAtTime(from RelatedFrom, limit int) ([]qresult, Relate
 
 			searchBuffer := from.RelationIndexFromKey[:10] // copy by value
 			startBuffer := from.RelationIndexFromKey
-			//isFirstPage := len(from.RelationIndexFromKey) == 10
+			// isFirstPage := len(from.RelationIndexFromKey) == 10
 
-			//skipToPageStart := !isFirstPage
+			// skipToPageStart := !isFirstPage
 
 			opts1 := badger.DefaultIteratorOptions
 			opts1.PrefetchValues = false
@@ -1014,7 +1020,7 @@ func (s *Store) GetRelatedAtTime(from RelatedFrom, limit int) ([]qresult, Relate
 				results = append(results, prevResult)
 				added = true
 			}
-			//mark this as the last query result page
+			// mark this as the last query result page
 			if !outgoingIterator.ValidForPrefix(searchBuffer) && (len(results) == 0 || added) {
 				cont.RelationIndexFromKey = nil
 			}

@@ -46,13 +46,17 @@ type Scheduler struct {
 	DatasetManager *server.DsManager
 }
 
-const TriggerTypeCron = "cron"
-const TriggerTypeOnChange = "onchange"
-const JobTypeFull = "fullsync"
-const JobTypeIncremental = "incremental"
+const (
+	TriggerTypeCron     = "cron"
+	TriggerTypeOnChange = "onchange"
+	JobTypeFull         = "fullsync"
+	JobTypeIncremental  = "incremental"
+)
 
-var TriggerTypes = map[string]bool{TriggerTypeOnChange: true, TriggerTypeCron: true}
-var JobTypes = map[string]bool{JobTypeFull: true, JobTypeIncremental: true}
+var (
+	TriggerTypes = map[string]bool{TriggerTypeOnChange: true, TriggerTypeCron: true}
+	JobTypes     = map[string]bool{JobTypeFull: true, JobTypeIncremental: true}
+)
 
 type JobTrigger struct {
 	TriggerType      string `json:"triggerType"`
@@ -64,7 +68,7 @@ type JobTrigger struct {
 // JobConfiguration is the external interfacing object to configure a job. It is also the one that gets persisted
 // in the store.
 type JobConfiguration struct {
-	Id          string                 `json:"id"`
+	ID          string                 `json:"id"`
 	Title       string                 `json:"title"`
 	Description string                 `json:"description"`
 	Tags        []string               `json:"tags"`
@@ -81,8 +85,8 @@ type ScheduleEntries struct {
 }
 
 type ScheduleEntry struct {
-	Id       int       `json:"id"`
-	JobId    string    `json:"jobId"`
+	ID       int       `json:"id"`
+	JobID    string    `json:"jobId"`
 	JobTitle string    `json:"jobTitle"`
 	Next     time.Time `json:"next"`
 	Prev     time.Time `json:"prev"`
@@ -90,7 +94,13 @@ type ScheduleEntry struct {
 
 // NewScheduler returns a new Scheduler. When started, it will load all existing JobConfiguration's from the store,
 // and schedule this with the runner.
-func NewScheduler(lc fx.Lifecycle, env *conf.Env, store *server.Store, dsm *server.DsManager, runner *Runner) *Scheduler {
+func NewScheduler(
+	lc fx.Lifecycle,
+	env *conf.Env,
+	store *server.Store,
+	dsm *server.DsManager,
+	runner *Runner,
+) *Scheduler {
 	scheduler := &Scheduler{
 		Logger:         env.Logger.Named("scheduler"),
 		Store:          store,
@@ -99,19 +109,19 @@ func NewScheduler(lc fx.Lifecycle, env *conf.Env, store *server.Store, dsm *serv
 	}
 
 	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
+		OnStart: func(_ context.Context) error {
 			scheduler.Logger.Infof("Starting the JobScheduler")
 
 			for _, j := range scheduler.loadConfigurations() {
 				err := scheduler.AddJob(j)
 				if err != nil {
-					scheduler.Logger.Warnf("Error loading job with id %s (%s), err: %v", j.Id, j.Title, err)
+					scheduler.Logger.Warnf("Error loading job with id %s (%s), err: %v", j.ID, j.Title, err)
 				}
 			}
 
 			return nil
 		},
-		OnStop: func(ctx context.Context) error {
+		OnStop: func(_ context.Context) error {
 			scheduler.Logger.Infof("Stopping job runner")
 			runner.Stop()
 			return nil
@@ -137,7 +147,7 @@ func (s *Scheduler) AddJob(jobConfig *JobConfiguration) error {
 		return err
 	}
 
-	err = s.Store.StoreObject(server.JOB_CONFIGS_INDEX, jobConfig.Id, jobConfig) // store it for the future
+	err = s.Store.StoreObject(server.JOB_CONFIGS_INDEX, jobConfig.ID, jobConfig) // store it for the future
 	if err != nil {
 		return err
 	}
@@ -145,8 +155,8 @@ func (s *Scheduler) AddJob(jobConfig *JobConfiguration) error {
 	g, _ := errgroup.WithContext(context.Background())
 	g.Go(func() error {
 		// make sure we clear up before adding
-		clearCrontab(s.Runner.scheduledJobs, jobConfig.Id)
-		s.Runner.eventBus.UnsubscribeToDataset(jobConfig.Id)
+		clearCrontab(s.Runner.scheduledJobs, jobConfig.ID)
+		s.Runner.eventBus.UnsubscribeToDataset(jobConfig.ID)
 		for _, job := range triggeredJobs {
 			if !jobConfig.Paused { // only add the job if it is not paused
 				err := s.Runner.addJob(job)
@@ -168,14 +178,17 @@ func (s *Scheduler) AddJob(jobConfig *JobConfiguration) error {
 func (s *Scheduler) toTriggeredJobs(jobConfig *JobConfiguration) ([]*job, error) {
 	var result []*job
 	for _, t := range jobConfig.Triggers {
-		pipeline, err := s.toPipeline(jobConfig, t.JobType) // this also verifies that it can be parsed, so do this first
+		pipeline, err := s.toPipeline(
+			jobConfig,
+			t.JobType,
+		) // this also verifies that it can be parsed, so do this first
 		if err != nil {
 			return nil, err
 		}
 		switch t.TriggerType {
 		case TriggerTypeOnChange:
 			result = append(result, &job{
-				id:       jobConfig.Id,
+				id:       jobConfig.ID,
 				title:    jobConfig.Title,
 				pipeline: pipeline,
 				topic:    t.MonitoredDataset,
@@ -184,14 +197,14 @@ func (s *Scheduler) toTriggeredJobs(jobConfig *JobConfiguration) ([]*job, error)
 			})
 		case TriggerTypeCron:
 			result = append(result, &job{
-				id:       jobConfig.Id,
+				id:       jobConfig.ID,
 				title:    jobConfig.Title,
 				pipeline: pipeline,
 				schedule: t.Schedule,
 				runner:   s.Runner,
 			})
 		default:
-			return nil, errors.New(fmt.Sprintf("could not map trigger configuration to job: %v", t))
+			return nil, fmt.Errorf("could not map trigger configuration to job: %v", t)
 		}
 	}
 	return result, nil
@@ -200,12 +213,12 @@ func (s *Scheduler) toTriggeredJobs(jobConfig *JobConfiguration) ([]*job, error)
 // DeleteJob deletes a JobConfiguration, and calls out to the Runner to make sure it also gets removed from
 // the running jobs.
 // It will attempt to load the job before it deletes it, to validate it's existence.
-func (s *Scheduler) DeleteJob(jobId string) error {
-	jobConfig, err := s.LoadJob(jobId)
+func (s *Scheduler) DeleteJob(jobID string) error {
+	jobConfig, err := s.LoadJob(jobID)
 	if err != nil {
 		return err
 	}
-	err = s.Runner.deleteJob(jobConfig.Id)
+	err = s.Runner.deleteJob(jobConfig.ID)
 	if err != nil {
 		return err
 	}
@@ -215,9 +228,9 @@ func (s *Scheduler) DeleteJob(jobId string) error {
 
 // LoadJob will attempt to load a JobConfiguration based on a jobId. Because of the GetObject method currently
 // works, it will not return nil when not found, but an empty jobConfig object.
-func (s *Scheduler) LoadJob(jobId string) (*JobConfiguration, error) {
+func (s *Scheduler) LoadJob(jobID string) (*JobConfiguration, error) {
 	jobConfig := &JobConfiguration{}
-	err := s.Store.GetObject(server.JOB_CONFIGS_INDEX, jobId, jobConfig)
+	err := s.Store.GetObject(server.JOB_CONFIGS_INDEX, jobID, jobConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -230,9 +243,9 @@ func (s *Scheduler) ListJobs() []*JobConfiguration {
 }
 
 // Parse is a convenience method to parse raw config json into a JobConfiguration
-func (s *Scheduler) Parse(rawJson []byte) (*JobConfiguration, error) {
+func (s *Scheduler) Parse(rawJSON []byte) (*JobConfiguration, error) {
 	config := &JobConfiguration{}
-	err := json.Unmarshal(rawJson, config)
+	err := json.Unmarshal(rawJSON, config)
 	if err != nil {
 		return nil, err
 	}
@@ -252,11 +265,11 @@ func (s *Scheduler) GetScheduleEntries() ScheduleEntries {
 
 	se := []ScheduleEntry{}
 	for _, e := range jobrunner.Entries() {
-		jobId := lookup[int(e.ID)]
-		jobTitle := s.resolveJobTitle(jobId)
+		jobID := lookup[int(e.ID)]
+		jobTitle := s.resolveJobTitle(jobID)
 		se = append(se, ScheduleEntry{
-			Id:       int(e.ID),
-			JobId:    jobId,
+			ID:       int(e.ID),
+			JobID:    jobID,
 			JobTitle: jobTitle,
 			Next:     e.Next,
 			Prev:     e.Prev,
@@ -271,7 +284,7 @@ func (s *Scheduler) GetScheduleEntries() ScheduleEntries {
 }
 
 type JobStatus struct {
-	JobId    string    `json:"jobId"`
+	JobID    string    `json:"jobId"`
 	JobTitle string    `json:"jobTitle"`
 	Started  time.Time `json:"started"`
 }
@@ -284,7 +297,7 @@ func (s *Scheduler) GetRunningJobs() []JobStatus {
 
 	for k, v := range runningJobs {
 		jobs = append(jobs, JobStatus{
-			JobId:    k,
+			JobID:    k,
 			JobTitle: v.title,
 			Started:  v.started,
 		})
@@ -301,11 +314,10 @@ func (s *Scheduler) GetRunningJob(jobid string) *JobStatus {
 		return nil
 	}
 	return &JobStatus{
-		JobId:    jobid,
+		JobID:    jobid,
 		JobTitle: runningJob.title,
 		Started:  runningJob.started,
 	}
-
 }
 
 // GetJobHistory returns a list of history for all jobs that have ever been run on the server. It could be that in the
@@ -316,7 +328,6 @@ func (s *Scheduler) GetJobHistory() []*jobResult {
 	_ = s.Store.IterateObjectsRaw(server.JOB_RESULT_INDEX_BYTES, func(jsonData []byte) error {
 		jobResult := &jobResult{}
 		err := json.Unmarshal(jsonData, jobResult)
-
 		if err != nil {
 			s.Logger.Warnf(" > Error parsing job from store - aborting start: %s", err)
 			return err
@@ -382,7 +393,7 @@ func (s *Scheduler) RunJob(jobid string, jobType string) (string, error) {
 	jobConfig, err := s.LoadJob(jobid)
 	s.Logger.Infof("Running job with id '%s' (%s)", jobid, jobConfig.Title)
 
-	if jobConfig == nil || jobConfig.Id == "" { // not found
+	if jobConfig == nil || jobConfig.ID == "" { // not found
 		return "", errors.New("could not load job with id " + jobid)
 	}
 
@@ -395,22 +406,22 @@ func (s *Scheduler) RunJob(jobid string, jobType string) (string, error) {
 	}
 
 	job := &job{
-		id:       jobConfig.Id,
+		id:       jobConfig.ID,
 		title:    jobConfig.Title,
 		pipeline: pipeline,
 		runner:   s.Runner,
 	}
 
 	// is the job running?
-	running := s.Runner.raffle.runningJob(jobConfig.Id)
+	running := s.Runner.raffle.runningJob(jobConfig.ID)
 	if running != nil {
-		return "", errors.New(fmt.Sprintf("job with id '%s' (%s) already running", jobid, jobConfig.Title))
+		return "", fmt.Errorf("job with id '%s' (%s) already running", jobid, jobConfig.Title)
 	}
 
 	// start the job run
 	s.Runner.startJob(job)
 
-	return jobConfig.Id, nil
+	return jobConfig.ID, nil
 }
 
 // changeStatus is the internal function to change status from/to paused/un-paused
@@ -432,7 +443,6 @@ func (s *Scheduler) loadConfigurations() []*JobConfiguration {
 	_ = s.Store.IterateObjectsRaw(server.JOB_CONFIGS_INDEX_BYTES, func(jsonData []byte) error {
 		jobConfig := &JobConfiguration{}
 		err := json.Unmarshal(jsonData, jobConfig)
-
 		if err != nil {
 			s.Logger.Warnf(" > Error parsing job from store - aborting start: %s", err)
 			return err
@@ -446,7 +456,7 @@ func (s *Scheduler) loadConfigurations() []*JobConfiguration {
 
 // verify makes sure a JobConfiguration is valid
 func (s *Scheduler) verify(jobConfiguration *JobConfiguration) error {
-	if len(jobConfiguration.Id) <= 0 {
+	if len(jobConfiguration.ID) <= 0 {
 		return errors.New("job configuration needs an id")
 	}
 	if len(jobConfiguration.Title) <= 0 {
@@ -454,7 +464,7 @@ func (s *Scheduler) verify(jobConfiguration *JobConfiguration) error {
 	}
 	for _, config := range s.ListJobs() {
 		if config.Title == jobConfiguration.Title {
-			if config.Id != jobConfiguration.Id {
+			if config.ID != jobConfiguration.ID {
 				return errors.New("job configuration title must be unique")
 			}
 		}
@@ -467,7 +477,7 @@ func (s *Scheduler) verify(jobConfiguration *JobConfiguration) error {
 		return errors.New("you must configure a sink")
 	}
 	if len(jobConfiguration.Triggers) <= 0 {
-		return errors.New("Job Configuration needs at least 1 trigger")
+		return errors.New("job Configuration needs at least 1 trigger")
 	}
 	for _, trigger := range jobConfiguration.Triggers {
 		if _, ok := TriggerTypes[trigger.TriggerType]; !ok {
@@ -486,7 +496,9 @@ func (s *Scheduler) verify(jobConfiguration *JobConfiguration) error {
 
 		_, err := cron.ParseStandard(trigger.Schedule)
 		if err != nil {
-			return errors.New("trigger type " + trigger.TriggerType + " requires a valid 'Schedule' expression. But: " + err.Error())
+			return errors.New(
+				"trigger type " + trigger.TriggerType + " requires a valid 'Schedule' expression. But: " + err.Error(),
+			)
 		}
 	}
 	return nil
@@ -533,8 +545,9 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 	if sourceConfig != nil {
 		sourceTypeName := sourceConfig["Type"]
 		if sourceTypeName != nil {
-			if sourceTypeName == "HttpDatasetSource" {
-				src := &source.HttpDatasetSource{}
+			switch sourceTypeName {
+			case "HttpDatasetSource":
+				src := &source.HTTPDatasetSource{}
 				src.Store = s.Store
 				src.Logger = s.Runner.logger.Named("HttpDatasetSource")
 				endpoint, ok := sourceConfig["Url"]
@@ -553,7 +566,7 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 					}
 				}
 				return src, nil
-			} else if sourceTypeName == "DatasetSource" {
+			case "DatasetSource":
 				var err error
 				src := &source.DatasetSource{}
 				src.Store = s.Store
@@ -567,7 +580,7 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 					}
 					// if no authProvider is found, fall back to no auth for backend requests
 					return func(req *http.Request) {
-						//noop
+						// noop
 					}
 				}
 				if sourceConfig["LatestOnly"] != nil {
@@ -582,7 +595,7 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 					return nil, err
 				}
 				return src, nil
-			} else if sourceTypeName == "MultiSource" {
+			case "MultiSource":
 				src := &source.MultiSource{}
 				src.Store = s.Store
 				src.DatasetManager = s.DatasetManager
@@ -603,7 +616,7 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 					return nil, err
 				}
 				return src, nil
-			} else if sourceTypeName == "UnionDatasetSource" {
+			case "UnionDatasetSource":
 				src := &source.UnionDatasetSource{}
 				datasets, ok := sourceConfig["DatasetSources"].([]interface{})
 				if ok {
@@ -617,14 +630,14 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 							}
 							src.DatasetSources = append(src.DatasetSources, parseSource.(*source.DatasetSource))
 						} else {
-							return nil, fmt.Errorf("could not parse dataset item in UnionDatasetSource %v: %v", jobConfig.Id, dsSrcConfig)
+							return nil, fmt.Errorf("could not parse dataset item in UnionDatasetSource %v: %v", jobConfig.ID, dsSrcConfig)
 						}
 					}
 				} else {
 					return nil, fmt.Errorf("could not parse UnionDatasetSource: %v", sourceConfig)
 				}
 				return src, nil
-			} else if sourceTypeName == "SampleSource" {
+			case "SampleSource":
 				src := &source.SampleSource{}
 				src.Store = s.Store
 				numEntities := sourceConfig["NumberOfEntities"]
@@ -632,7 +645,7 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 					src.NumberOfEntities = int(numEntities.(float64))
 				}
 				return src, nil
-			} else if sourceTypeName == "SlowSource" {
+			case "SlowSource":
 				src := &source.SlowSource{}
 				src.Sleep = sourceConfig["Sleep"].(string)
 				batch := sourceConfig["BatchSize"]
@@ -640,20 +653,19 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 					src.BatchSize = int(batch.(float64))
 				}
 				return src, nil
-			} else {
+			default:
 				return nil, errors.New("unknown source type: " + sourceTypeName.(string))
 			}
 		}
 		return nil, errors.New("missing source type")
 	}
 	return nil, errors.New("missing source config")
-
 }
 
-func (s *Scheduler) resolveJobTitle(jobId string) string {
-	jobConfig, err := s.LoadJob(jobId)
+func (s *Scheduler) resolveJobTitle(jobID string) string {
+	jobConfig, err := s.LoadJob(jobID)
 	if err != nil {
-		s.Logger.Warnf("Failed to resolve title for job id '%s'", jobId)
+		s.Logger.Warnf("Failed to resolve title for job id '%s'", jobID)
 		return ""
 	}
 	return jobConfig.Title

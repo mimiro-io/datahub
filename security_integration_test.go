@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/mimiro-io/datahub/internal/security"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -26,6 +25,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/mimiro-io/datahub/internal/security"
 
 	"github.com/franela/goblin"
 	"go.uber.org/fx"
@@ -71,6 +72,7 @@ func TestNodeSecurity(t *testing.T) {
 			defer cancel()
 			g.Assert(err).IsNil()
 			err = os.RemoveAll(location)
+			g.Assert(err).IsNil()
 			err = os.RemoveAll(securityLocation)
 			g.Assert(err).IsNil()
 			_ = os.Unsetenv("STORE_LOCATION")
@@ -94,8 +96,8 @@ func TestNodeSecurity(t *testing.T) {
 			data.Set("client_id", "admin")
 			data.Set("client_secret", "admin")
 
-			reqUrl := datahubURL + "security/token"
-			res, err := http.PostForm(reqUrl, data)
+			reqURL := datahubURL + "security/token"
+			res, err := http.PostForm(reqURL, data)
 			g.Assert(err).IsNil()
 			g.Assert(res).IsNotZero()
 			g.Assert(res.StatusCode).Eql(200)
@@ -103,13 +105,14 @@ func TestNodeSecurity(t *testing.T) {
 			decoder := json.NewDecoder(res.Body)
 			response := make(map[string]interface{})
 			err = decoder.Decode(&response)
+			g.Assert(err).IsNil()
 			token := response["access_token"].(string)
 			g.Assert(token).IsNotNil()
 
 			// check JWT valid for endpoint access (also tests the admin role)
-			reqUrl = datahubURL + "datasets"
+			reqURL = datahubURL + "datasets"
 			client := &http.Client{}
-			req, _ := http.NewRequest("GET", reqUrl, nil)
+			req, _ := http.NewRequest("GET", reqURL, nil)
 			req.Header = http.Header{
 				"Content-Type":  []string{"application/json"},
 				"Authorization": []string{"Bearer " + token},
@@ -130,8 +133,8 @@ func TestNodeSecurity(t *testing.T) {
 			data.Set("client_id", "admin")
 			data.Set("client_secret", "admin")
 
-			reqUrl := datahubURL + "security/token"
-			res, err := http.PostForm(reqUrl, data)
+			reqURL := datahubURL + "security/token"
+			res, err := http.PostForm(reqURL, data)
 			g.Assert(err).IsNil()
 			g.Assert(res).IsNotZero()
 			g.Assert(res.StatusCode).Eql(200)
@@ -139,13 +142,14 @@ func TestNodeSecurity(t *testing.T) {
 			decoder := json.NewDecoder(res.Body)
 			response := make(map[string]interface{})
 			err = decoder.Decode(&response)
+			g.Assert(err).IsNil()
 			token := response["access_token"].(string)
 			g.Assert(token).IsNotNil()
 
 			// check JWT valid for endpoint access (also tests the admin role)
-			reqUrl = datahubURL + "datasets"
+			reqURL = datahubURL + "datasets"
 			client := &http.Client{}
-			req, _ := http.NewRequest("GET", reqUrl, nil)
+			req, _ := http.NewRequest("GET", reqURL, nil)
 			req.Header = http.Header{
 				"Content-Type":  []string{"application/json"},
 				"Authorization": []string{"Bearer " + token},
@@ -158,16 +162,18 @@ func TestNodeSecurity(t *testing.T) {
 
 			// register new client
 			clientInfo := &security.ClientInfo{}
-			clientInfo.ClientId = "client1"
+			clientInfo.ClientID = "client1"
 			_, publicKey := security.GenerateRsaKeyPair()
 			publicKeyPem, err := security.ExportRsaPublicKeyAsPem(publicKey)
+			g.Assert(err).IsNil()
 			clientInfo.PublicKey = []byte(publicKeyPem)
 
 			clientJSON, err := json.Marshal(clientInfo)
+			g.Assert(err).IsNil()
 
-			reqUrl = datahubURL + "security/clients"
+			reqURL = datahubURL + "security/clients"
 			client = &http.Client{}
-			req, _ = http.NewRequest("POST", reqUrl, bytes.NewBuffer(clientJSON))
+			req, _ = http.NewRequest("POST", reqURL, bytes.NewBuffer(clientJSON))
 			req.Header = http.Header{
 				"Content-Type":  []string{"application/json"},
 				"Authorization": []string{"Bearer " + token},
@@ -179,9 +185,9 @@ func TestNodeSecurity(t *testing.T) {
 			g.Assert(res.StatusCode).Eql(200)
 
 			// get list of registered clients
-			reqUrl = datahubURL + "security/clients"
+			reqURL = datahubURL + "security/clients"
 			client = &http.Client{}
-			req, _ = http.NewRequest("GET", reqUrl, nil)
+			req, _ = http.NewRequest("GET", reqURL, nil)
 			req.Header = http.Header{
 				"Content-Type":  []string{"application/json"},
 				"Authorization": []string{"Bearer " + token},
@@ -192,6 +198,7 @@ func TestNodeSecurity(t *testing.T) {
 			g.Assert(res).IsNotNil()
 			g.Assert(res.StatusCode).Eql(200)
 			clientData, err := io.ReadAll(res.Body)
+			g.Assert(err).IsNil()
 			var clients map[string]*security.ClientInfo
 			err = json.Unmarshal(clientData, &clients)
 			g.Assert(err).IsNil()
@@ -201,13 +208,14 @@ func TestNodeSecurity(t *testing.T) {
 
 			// delete client
 			clientInfo = &security.ClientInfo{}
-			clientInfo.ClientId = "client1"
+			clientInfo.ClientID = "client1"
 			clientInfo.Deleted = true
 			clientJSON, err = json.Marshal(clientInfo)
+			g.Assert(err).IsNil()
 
-			reqUrl = datahubURL + "security/clients"
+			reqURL = datahubURL + "security/clients"
 			client = &http.Client{}
-			req, _ = http.NewRequest("POST", reqUrl, bytes.NewBuffer(clientJSON))
+			req, _ = http.NewRequest("POST", reqURL, bytes.NewBuffer(clientJSON))
 			req.Header = http.Header{
 				"Content-Type":  []string{"application/json"},
 				"Authorization": []string{"Bearer " + token},
@@ -219,17 +227,19 @@ func TestNodeSecurity(t *testing.T) {
 			g.Assert(res.StatusCode).Eql(200)
 
 			// get clients and check client1 is not there
-			reqUrl = datahubURL + "security/clients"
+			reqURL = datahubURL + "security/clients"
 			client = &http.Client{}
-			req, _ = http.NewRequest("GET", reqUrl, nil)
+			req, _ = http.NewRequest("GET", reqURL, nil)
 			req.Header = http.Header{
 				"Content-Type":  []string{"application/json"},
 				"Authorization": []string{"Bearer " + token},
 			}
 			res, err = client.Do(req)
+			g.Assert(err).IsNil()
 			clientData, err = io.ReadAll(res.Body)
-			cd := string(clientData)
-			cd = cd + ""
+			g.Assert(err).IsNil()
+			// cd := string(clientData)
+			// cd = cd + ""
 			var deletedClients map[string]*security.ClientInfo
 			err = json.Unmarshal(clientData, &deletedClients)
 			g.Assert(err).IsNil()
@@ -242,10 +252,11 @@ func TestNodeSecurity(t *testing.T) {
 			acl1.Resource = "/datasets"
 			acls = append(acls, acl1)
 			aclJSON, err := json.Marshal(acls)
+			g.Assert(err).IsNil()
 
-			reqUrl = datahubURL + "security/clients/client1/acl"
+			reqURL = datahubURL + "security/clients/client1/acl"
 			client = &http.Client{}
-			req, _ = http.NewRequest("POST", reqUrl, bytes.NewBuffer(aclJSON))
+			req, _ = http.NewRequest("POST", reqURL, bytes.NewBuffer(aclJSON))
 			req.Header = http.Header{
 				"Content-Type":  []string{"application/json"},
 				"Authorization": []string{"Bearer " + token},
@@ -257,24 +268,26 @@ func TestNodeSecurity(t *testing.T) {
 			g.Assert(res.StatusCode).Eql(200)
 
 			// fetch client acls
-			reqUrl = datahubURL + "security/clients/client1/acl"
+			reqURL = datahubURL + "security/clients/client1/acl"
 			client = &http.Client{}
-			req, _ = http.NewRequest("GET", reqUrl, nil)
+			req, _ = http.NewRequest("GET", reqURL, nil)
 			req.Header = http.Header{
 				"Content-Type":  []string{"application/json"},
 				"Authorization": []string{"Bearer " + token},
 			}
 			res, err = client.Do(req)
+			g.Assert(err).IsNil()
 			clientData, err = io.ReadAll(res.Body)
+			g.Assert(err).IsNil()
 			var clientacls []*security.AccessControl
 			err = json.Unmarshal(clientData, &clientacls)
 			g.Assert(err).IsNil()
 			g.Assert(len(clientacls)).Equal(1)
 
 			// clear client acls
-			reqUrl = datahubURL + "security/clients/client1/acl"
+			reqURL = datahubURL + "security/clients/client1/acl"
 			client = &http.Client{}
-			req, _ = http.NewRequest("DELETE", reqUrl, nil)
+			req, _ = http.NewRequest("DELETE", reqURL, nil)
 			req.Header = http.Header{
 				"Content-Type":  []string{"application/json"},
 				"Authorization": []string{"Bearer " + token},
@@ -286,20 +299,21 @@ func TestNodeSecurity(t *testing.T) {
 			g.Assert(res.StatusCode).Eql(200)
 
 			// register client roles
-			reqUrl = datahubURL + "security/clients/client1/acl"
+			reqURL = datahubURL + "security/clients/client1/acl"
 			client = &http.Client{}
-			req, _ = http.NewRequest("GET", reqUrl, nil)
+			req, _ = http.NewRequest("GET", reqURL, nil)
 			req.Header = http.Header{
 				"Content-Type":  []string{"application/json"},
 				"Authorization": []string{"Bearer " + token},
 			}
 			res, err = client.Do(req)
+			g.Assert(err).IsNil()
 			clientData, err = io.ReadAll(res.Body)
+			g.Assert(err).IsNil()
 			var deletedeclientacls []*security.AccessControl
 			err = json.Unmarshal(clientData, &deletedeclientacls)
 			g.Assert(err).IsNil()
 			g.Assert(len(deletedeclientacls)).Equal(0)
-
 		})
 		g.It("Should register client and allow access", func() {
 			g.Timeout(15 * time.Minute)
@@ -310,8 +324,8 @@ func TestNodeSecurity(t *testing.T) {
 			data.Set("client_id", "admin")
 			data.Set("client_secret", "admin")
 
-			reqUrl := datahubURL + "security/token"
-			res, err := http.PostForm(reqUrl, data)
+			reqURL := datahubURL + "security/token"
+			res, err := http.PostForm(reqURL, data)
 			g.Assert(err).IsNil()
 			g.Assert(res).IsNotZero()
 			g.Assert(res.StatusCode).Eql(200)
@@ -319,13 +333,14 @@ func TestNodeSecurity(t *testing.T) {
 			decoder := json.NewDecoder(res.Body)
 			response := make(map[string]interface{})
 			err = decoder.Decode(&response)
+			g.Assert(err).IsNil()
 			token := response["access_token"].(string)
 			g.Assert(token).IsNotNil()
 
 			// check JWT valid for endpoint access (also tests the admin role)
-			reqUrl = datahubURL + "datasets"
+			reqURL = datahubURL + "datasets"
 			client := &http.Client{}
-			req, _ := http.NewRequest("GET", reqUrl, nil)
+			req, _ := http.NewRequest("GET", reqURL, nil)
 			req.Header = http.Header{
 				"Content-Type":  []string{"application/json"},
 				"Authorization": []string{"Bearer " + token},
@@ -338,16 +353,18 @@ func TestNodeSecurity(t *testing.T) {
 
 			// register new client
 			clientInfo := &security.ClientInfo{}
-			clientInfo.ClientId = "client1"
+			clientInfo.ClientID = "client1"
 			clientPrivateKey, publicKey := security.GenerateRsaKeyPair()
 			publicKeyPem, err := security.ExportRsaPublicKeyAsPem(publicKey)
+			g.Assert(err).IsNil()
 			clientInfo.PublicKey = []byte(publicKeyPem)
 
 			clientJSON, err := json.Marshal(clientInfo)
+			g.Assert(err).IsNil()
 
-			reqUrl = datahubURL + "security/clients"
+			reqURL = datahubURL + "security/clients"
 			client = &http.Client{}
-			req, _ = http.NewRequest("POST", reqUrl, bytes.NewBuffer(clientJSON))
+			req, _ = http.NewRequest("POST", reqURL, bytes.NewBuffer(clientJSON))
 			req.Header = http.Header{
 				"Content-Type":  []string{"application/json"},
 				"Authorization": []string{"Bearer " + token},
@@ -365,10 +382,11 @@ func TestNodeSecurity(t *testing.T) {
 			acl1.Resource = "/datasets*"
 			acls = append(acls, acl1)
 			aclJSON, err := json.Marshal(acls)
+			g.Assert(err).IsNil()
 
-			reqUrl = datahubURL + "security/clients/client1/acl"
+			reqURL = datahubURL + "security/clients/client1/acl"
 			client = &http.Client{}
-			req, _ = http.NewRequest("POST", reqUrl, bytes.NewBuffer(aclJSON))
+			req, _ = http.NewRequest("POST", reqURL, bytes.NewBuffer(aclJSON))
 			req.Header = http.Header{
 				"Content-Type":  []string{"application/json"},
 				"Authorization": []string{"Bearer " + token},
@@ -385,10 +403,11 @@ func TestNodeSecurity(t *testing.T) {
 			data1.Set("client_assertion_type", "urn:ietf:params:oauth:grant-type:jwt-bearer")
 
 			pem, err := security.CreateJWTForTokenRequest("client1", "node1", clientPrivateKey)
+			g.Assert(err).IsNil()
 			data1.Set("client_assertion", pem)
 
-			reqUrl = datahubURL + "security/token"
-			res, err = http.PostForm(reqUrl, data1)
+			reqURL = datahubURL + "security/token"
+			res, err = http.PostForm(reqURL, data1)
 			g.Assert(err).IsNil()
 			g.Assert(res).IsNotZero()
 			g.Assert(res.StatusCode).Eql(200)
@@ -396,13 +415,14 @@ func TestNodeSecurity(t *testing.T) {
 			decoder = json.NewDecoder(res.Body)
 			response = make(map[string]interface{})
 			err = decoder.Decode(&response)
+			g.Assert(err).IsNil()
 			clientToken := response["access_token"].(string)
 			g.Assert(clientToken).IsNotNil()
 
 			// use token to list datasets
-			reqUrl = datahubURL + "datasets"
+			reqURL = datahubURL + "datasets"
 			client = &http.Client{}
-			req, _ = http.NewRequest("GET", reqUrl, nil)
+			req, _ = http.NewRequest("GET", reqURL, nil)
 			req.Header = http.Header{
 				"Content-Type":  []string{"application/json"},
 				"Authorization": []string{"Bearer " + clientToken},
@@ -416,6 +436,7 @@ func TestNodeSecurity(t *testing.T) {
 			jsonraw, _ := io.ReadAll(res.Body)
 			result := make([]map[string]interface{}, 0)
 			err = json.Unmarshal(jsonraw, &result)
+			g.Assert(err).IsNil()
 			g.Assert(len(result) == 1)
 		})
 
@@ -428,8 +449,8 @@ func TestNodeSecurity(t *testing.T) {
 			data.Set("client_id", "admin")
 			data.Set("client_secret", "admin")
 
-			reqUrl := datahubURL + "security/token"
-			res, err := http.PostForm(reqUrl, data)
+			reqURL := datahubURL + "security/token"
+			res, err := http.PostForm(reqURL, data)
 			g.Assert(err).IsNil()
 			g.Assert(res).IsNotZero()
 			g.Assert(res.StatusCode).Eql(200)
@@ -437,13 +458,14 @@ func TestNodeSecurity(t *testing.T) {
 			decoder := json.NewDecoder(res.Body)
 			response := make(map[string]interface{})
 			err = decoder.Decode(&response)
+			g.Assert(err).IsNil()
 			token := response["access_token"].(string)
 			g.Assert(token).IsNotNil()
 
 			// check JWT valid for endpoint access (also tests the admin role)
-			reqUrl = datahubURL + "datasets"
+			reqURL = datahubURL + "datasets"
 			client := &http.Client{}
-			req, _ := http.NewRequest("GET", reqUrl, nil)
+			req, _ := http.NewRequest("GET", reqURL, nil)
 			req.Header = http.Header{
 				"Content-Type":  []string{"application/json"},
 				"Authorization": []string{"Bearer " + token},
@@ -456,24 +478,29 @@ func TestNodeSecurity(t *testing.T) {
 
 			// register this node as a client to itself
 			clientInfo := &security.ClientInfo{}
-			clientInfo.ClientId = "node1"
+			clientInfo.ClientID = "node1"
 
 			// read the node private and public keys for use in this interaction
-			content, err := ioutil.ReadFile(securityLocation + string(os.PathSeparator) + "node_key")
+			_, err = ioutil.ReadFile(securityLocation + string(os.PathSeparator) + "node_key")
+			g.Assert(err).IsNil()
 			// clientPrivateKey, err := security.ParseRsaPrivateKeyFromPem(content)
 
-			content, err = ioutil.ReadFile(securityLocation + string(os.PathSeparator) + "node_key.pub")
+			content, err := ioutil.ReadFile(securityLocation + string(os.PathSeparator) + "node_key.pub")
+			g.Assert(err).IsNil()
 			publicKey, err := security.ParseRsaPublicKeyFromPem(content)
+			g.Assert(err).IsNil()
 
 			// clientPrivateKey, publicKey := security.GenerateRsaKeyPair()
 			publicKeyPem, err := security.ExportRsaPublicKeyAsPem(publicKey)
+			g.Assert(err).IsNil()
 			clientInfo.PublicKey = []byte(publicKeyPem)
 
 			clientJSON, err := json.Marshal(clientInfo)
+			g.Assert(err).IsNil()
 
-			reqUrl = datahubURL + "security/clients"
+			reqURL = datahubURL + "security/clients"
 			client = &http.Client{}
-			req, _ = http.NewRequest("POST", reqUrl, bytes.NewBuffer(clientJSON))
+			req, _ = http.NewRequest("POST", reqURL, bytes.NewBuffer(clientJSON))
 			req.Header = http.Header{
 				"Content-Type":  []string{"application/json"},
 				"Authorization": []string{"Bearer " + token},
@@ -491,10 +518,11 @@ func TestNodeSecurity(t *testing.T) {
 			acl1.Resource = "/datasets*"
 			acls = append(acls, acl1)
 			aclJSON, err := json.Marshal(acls)
+			g.Assert(err).IsNil()
 
-			reqUrl = datahubURL + "security/clients/node1/acl"
+			reqURL = datahubURL + "security/clients/node1/acl"
 			client = &http.Client{}
-			req, _ = http.NewRequest("POST", reqUrl, bytes.NewBuffer(aclJSON))
+			req, _ = http.NewRequest("POST", reqURL, bytes.NewBuffer(aclJSON))
 			req.Header = http.Header{
 				"Content-Type":  []string{"application/json"},
 				"Authorization": []string{"Bearer " + token},
@@ -519,9 +547,10 @@ func TestNodeSecurity(t *testing.T) {
 			}
 
 			providerJSON, err := json.Marshal(providerConfig)
-			reqUrl = datahubURL + "provider/logins"
+			g.Assert(err).IsNil()
+			reqURL = datahubURL + "provider/logins"
 			client = &http.Client{}
-			req, _ = http.NewRequest("POST", reqUrl, bytes.NewBuffer(providerJSON))
+			req, _ = http.NewRequest("POST", reqURL, bytes.NewBuffer(providerJSON))
 			req.Header = http.Header{
 				"Content-Type":  []string{"application/json"},
 				"Authorization": []string{"Bearer " + token},
@@ -533,7 +562,7 @@ func TestNodeSecurity(t *testing.T) {
 			g.Assert(res.StatusCode).Eql(200)
 
 			// upload job to access remote (loopback) dataset
-			jobJson := `{
+			jobJSON := `{
 			"id" : "sync-from-remote-dataset-with-node-provider",
 			"title" : "sync-from-remote-dataset-with-node-provider",
 			"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
@@ -546,9 +575,9 @@ func TestNodeSecurity(t *testing.T) {
 				"Type" : "DevNullSink"
 			}}`
 
-			reqUrl = datahubURL + "jobs"
+			reqURL = datahubURL + "jobs"
 			client = &http.Client{}
-			req, _ = http.NewRequest("POST", reqUrl, bytes.NewBuffer([]byte(jobJson)))
+			req, _ = http.NewRequest("POST", reqURL, bytes.NewBuffer([]byte(jobJSON)))
 			req.Header = http.Header{
 				"Content-Type":  []string{"application/json"},
 				"Authorization": []string{"Bearer " + token},
@@ -585,7 +614,7 @@ func TestNodeSecurity(t *testing.T) {
 				body, _ := ioutil.ReadAll(res.Body)
 				var hist []map[string]interface{}
 				json.Unmarshal(body, &hist)
-				//t.Log(hist)
+				// t.Log(hist)
 				if len(hist) != 0 {
 					g.Assert(hist[0]["lastError"]).IsZero("no error expected")
 					break

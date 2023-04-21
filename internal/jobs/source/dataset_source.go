@@ -40,8 +40,11 @@ func (datasetSource *DatasetSource) EndFullSync() {
 	datasetSource.isFullSync = false
 }
 
-func (datasetSource *DatasetSource) ReadEntities(since DatasetContinuation, batchSize int,
-	processEntities func([]*server.Entity, DatasetContinuation) error) error {
+func (datasetSource *DatasetSource) ReadEntities(
+	since DatasetContinuation,
+	batchSize int,
+	processEntities func([]*server.Entity, DatasetContinuation) error,
+) error {
 	exists := datasetSource.DatasetManager.IsDataset(datasetSource.DatasetName)
 	if !exists {
 		return fmt.Errorf("dataset does not exist: %v", datasetSource.DatasetName)
@@ -49,7 +52,6 @@ func (datasetSource *DatasetSource) ReadEntities(since DatasetContinuation, batc
 	dataset := datasetSource.DatasetManager.GetDataset(datasetSource.DatasetName)
 
 	entities := make([]*server.Entity, 0)
-	var err error
 	var cont *StringDatasetContinuation
 	if datasetSource.isFullSync {
 		if dataset.IsProxy() {
@@ -107,7 +109,7 @@ func (datasetSource *DatasetSource) ReadEntities(since DatasetContinuation, batc
 		}
 	}
 
-	err = processEntities(entities, cont)
+	err := processEntities(entities, cont)
 	if err != nil {
 		return err
 	}

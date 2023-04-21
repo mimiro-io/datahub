@@ -20,14 +20,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/golang-jwt/jwt/v4"
-	"github.com/mimiro-io/datahub/internal/security"
-	"github.com/mimiro-io/datahub/internal/service/types"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/golang-jwt/jwt/v4"
+	"github.com/mimiro-io/datahub/internal/security"
+	"github.com/mimiro-io/datahub/internal/service/types"
 
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -45,7 +46,16 @@ type datasetHandler struct {
 	tokenProviders *security.TokenProviders
 }
 
-func NewDatasetHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, dm *server.DsManager, store *server.Store, eb server.EventBus, tokenProviders *security.TokenProviders) {
+func NewDatasetHandler(
+	lc fx.Lifecycle,
+	e *echo.Echo,
+	logger *zap.SugaredLogger,
+	mw *Middleware,
+	dm *server.DsManager,
+	store *server.Store,
+	eb server.EventBus,
+	tokenProviders *security.TokenProviders,
+) {
 	log := logger.Named("web")
 	handler := &datasetHandler{
 		datasetManager: dm,
@@ -55,7 +65,7 @@ func NewDatasetHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger,
 	}
 
 	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
+		OnStart: func(_ context.Context) error {
 			e.GET("/datasets", handler.datasetList, mw.authorizer(log, datahubRead))
 			e.GET("/datasets/:dataset/entities", handler.getEntitiesHandler, mw.authorizer(log, datahubRead))
 			e.GET("/datasets/:dataset/changes", handler.getChangesHandler, mw.authorizer(log, datahubRead))
@@ -69,12 +79,10 @@ func NewDatasetHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger,
 			return nil
 		},
 	})
-
 }
 
 // datasetList
 func (handler *datasetHandler) datasetList(c echo.Context) error {
-
 	// this is only set by OPA auth
 	// if not set and local auth is enabled then use that
 	accessible := c.Get("datasets")
@@ -240,14 +248,12 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 		return c.NoContent(http.StatusBadRequest)
 	}
 
-	var (
-		l int
-	)
+	var l int
 	limit := c.QueryParam("limit")
 	if limit != "" {
-		f, err := strconv.ParseInt(limit, 10, 64)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, server.HttpQueryParamErr(err).Error())
+		f, err2 := strconv.ParseInt(limit, 10, 64)
+		if err2 != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, server.HttpQueryParamErr(err2).Error())
 		}
 		l = int(f)
 	}
@@ -312,12 +318,12 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 			return err
 		}
 		continuationToken, err = dataset.MapEntitiesRaw(f, l, func(jsonData []byte) error {
-			_, err := c.Response().Write([]byte(","))
-			if err != nil {
-				return err
+			_, err2 := c.Response().Write([]byte(","))
+			if err2 != nil {
+				return err2
 			}
-			_, err = c.Response().Write(jsonData)
-			return err
+			_, err2 = c.Response().Write(jsonData)
+			return err2
 		})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -349,9 +355,7 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 	reverse := c.QueryParam("reverse") == "true"
 	latestOnly := c.QueryParam("latestOnly") == "true"
 
-	var (
-		l int
-	)
+	var l int
 	if limit != "" {
 		f, err := strconv.ParseInt(limit, 10, 64)
 		if err != nil {
@@ -456,10 +460,16 @@ func (handler *datasetHandler) storeEntitiesHandler(c echo.Context) error {
 	fsStart := c.Request().Header.Get("universal-data-api-full-sync-start")
 	fsEnd := c.Request().Header.Get("universal-data-api-full-sync-end")
 
-	return handler.processEntities(c, datasetName, fsStart == "true", fsID, "true" == fsEnd)
+	return handler.processEntities(c, datasetName, fsStart == "true", fsID, fsEnd == "true")
 }
 
-func (handler *datasetHandler) processEntities(c echo.Context, datasetName string, fullSyncStart bool, fullSyncID string, fullSyncEnd bool) error {
+func (handler *datasetHandler) processEntities(
+	c echo.Context,
+	datasetName string,
+	fullSyncStart bool,
+	fullSyncID string,
+	fullSyncEnd bool,
+) error {
 	var err error
 	// check dataset exists
 	ok := handler.datasetManager.IsDataset(datasetName)
@@ -476,9 +486,9 @@ func (handler *datasetHandler) processEntities(c echo.Context, datasetName strin
 	}
 	// start new fullsync if requested
 	if fullSyncStart {
-		err := dataset.StartFullSyncWithLease(fullSyncID)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusConflict, server.HttpFullsyncErr(err).Error())
+		err2 := dataset.StartFullSyncWithLease(fullSyncID)
+		if err2 != nil {
+			return echo.NewHTTPError(http.StatusConflict, server.HttpFullsyncErr(err2).Error())
 		}
 	} else if dataset.FullSyncStarted() {
 		err = dataset.RefreshFullSyncLease(fullSyncID)
@@ -496,9 +506,9 @@ func (handler *datasetHandler) processEntities(c echo.Context, datasetName strin
 		entities = append(entities, e)
 		count++
 		if count == batchSize {
-			err := dataset.StoreEntities(entities)
-			if err != nil {
-				return echo.NewHTTPError(http.StatusInternalServerError, server.AttemptStoreEntitiesErr(err).Error())
+			err2 := dataset.StoreEntities(entities)
+			if err2 != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, server.AttemptStoreEntitiesErr(err2).Error())
 			}
 			count = 0
 			entities = make([]*server.Entity, 0)

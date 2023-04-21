@@ -35,13 +35,13 @@ import (
 
 // NodeInfo is a data structure that represents a node in the security topology
 type NodeInfo struct {
-	NodeId   string
+	NodeID   string
 	KeyPairs []*KeyPair
 }
 
-func NewNodeInfo(nodeId string, keyPairs []*KeyPair) *NodeInfo {
+func NewNodeInfo(nodeID string, keyPairs []*KeyPair) *NodeInfo {
 	nodeInfo := &NodeInfo{}
-	nodeInfo.NodeId = nodeId
+	nodeInfo.NodeID = nodeID
 	nodeInfo.KeyPairs = keyPairs
 	return nodeInfo
 }
@@ -62,14 +62,14 @@ func NewKeyPair(privateKey *rsa.PrivateKey, publicKey *rsa.PublicKey, active boo
 }
 
 type ClientInfo struct {
-	ClientId  string
+	ClientID  string
 	PublicKey []byte
 	Deleted   bool
 }
 
-// ClientIdClaim used by a client to assert it is who they say they are.
-type ClientIdClaim struct {
-	clientId       string
+// ClientIDClaim used by a client to assert it is who they say they are.
+type ClientIDClaim struct {
+	clientID       string
 	timestamp      string
 	Message        []byte // encrypted message
 	MessageHashSum int    // signed
@@ -122,7 +122,7 @@ func NewServiceCore(env *conf.Env) *ServiceCore {
 	serviceCore.Location = env.SecurityStorageLocation
 	serviceCore.AdminClientKey = env.AdminUserName
 	serviceCore.AdminClientSecret = env.AdminPassword
-	nodeInfo := NewNodeInfo(env.NodeId, nil)
+	nodeInfo := NewNodeInfo(env.NodeID, nil)
 	serviceCore.NodeInfo = nodeInfo
 	serviceCore.IsLocalAuthEnabled = env.Auth.Middleware == "local"
 
@@ -193,7 +193,7 @@ func ParseRsaPublicKeyFromPem(pemValue []byte) (*rsa.PublicKey, error) {
 	default:
 		break // fall through
 	}
-	return nil, errors.New("Key type is not RSA")
+	return nil, errors.New("key type is not RSA")
 }
 
 // Init ensures that local storage is available
@@ -208,25 +208,25 @@ func (serviceCore *ServiceCore) Init() error {
 	fileinfo, err := os.Stat(serviceCore.Location + string(os.PathSeparator) + "node_key")
 	if err == nil {
 		// load data for private key
-		content, err := ioutil.ReadFile(serviceCore.Location + string(os.PathSeparator) + fileinfo.Name())
-		if err != nil {
-			return err
+		content, err2 := ioutil.ReadFile(serviceCore.Location + string(os.PathSeparator) + fileinfo.Name())
+		if err2 != nil {
+			return err2
 		}
 
-		privateKey, err := ParseRsaPrivateKeyFromPem(content)
-		if err != nil {
-			return err
+		privateKey, err2 := ParseRsaPrivateKeyFromPem(content)
+		if err2 != nil {
+			return err2
 		}
 
 		// public key
-		content, err = ioutil.ReadFile(serviceCore.Location + string(os.PathSeparator) + "node_key.pub")
-		if err != nil {
-			return err
+		content, err2 = ioutil.ReadFile(serviceCore.Location + string(os.PathSeparator) + "node_key.pub")
+		if err2 != nil {
+			return err2
 		}
 
-		publicKey, err := ParseRsaPublicKeyFromPem(content)
-		if err != nil {
-			return err
+		publicKey, err2 := ParseRsaPublicKeyFromPem(content)
+		if err2 != nil {
+			return err2
 		}
 
 		keyPair := NewKeyPair(privateKey, publicKey, true)
@@ -235,23 +235,23 @@ func (serviceCore *ServiceCore) Init() error {
 	} else {
 		// generate files
 		privateKey, publicKey := GenerateRsaKeyPair()
-		privateKeyPem, err := ExportRsaPrivateKeyAsPem(privateKey)
-		if err != nil {
-			return err
+		privateKeyPem, err2 := ExportRsaPrivateKeyAsPem(privateKey)
+		if err2 != nil {
+			return err2
 		}
-		publicKeyPem, err := ExportRsaPublicKeyAsPem(publicKey)
-		if err != nil {
-			return err
+		publicKeyPem, err2 := ExportRsaPublicKeyAsPem(publicKey)
+		if err2 != nil {
+			return err2
 		}
 
 		// write keys to files
-		err = ioutil.WriteFile(serviceCore.Location+string(os.PathSeparator)+"node_key", []byte(privateKeyPem), 0600)
-		if err != nil {
-			return err
+		err2 = ioutil.WriteFile(serviceCore.Location+string(os.PathSeparator)+"node_key", []byte(privateKeyPem), 0o600)
+		if err2 != nil {
+			return err2
 		}
-		err = ioutil.WriteFile(serviceCore.Location+string(os.PathSeparator)+"node_key.pub", []byte(publicKeyPem), 0600)
-		if err != nil {
-			return err
+		err2 = ioutil.WriteFile(serviceCore.Location+string(os.PathSeparator)+"node_key.pub", []byte(publicKeyPem), 0o600)
+		if err2 != nil {
+			return err2
 		}
 
 		keyPair := NewKeyPair(privateKey, publicKey, true)
@@ -285,8 +285,8 @@ func (serviceCore *ServiceCore) loadClients() error {
 		return err
 	}
 
-	for clientId, clientInfo := range clients {
-		serviceCore.clients.Store(clientId, clientInfo)
+	for clientID, clientInfo := range clients {
+		serviceCore.clients.Store(clientID, clientInfo)
 	}
 
 	return nil
@@ -303,19 +303,19 @@ func (serviceCore *ServiceCore) loadAcls() error {
 		return err
 	}
 
-	for clientId, acls := range acls {
-		serviceCore.accessControls.Store(clientId, acls)
+	for clientID, acls := range acls {
+		serviceCore.accessControls.Store(clientID, acls)
 	}
 
 	return nil
 }
 
 func CreateJWTForTokenRequest(subject string, audience string, privateKey *rsa.PrivateKey) (string, error) {
-	uniqueId := uuid.New()
+	uniqueID := uuid.New()
 
 	claims := jwt.RegisteredClaims{
 		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 1)),
-		ID:        uniqueId.String(),
+		ID:        uniqueID.String(),
 		Subject:   subject,
 		Audience:  jwt.ClaimStrings{audience},
 	}
@@ -330,7 +330,7 @@ func CreateJWTForTokenRequest(subject string, audience string, privateKey *rsa.P
 // CreateJWTForTokenRequest returns a JWT token that can be used to get an access token to a remote endpoint
 func (serviceCore *ServiceCore) CreateJWTForTokenRequest(audience string) (string, error) {
 	keyPair := serviceCore.GetActiveKeyPair()
-	return CreateJWTForTokenRequest(serviceCore.NodeInfo.NodeId, audience, keyPair.PrivateKey)
+	return CreateJWTForTokenRequest(serviceCore.NodeInfo.NodeID, audience, keyPair.PrivateKey)
 }
 
 func (serviceCore *ServiceCore) RegisterClient(clientInfo *ClientInfo) {
@@ -339,14 +339,14 @@ func (serviceCore *ServiceCore) RegisterClient(clientInfo *ClientInfo) {
 	defer mut.Unlock()
 
 	if clientInfo.Deleted {
-		serviceCore.clients.Delete(clientInfo.ClientId)
-		serviceCore.DeleteClientAccessControls(clientInfo.ClientId)
+		serviceCore.clients.Delete(clientInfo.ClientID)
+		serviceCore.DeleteClientAccessControls(clientInfo.ClientID)
 	} else {
-		serviceCore.clients.Store(clientInfo.ClientId, clientInfo)
+		serviceCore.clients.Store(clientInfo.ClientID, clientInfo)
 	}
 
 	jsonData, _ := json.Marshal(serviceCore.GetClients())
-	_ = ioutil.WriteFile(serviceCore.Location+string(os.PathSeparator)+"clients.json", jsonData, 0644)
+	_ = ioutil.WriteFile(serviceCore.Location+string(os.PathSeparator)+"clients.json", jsonData, 0o644)
 }
 
 func (serviceCore *ServiceCore) GetClients() map[string]*ClientInfo {
@@ -358,30 +358,30 @@ func (serviceCore *ServiceCore) GetClients() map[string]*ClientInfo {
 	return m
 }
 
-func (serviceCore *ServiceCore) DeleteClientAccessControls(clientId string) {
+func (serviceCore *ServiceCore) DeleteClientAccessControls(clientID string) {
 	var mut sync.Mutex
 	mut.Lock()
 	defer mut.Unlock()
 
-	serviceCore.accessControls.Delete(clientId)
+	serviceCore.accessControls.Delete(clientID)
 
 	jsonData, _ := json.Marshal(serviceCore.GetClients())
-	_ = ioutil.WriteFile(serviceCore.Location+string(os.PathSeparator)+"acls.json", jsonData, 0644)
+	_ = ioutil.WriteFile(serviceCore.Location+string(os.PathSeparator)+"acls.json", jsonData, 0o644)
 }
 
-func (serviceCore *ServiceCore) SetClientAccessControls(clientId string, acls []*AccessControl) {
+func (serviceCore *ServiceCore) SetClientAccessControls(clientID string, acls []*AccessControl) {
 	var mut sync.Mutex
 	mut.Lock()
 	defer mut.Unlock()
 
-	serviceCore.accessControls.Store(clientId, acls)
+	serviceCore.accessControls.Store(clientID, acls)
 
 	jsonData, _ := json.Marshal(serviceCore.GetAllAccessControls())
-	_ = ioutil.WriteFile(serviceCore.Location+string(os.PathSeparator)+"acls.json", jsonData, 0644)
+	_ = ioutil.WriteFile(serviceCore.Location+string(os.PathSeparator)+"acls.json", jsonData, 0o644)
 }
 
-func (serviceCore *ServiceCore) GetAccessControls(clientId string) []*AccessControl {
-	acls, ok := serviceCore.accessControls.Load(clientId)
+func (serviceCore *ServiceCore) GetAccessControls(clientID string) []*AccessControl {
+	acls, ok := serviceCore.accessControls.Load(clientID)
 	if ok {
 		return acls.([]*AccessControl)
 	} else {
@@ -403,7 +403,6 @@ func (serviceCore *ServiceCore) GetActiveKeyPair() *KeyPair {
 }
 
 func (serviceCore *ServiceCore) MakeAdminJWT(clientKey string, clientSecret string) (string, error) {
-
 	if clientKey != serviceCore.AdminClientKey || clientSecret != serviceCore.AdminClientSecret {
 		return "", errors.New("incorrect key or secret")
 	}
@@ -414,13 +413,12 @@ func (serviceCore *ServiceCore) MakeAdminJWT(clientKey string, clientSecret stri
 
 	claims := CustomClaims{}
 	claims.Roles = roles
-	claims.RegisteredClaims =
-		jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 15)),
-			Issuer:    "node:" + serviceCore.NodeInfo.NodeId,
-			Audience:  jwt.ClaimStrings{"node:" + serviceCore.NodeInfo.NodeId},
-			Subject:   clientKey,
-		}
+	claims.RegisteredClaims = jwt.RegisteredClaims{
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 15)),
+		Issuer:    "node:" + serviceCore.NodeInfo.NodeID,
+		Audience:  jwt.ClaimStrings{"node:" + serviceCore.NodeInfo.NodeID},
+		Subject:   clientKey,
+	}
 
 	token, err := jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(keypair.PrivateKey)
 	if err != nil {
@@ -431,23 +429,26 @@ func (serviceCore *ServiceCore) MakeAdminJWT(clientKey string, clientSecret stri
 }
 
 func (serviceCore *ServiceCore) ValidateClientJWTMakeJWTAccessToken(clientJWT string) (string, error) {
-	// parse without key to get subject
-	token, err := jwt.ParseWithClaims(clientJWT, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
+	// parse without key to get subject. ignore error, it will be "key is of invalid type"
+	token, _ := jwt.ParseWithClaims(clientJWT, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(""), nil
 	})
 
 	clientClaims := token.Claims.(*jwt.RegisteredClaims)
-	var clientId = clientClaims.Subject
+	clientID := clientClaims.Subject
 
-	client, _ := serviceCore.clients.Load(clientId)
+	client, _ := serviceCore.clients.Load(clientID)
 	clientPublicKey, err := ParseRsaPublicKeyFromPem(client.(*ClientInfo).PublicKey)
+	if err != nil {
+		return "", err
+	}
 
 	// parse again with key
 	token, err = jwt.ParseWithClaims(clientJWT, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return clientPublicKey, nil
 	})
 
-	if token.Valid == false {
+	if !token.Valid {
 		return "", errors.New("invalid client jwt")
 	}
 
@@ -462,13 +463,12 @@ func (serviceCore *ServiceCore) ValidateClientJWTMakeJWTAccessToken(clientJWT st
 	// add in roles in config
 	claims := CustomClaims{}
 	claims.Roles = roles
-	claims.RegisteredClaims =
-		jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 15)),
-			Issuer:    "node:" + serviceCore.NodeInfo.NodeId,
-			Audience:  jwt.ClaimStrings{"node:" + serviceCore.NodeInfo.NodeId},
-			Subject:   clientId,
-		}
+	claims.RegisteredClaims = jwt.RegisteredClaims{
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 15)),
+		Issuer:    "node:" + serviceCore.NodeInfo.NodeID,
+		Audience:  jwt.ClaimStrings{"node:" + serviceCore.NodeInfo.NodeID},
+		Subject:   clientID,
+	}
 
 	keypair := serviceCore.GetActiveKeyPair()
 	accessToken, err := jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(keypair.PrivateKey)
@@ -480,7 +480,10 @@ func (serviceCore *ServiceCore) ValidateClientJWTMakeJWTAccessToken(clientJWT st
 }
 
 // FilterDatasets given a list of datasets returns the ones that the user has access to
-func (serviceCore *ServiceCore) FilterDatasets(datasets []server.DatasetName, subject string) ([]server.DatasetName, error) {
+func (serviceCore *ServiceCore) FilterDatasets(
+	datasets []server.DatasetName,
+	subject string,
+) ([]server.DatasetName, error) {
 	acl := serviceCore.GetAccessControls(subject)
 	result := make([]server.DatasetName, 0)
 

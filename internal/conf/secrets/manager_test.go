@@ -16,10 +16,11 @@ package secrets
 
 import (
 	"errors"
+	"testing"
+
 	"github.com/franela/goblin"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/zap"
-	"testing"
 )
 
 func TestNewManager(t *testing.T) {
@@ -42,6 +43,5 @@ func TestNewManager(t *testing.T) {
 				g.Fail(errors.New("store is not NoopStore"))
 			}
 		})
-
 	})
 }

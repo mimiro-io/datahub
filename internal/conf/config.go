@@ -70,7 +70,7 @@ func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 			Middleware: viper.GetString("AUTHORIZATION_MIDDLEWARE"),
 		},
 		DlJwtConfig: &DatalayerJwtConfig{
-			ClientId:     viper.GetString("DL_JWT_CLIENT_ID"),
+			ClientID:     viper.GetString("DL_JWT_CLIENT_ID"),
 			ClientSecret: viper.GetString("DL_JWT_CLIENT_SECRET"),
 			Audience:     viper.GetString("DL_JWT_AUDIENCE"),
 			GrantType:    viper.GetString("DL_JWT_GRANT_TYPE"),
@@ -83,7 +83,7 @@ func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 		MaxCompactionLevels:     viper.GetInt("MAX_COMPACTION_LEVELS"),
 		AdminUserName:           viper.GetString("ADMIN_USERNAME"),
 		AdminPassword:           viper.GetString("ADMIN_PASSWORD"),
-		NodeId:                  viper.GetString("NODE_ID"),
+		NodeID:                  viper.GetString("NODE_ID"),
 		SecurityStorageLocation: viper.GetString("SECURITY_STORAGE_LOCATION"),
 		BackupSourceLocation:    viper.GetString("BACKUP_SOURCE_LOCATION"),
 		RunnerConfig: &RunnerConfig{

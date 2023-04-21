@@ -18,19 +18,18 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"os"
+
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/conf/secrets"
 	"github.com/mimiro-io/datahub/internal/server"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
-	"net/http"
-	"os"
 )
 
-var (
-	ErrLoginProviderNotFound = errors.New("login provider not found")
-)
+var ErrLoginProviderNotFound = errors.New("login provider not found")
 
 type Provider interface {
 	Authorize(req *http.Request)
@@ -62,7 +61,7 @@ func NewProviderManager(lc fx.Lifecycle, env *conf.Env, store *server.Store, log
 // addComp makes sure we still support the old version by adding the
 // jwt configuration from the env if present.
 func (pm *ProviderManager) addComp() error {
-	if pm.env.DlJwtConfig != nil && pm.env.DlJwtConfig.ClientId != "" {
+	if pm.env.DlJwtConfig != nil && pm.env.DlJwtConfig.ClientID != "" {
 		provider := ProviderConfig{
 			Name: "jwttokenprovider",
 			Type: "bearer",

@@ -41,8 +41,11 @@ func (source *SampleSource) GetConfig() map[string]interface{} {
 	return config
 }
 
-func (source *SampleSource) ReadEntities(since DatasetContinuation, batchSize int, processEntities func([]*server.Entity, DatasetContinuation) error) error {
-
+func (source *SampleSource) ReadEntities(
+	since DatasetContinuation,
+	batchSize int,
+	processEntities func([]*server.Entity, DatasetContinuation) error,
+) error {
 	var err error
 	sinceOffset := int(since.AsIncrToken())
 	if source.NumberOfEntities < batchSize {

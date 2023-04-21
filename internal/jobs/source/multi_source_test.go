@@ -18,6 +18,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"testing"
+
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/franela/goblin"
 	"github.com/mimiro-io/datahub/internal"
@@ -26,8 +29,6 @@ import (
 	"github.com/mimiro-io/datahub/internal/server"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
-	"os"
-	"testing"
 )
 
 func TestMultiSource(t *testing.T) {
@@ -73,18 +74,22 @@ func TestMultiSource(t *testing.T) {
 			var recordedEntities []server.Entity
 			token := &source.MultiDatasetContinuation{}
 			testSource.StartFullSync()
-			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				tokens = append(tokens, token)
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err := testSource.ReadEntities(
+				token,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					tokens = append(tokens, token)
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			testSource.EndFullSync()
 			g.Assert(len(recordedEntities)).Eql(4, "two entities with 2 changes each expected")
 
-			//now, modify alice and verify that we get alice emitted in next read
+			// now, modify alice and verify that we get alice emitted in next read
 			err = people.StoreEntities([]*server.Entity{
 				server.NewEntityFromMap(map[string]interface{}{
 					"id":    peoplePrefix + ":Alice",
@@ -92,16 +97,21 @@ func TestMultiSource(t *testing.T) {
 					"refs":  map[string]interface{}{},
 				}),
 			})
+			g.Assert(err).IsNil()
 			since := tokens[len(tokens)-1]
 			tokens = []source.DatasetContinuation{}
 			recordedEntities = []server.Entity{}
-			err = testSource.ReadEntities(since, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				tokens = append(tokens, token)
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				since,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					tokens = append(tokens, token)
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(1)
 			g.Assert(recordedEntities[0].Properties["name"]).Eql("Alice-changed")
@@ -113,24 +123,31 @@ func TestMultiSource(t *testing.T) {
 			// add one change to each entity -> 4 changes
 			addChanges("people", []string{"Bob", "Alice"}, dsm, store)
 
-			testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm,
-				LatestOnly: true}
+			testSource := source.MultiSource{
+				DatasetName: "people", Store: store, DatasetManager: dsm,
+				LatestOnly: true,
+			}
 			var tokens []source.DatasetContinuation
 			var recordedEntities []server.Entity
 			token := &source.MultiDatasetContinuation{}
 			testSource.StartFullSync()
-			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				tokens = append(tokens, token)
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err := testSource.ReadEntities(
+				token,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					tokens = append(tokens, token)
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			testSource.EndFullSync()
-			g.Assert(len(recordedEntities)).Eql(2, "There are 4 changes present, we expect only 2 (latest) changes emitted")
+			g.Assert(len(recordedEntities)).
+				Eql(2, "There are 4 changes present, we expect only 2 (latest) changes emitted")
 
-			//now, modify alice and verify that we get alice emitted in next read
+			// now, modify alice and verify that we get alice emitted in next read
 			err = people.StoreEntities([]*server.Entity{
 				server.NewEntityFromMap(map[string]interface{}{
 					"id":    peoplePrefix + ":Alice",
@@ -138,16 +155,21 @@ func TestMultiSource(t *testing.T) {
 					"refs":  map[string]interface{}{},
 				}),
 			})
+			g.Assert(err).IsNil()
 			since := tokens[len(tokens)-1]
 			tokens = []source.DatasetContinuation{}
 			recordedEntities = []server.Entity{}
-			err = testSource.ReadEntities(since, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				tokens = append(tokens, token)
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				since,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					tokens = append(tokens, token)
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(1)
 			g.Assert(recordedEntities[0].Properties["name"]).Eql("Alice-changed")
@@ -176,31 +198,46 @@ func TestMultiSource(t *testing.T) {
 			token := &source.MultiDatasetContinuation{}
 			var lastToken source.DatasetContinuation
 			testSource.StartFullSync()
-			err = testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				token,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			testSource.EndFullSync()
 
-			//test that we do not get anything emitted without further changes. verifying that watermarks are stored in lastToken
+			// test that we do not get anything emitted without further changes. verifying that watermarks are stored in lastToken
 			recordedEntities = []server.Entity{}
-			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				lastToken,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(0)
 		})
 
 		g.It("should emit main entity if direct dependency was changed after fullsync", func() {
-			addresses, addressPrefix := createTestDataset("address", []string{"Mainstreet", "Sidealley"}, nil, dsm, g, store)
+			addresses, addressPrefix := createTestDataset(
+				"address",
+				[]string{"Mainstreet", "Sidealley"},
+				nil,
+				dsm,
+				g,
+				store,
+			)
 			peoplePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://people/")
 			createTestDataset("people", []string{"Bob", "Alice"}, map[string]map[string]interface{}{
 				"Bob":   {peoplePrefix + ":address": addressPrefix + ":Mainstreet"},
@@ -218,22 +255,26 @@ func TestMultiSource(t *testing.T) {
 			err = testSource.ParseDependencies(srcConfig["Dependencies"])
 			g.Assert(err).IsNil()
 
-			//fullsync
+			// fullsync
 			var recordedEntities []server.Entity
 			token := &source.MultiDatasetContinuation{}
 			var lastToken source.DatasetContinuation
 			testSource.StartFullSync()
-			err = testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				token,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			testSource.EndFullSync()
 
-			//now, modify Mainstreet address and verify that we get Bob emitted in next read (mainstreet is direct dependency to bob)
+			// now, modify Mainstreet address and verify that we get Bob emitted in next read (mainstreet is direct dependency to bob)
 			err = addresses.StoreEntities([]*server.Entity{
 				server.NewEntityFromMap(map[string]interface{}{
 					"id":    addressPrefix + ":Mainstreet",
@@ -241,24 +282,35 @@ func TestMultiSource(t *testing.T) {
 					"refs":  map[string]interface{}{},
 				}),
 			})
+			g.Assert(err).IsNil()
 			recordedEntities = []server.Entity{}
-			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				lastToken,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(1)
-			//Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
+			// Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
 			g.Assert(recordedEntities[0].Properties["name"]).Eql("Bob")
-
 		})
 
-		//initial incremental will be much slower, as it traverses all main entities and processes all dependency changes without watermarks
+		// initial incremental will be much slower, as it traverses all main entities and processes all dependency changes without watermarks
 		g.It("should emit main entity if direct dependency was changed after initial incremental run", func() {
-			addresses, addressPrefix := createTestDataset("address", []string{"Mainstreet", "Sidealley"}, nil, dsm, g, store)
+			addresses, addressPrefix := createTestDataset(
+				"address",
+				[]string{"Mainstreet", "Sidealley"},
+				nil,
+				dsm,
+				g,
+				store,
+			)
 			peoplePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://people/")
 			createTestDataset("people", []string{"Bob", "Alice"}, map[string]map[string]interface{}{
 				"Bob":   {peoplePrefix + ":address": addressPrefix + ":Mainstreet"},
@@ -276,21 +328,25 @@ func TestMultiSource(t *testing.T) {
 			err = testSource.ParseDependencies(srcConfig["Dependencies"])
 			g.Assert(err).IsNil()
 
-			//initial incremental run.
-			//Since the fullsync flag is not set, the run will traverse all dependencies in addition to all main entities
+			// initial incremental run.
+			// Since the fullsync flag is not set, the run will traverse all dependencies in addition to all main entities
 			var recordedEntities []server.Entity
 			token := &source.MultiDatasetContinuation{}
 			var lastToken source.DatasetContinuation
-			err = testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				token,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 
-			//now, modify Mainstreet address and verify that we get Bob emitted in next read (mainstreet is direct dependency to bob)
+			// now, modify Mainstreet address and verify that we get Bob emitted in next read (mainstreet is direct dependency to bob)
 			err = addresses.StoreEntities([]*server.Entity{
 				server.NewEntityFromMap(map[string]interface{}{
 					"id":    addressPrefix + ":Mainstreet",
@@ -298,17 +354,22 @@ func TestMultiSource(t *testing.T) {
 					"refs":  map[string]interface{}{},
 				}),
 			})
+			g.Assert(err).IsNil()
 			recordedEntities = []server.Entity{}
-			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				lastToken,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(1)
-			//Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
+			// Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
 			g.Assert(recordedEntities[0].Properties["name"]).Eql("Bob")
 		})
 
@@ -318,7 +379,9 @@ func TestMultiSource(t *testing.T) {
 				[]string{"MediumCorp", "LittleSweatshop", "YardSale"}, map[string]map[string]interface{}{
 					"MediumCorp":      {peoplePrefix + ":employment": peoplePrefix + ":Bob"},
 					"LittleSweatshop": {peoplePrefix + ":employment": peoplePrefix + ":Alice"},
-					"YardSale":        {peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"}},
+					"YardSale": {
+						peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"},
+					},
 				}, dsm, g, store)
 
 			testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
@@ -330,22 +393,26 @@ func TestMultiSource(t *testing.T) {
 			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
 			_ = testSource.ParseDependencies(srcConfig["Dependencies"])
 
-			//fullsync
+			// fullsync
 			var recordedEntities []server.Entity
 			token := &source.MultiDatasetContinuation{}
 			var lastToken source.DatasetContinuation
 			testSource.StartFullSync()
-			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err := testSource.ReadEntities(
+				token,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			testSource.EndFullSync()
 
-			//now, modify MediumCorp employment and verify that we get Bob emitted in next read (MediumCorp is inverse dependency to bob)
+			// now, modify MediumCorp employment and verify that we get Bob emitted in next read (MediumCorp is inverse dependency to bob)
 			err = employments.StoreEntities([]*server.Entity{
 				server.NewEntityFromMap(map[string]interface{}{
 					"id":    employmentPrefix + ":MediumCorp",
@@ -353,39 +420,51 @@ func TestMultiSource(t *testing.T) {
 					"refs":  map[string]interface{}{peoplePrefix + ":employment": peoplePrefix + ":Bob"},
 				}),
 			})
+			g.Assert(err).IsNil()
 
 			recordedEntities = []server.Entity{}
-			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				lastToken,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(1)
-			//Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
+			// Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
 			g.Assert(recordedEntities[0].Properties["name"]).Eql("Bob")
 
-			//also, modify YardSale employment and verify that both Bob and Alice emitted in next read
+			// also, modify YardSale employment and verify that both Bob and Alice emitted in next read
 			err = employments.StoreEntities([]*server.Entity{
 				server.NewEntityFromMap(map[string]interface{}{
 					"id":    employmentPrefix + ":YardSale",
 					"props": map[string]interface{}{"name": "YardSale-changed"},
-					"refs":  map[string]interface{}{peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"}},
+					"refs": map[string]interface{}{
+						peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"},
+					},
 				}),
 			})
+			g.Assert(err).IsNil()
 
 			recordedEntities = []server.Entity{}
-			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				lastToken,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
-			//expect both referred-to people to be emitted
+			// expect both referred-to people to be emitted
 			g.Assert(len(recordedEntities)).Eql(2)
 		})
 
@@ -417,22 +496,26 @@ func TestMultiSource(t *testing.T) {
 			err = testSource.ParseDependencies(srcConfig["Dependencies"])
 			g.Assert(err).IsNil()
 
-			//fullsync
+			// fullsync
 			var recordedEntities []server.Entity
 			token := &source.MultiDatasetContinuation{}
 			var lastToken source.DatasetContinuation
 			testSource.StartFullSync()
-			err = testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				token,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			testSource.EndFullSync()
 
-			//modify Mainstreet address and verify that nothing changed (address is not a dependency, just a join)
+			// modify Mainstreet address and verify that nothing changed (address is not a dependency, just a join)
 			err = addresses.StoreEntities([]*server.Entity{
 				server.NewEntityFromMap(map[string]interface{}{
 					"id":    addressPrefix + ":Mainstreet",
@@ -440,18 +523,23 @@ func TestMultiSource(t *testing.T) {
 					"refs":  map[string]interface{}{addressPrefix + ":city": cityPrefix + ":Oslo"},
 				}),
 			})
+			g.Assert(err).IsNil()
 			recordedEntities = []server.Entity{}
-			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				lastToken,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(0)
 
-			//now, modify Oslo city and verify that bob is found via Mainstreet address
+			// now, modify Oslo city and verify that bob is found via Mainstreet address
 			err = cities.StoreEntities([]*server.Entity{
 				server.NewEntityFromMap(map[string]interface{}{
 					"id":    cityPrefix + ":Oslo",
@@ -459,14 +547,19 @@ func TestMultiSource(t *testing.T) {
 					"refs":  map[string]interface{}{},
 				}),
 			})
+			g.Assert(err).IsNil()
 			recordedEntities = []server.Entity{}
-			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				lastToken,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(1)
 		})
@@ -478,12 +571,19 @@ func TestMultiSource(t *testing.T) {
 				[]string{"MediumCorp", "LittleSweatshop", "YardSale"}, map[string]map[string]interface{}{
 					"MediumCorp":      {peoplePrefix + ":employment": peoplePrefix + ":Bob"},
 					"LittleSweatshop": {peoplePrefix + ":employment": peoplePrefix + ":Alice"},
-					"YardSale":        {peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"}},
+					"YardSale": {
+						peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"},
+					},
 				}, dsm, g, store)
 			incomeRanges, incomeRangePrefix := createTestDataset("incomeRange",
 				[]string{"High", "Medium", "Low"}, map[string]map[string]interface{}{
 					"High": {employmentPrefix + ":employment": employmentPrefix + ":MediumCorp"},
-					"Low":  {employmentPrefix + ":employment": []string{employmentPrefix + ":MediumCorp", employmentPrefix + "YardSale"}},
+					"Low": {
+						employmentPrefix + ":employment": []string{
+							employmentPrefix + ":MediumCorp",
+							employmentPrefix + "YardSale",
+						},
+					},
 				}, dsm, g, store)
 
 			testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
@@ -497,22 +597,26 @@ func TestMultiSource(t *testing.T) {
 			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
 			_ = testSource.ParseDependencies(srcConfig["Dependencies"])
 
-			//fullsync
+			// fullsync
 			var recordedEntities []server.Entity
 			token := &source.MultiDatasetContinuation{}
 			var lastToken source.DatasetContinuation
 			testSource.StartFullSync()
-			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err := testSource.ReadEntities(
+				token,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			testSource.EndFullSync()
 
-			//now, modify High incomeRange and verify that we get Bob emitted in next read (MediumCorp is inverse dependency to bob via employment MediumCorp)
+			// now, modify High incomeRange and verify that we get Bob emitted in next read (MediumCorp is inverse dependency to bob via employment MediumCorp)
 			err = incomeRanges.StoreEntities([]*server.Entity{
 				server.NewEntityFromMap(map[string]interface{}{
 					"id":    incomeRangePrefix + ":High",
@@ -520,18 +624,23 @@ func TestMultiSource(t *testing.T) {
 					"refs":  map[string]interface{}{employmentPrefix + ":employment": employmentPrefix + ":MediumCorp"},
 				}),
 			})
+			g.Assert(err).IsNil()
 
 			recordedEntities = []server.Entity{}
-			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				lastToken,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(1)
-			//Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
+			// Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
 			g.Assert(recordedEntities[0].Properties["name"]).Eql("Bob")
 		})
 
@@ -541,7 +650,9 @@ func TestMultiSource(t *testing.T) {
 				[]string{"MediumCorp", "LittleSweatshop", "YardSale"}, map[string]map[string]interface{}{
 					"MediumCorp":      {peoplePrefix + ":employment": peoplePrefix + ":Bob"},
 					"LittleSweatshop": {peoplePrefix + ":employment": peoplePrefix + ":Alice"},
-					"YardSale":        {peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"}},
+					"YardSale": {
+						peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"},
+					},
 				}, dsm, g, store)
 
 			testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
@@ -553,22 +664,26 @@ func TestMultiSource(t *testing.T) {
 			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
 			_ = testSource.ParseDependencies(srcConfig["Dependencies"])
 
-			//fullsync
+			// fullsync
 			var recordedEntities []server.Entity
 			token := &source.MultiDatasetContinuation{}
 			var lastToken source.DatasetContinuation
 			testSource.StartFullSync()
-			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err := testSource.ReadEntities(
+				token,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			testSource.EndFullSync()
 
-			//now, remove all refs  from MediumCorp.  this should emit bob because the dependency was changed
+			// now, remove all refs  from MediumCorp.  this should emit bob because the dependency was changed
 			err = employments.StoreEntities([]*server.Entity{
 				server.NewEntityFromMap(map[string]interface{}{
 					"id":    employmentPrefix + ":MediumCorp",
@@ -576,18 +691,23 @@ func TestMultiSource(t *testing.T) {
 					"refs":  map[string]interface{}{},
 				}),
 			})
+			g.Assert(err).IsNil()
 
 			recordedEntities = []server.Entity{}
-			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				lastToken,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(1)
-			//Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
+			// Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
 			g.Assert(recordedEntities[0].Properties["name"]).Eql("Bob")
 		})
 		g.It("should support empty dependency dastasets", func() {
@@ -603,18 +723,22 @@ func TestMultiSource(t *testing.T) {
 			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
 			_ = testSource.ParseDependencies(srcConfig["Dependencies"])
 
-			//fullsync
+			// fullsync
 			var recordedEntities []server.Entity
 			token := &source.MultiDatasetContinuation{}
 			var lastToken source.DatasetContinuation
 			testSource.StartFullSync()
-			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err := testSource.ReadEntities(
+				token,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			testSource.EndFullSync()
 
@@ -622,13 +746,17 @@ func TestMultiSource(t *testing.T) {
 
 			// run inc
 			recordedEntities = []server.Entity{}
-			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				lastToken,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(0)
 		})
@@ -641,12 +769,19 @@ func TestMultiSource(t *testing.T) {
 					"MediumCorp":      {peoplePrefix + ":employment": peoplePrefix + ":Bob"},
 					"BigCorp":         {peoplePrefix + ":employment": peoplePrefix + ":Hank"},
 					"LittleSweatshop": {peoplePrefix + ":employment": peoplePrefix + ":Alice"},
-					"YardSale":        {peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"}},
+					"YardSale": {
+						peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"},
+					},
 				}, dsm, g, store)
 			incomeRanges, incomeRangePrefix := createTestDataset("incomeRange",
 				[]string{"High", "Medium", "Low"}, map[string]map[string]interface{}{
 					"High": {employmentPrefix + ":employment": employmentPrefix + ":MediumCorp"},
-					"Low":  {employmentPrefix + ":employment": []string{employmentPrefix + ":MediumCorp", employmentPrefix + "YardSale"}},
+					"Low": {
+						employmentPrefix + ":employment": []string{
+							employmentPrefix + ":MediumCorp",
+							employmentPrefix + "YardSale",
+						},
+					},
 				}, dsm, g, store)
 
 			testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
@@ -660,23 +795,27 @@ func TestMultiSource(t *testing.T) {
 			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
 			_ = testSource.ParseDependencies(srcConfig["Dependencies"])
 
-			//fullsync
+			// fullsync
 			var recordedEntities []server.Entity
 			token := &source.MultiDatasetContinuation{}
 			var lastToken source.DatasetContinuation
 			testSource.StartFullSync()
-			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err := testSource.ReadEntities(
+				token,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			testSource.EndFullSync()
 
-			//now, point High incomeRange from MediumCorp to BigCorp.
-			//Hank and Bob should be emitted (Hank, because he gained High incomeRange. Bob, because he lost it).
+			// now, point High incomeRange from MediumCorp to BigCorp.
+			// Hank and Bob should be emitted (Hank, because he gained High incomeRange. Bob, because he lost it).
 			err = incomeRanges.StoreEntities([]*server.Entity{
 				server.NewEntityFromMap(map[string]interface{}{
 					"id":    incomeRangePrefix + ":High",
@@ -684,17 +823,22 @@ func TestMultiSource(t *testing.T) {
 					"refs":  map[string]interface{}{employmentPrefix + ":employment": employmentPrefix + ":BigCorp"},
 				}),
 			})
+			g.Assert(err).IsNil()
 
 			recordedEntities = []server.Entity{}
 			batchCnt := 0
-			err = testSource.ReadEntities(lastToken, 1, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				batchCnt++
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				lastToken,
+				1,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					batchCnt++
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(batchCnt).Eql(3, "2 batches of 1, and final main dataset batch is empty")
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(2)
@@ -705,7 +849,6 @@ func TestMultiSource(t *testing.T) {
 			}
 			g.Assert(seenBob).IsTrue("expected to find Bob in emitted entities")
 			g.Assert(seenHank).IsTrue("expected to find Hank in emitted entities")
-
 		})
 
 		g.It("should support same dataset as dependency multiple times", func() {
@@ -717,12 +860,19 @@ func TestMultiSource(t *testing.T) {
 					"MediumCorp":      {peoplePrefix + ":employment": peoplePrefix + ":Bob"},
 					"BigCorp":         {peoplePrefix + ":employment": peoplePrefix + ":Hank"},
 					"LittleSweatshop": {peoplePrefix + ":employment": peoplePrefix + ":Alice"},
-					"YardSale":        {peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"}},
+					"YardSale": {
+						peoplePrefix + ":employment": []string{peoplePrefix + ":Bob", peoplePrefix + ":Alice"},
+					},
 				}, dsm, g, store)
 			incomeRanges, incomeRangePrefix := createTestDataset("incomeRange",
 				[]string{"High", "Medium", "Low"}, map[string]map[string]interface{}{
 					"High": {employmentPrefix + ":employment": employmentPrefix + ":MediumCorp"},
-					"Low":  {employmentPrefix + ":employment": []string{employmentPrefix + ":MediumCorp", employmentPrefix + "YardSale"}},
+					"Low": {
+						employmentPrefix + ":employment": []string{
+							employmentPrefix + ":MediumCorp",
+							employmentPrefix + "YardSale",
+						},
+					},
 				}, dsm, g, store)
 			_, _ = createTestDataset("demographic", []string{"young", "middle-aged", "senior"},
 				map[string]map[string]interface{}{
@@ -749,18 +899,22 @@ func TestMultiSource(t *testing.T) {
 			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
 			_ = testSource.ParseDependencies(srcConfig["Dependencies"])
 
-			//fullsync
+			// fullsync
 			var recordedEntities []server.Entity
 			token := &source.MultiDatasetContinuation{}
 			var lastToken source.DatasetContinuation
 			testSource.StartFullSync()
-			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err := testSource.ReadEntities(
+				token,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			testSource.EndFullSync()
 
@@ -773,15 +927,20 @@ func TestMultiSource(t *testing.T) {
 					"refs":  map[string]interface{}{employmentPrefix + ":employment": employmentPrefix + ":MediumCorp"},
 				}),
 			})
+			g.Assert(err).IsNil()
 
 			recordedEntities = []server.Entity{}
-			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				lastToken,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(2)
 			var seenBob, seenAlice bool
@@ -791,17 +950,27 @@ func TestMultiSource(t *testing.T) {
 			}
 			g.Assert(seenBob).IsTrue("expected to find Bob in emitted entities via 1st dep")
 			g.Assert(seenAlice).IsTrue("expected to find Alice in emitted entities via 2nd dep")
-
 		})
 
 		g.It("should support multiple link predicates per join", func() {
 			// people <- band -> people
-			people, peoplePrefix := createTestDataset("people", []string{"Bob", "Rob", "Mary", "Alice", "Hank", "Lisa"}, nil, dsm, g, store)
+			people, peoplePrefix := createTestDataset(
+				"people",
+				[]string{"Bob", "Rob", "Mary", "Alice", "Hank", "Lisa"},
+				nil,
+				dsm,
+				g,
+				store,
+			)
 
 			_, _ = createTestDataset("band", []string{"Rockbuds", "SideshowBand"},
 				map[string]map[string]interface{}{
 					"Rockbuds": {
-						peoplePrefix + ":singer":  []string{peoplePrefix + ":Rob", peoplePrefix + ":Mary", peoplePrefix + ":Lisa"},
+						peoplePrefix + ":singer": []string{
+							peoplePrefix + ":Rob",
+							peoplePrefix + ":Mary",
+							peoplePrefix + ":Lisa",
+						},
 						peoplePrefix + ":drummer": []string{peoplePrefix + ":Alice"},
 					},
 					"SideshowBand": {
@@ -833,18 +1002,22 @@ func TestMultiSource(t *testing.T) {
 			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
 			_ = testSource.ParseDependencies(srcConfig["Dependencies"])
 
-			//fullsync
+			// fullsync
 			var recordedEntities []server.Entity
 			token := &source.MultiDatasetContinuation{}
 			var lastToken source.DatasetContinuation
 			testSource.StartFullSync()
-			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err := testSource.ReadEntities(
+				token,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			testSource.EndFullSync()
 
@@ -856,15 +1029,20 @@ func TestMultiSource(t *testing.T) {
 					"refs":  map[string]interface{}{},
 				}),
 			})
+			g.Assert(err).IsNil()
 
 			recordedEntities = []server.Entity{}
-			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				lastToken,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(2)
 			var seenBob, seenHank bool
@@ -884,15 +1062,20 @@ func TestMultiSource(t *testing.T) {
 					"refs":  map[string]interface{}{},
 				}),
 			})
+			g.Assert(err).IsNil()
 
 			recordedEntities = []server.Entity{}
-			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				lastToken,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(5)
 			var lisaSeen, robSeen, marySeen, aliceSeen bool
@@ -923,12 +1106,20 @@ func TestMultiSource(t *testing.T) {
 			_, _ = createTestDataset("team", []string{"product", "development"},
 				map[string]map[string]interface{}{
 					"product": {
-						teamPrefix + ":lead":   peoplePrefix + ":Bob",
-						teamPrefix + ":member": []string{peoplePrefix + ":Bob", peoplePrefix + ":Rob", peoplePrefix + ":Mary"},
+						teamPrefix + ":lead": peoplePrefix + ":Bob",
+						teamPrefix + ":member": []string{
+							peoplePrefix + ":Bob",
+							peoplePrefix + ":Rob",
+							peoplePrefix + ":Mary",
+						},
 					},
 					"development": {
-						teamPrefix + ":lead":   peoplePrefix + ":Alice",
-						teamPrefix + ":member": []string{peoplePrefix + ":Alice", peoplePrefix + ":Hank", peoplePrefix + ":Lisa"},
+						teamPrefix + ":lead": peoplePrefix + ":Alice",
+						teamPrefix + ":member": []string{
+							peoplePrefix + ":Alice",
+							peoplePrefix + ":Hank",
+							peoplePrefix + ":Lisa",
+						},
 					},
 				}, dsm, g, store)
 
@@ -964,18 +1155,22 @@ func TestMultiSource(t *testing.T) {
 			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
 			_ = testSource.ParseDependencies(srcConfig["Dependencies"])
 
-			//fullsync
+			// fullsync
 			var recordedEntities []server.Entity
 			token := &source.MultiDatasetContinuation{}
 			var lastToken source.DatasetContinuation
 			testSource.StartFullSync()
-			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err := testSource.ReadEntities(
+				token,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			testSource.EndFullSync()
 
@@ -991,13 +1186,17 @@ func TestMultiSource(t *testing.T) {
 			g.Assert(err).IsNil()
 
 			recordedEntities = []server.Entity{}
-			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				lastToken,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(3)
@@ -1039,42 +1238,55 @@ func TestMultiSource(t *testing.T) {
 			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
 			_ = testSource.ParseDependencies(srcConfig["Dependencies"])
 
-			//fullsync
+			// fullsync
 			var recordedEntities []server.Entity
 			token := &source.MultiDatasetContinuation{}
 			var lastToken source.DatasetContinuation
 			testSource.StartFullSync()
-			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err := testSource.ReadEntities(
+				token,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			testSource.EndFullSync()
 
-			//now, add new Employment with refs to Bob (exists) and Franz (non-exists)
+			// now, add new Employment with refs to Bob (exists) and Franz (non-exists)
 			err = employmentDs.StoreEntities([]*server.Entity{
 				server.NewEntityFromMap(map[string]interface{}{
 					"id":    employmentPrefix + ":YardSale",
 					"props": map[string]interface{}{"name": "YardSale"},
-					"refs":  map[string]interface{}{peoplePrefix + ":employment": []string{peoplePrefix + ":Franz", peoplePrefix + ":Bob"}},
+					"refs": map[string]interface{}{
+						peoplePrefix + ":employment": []string{peoplePrefix + ":Franz", peoplePrefix + ":Bob"},
+					},
 				}),
 			})
+			g.Assert(err).IsNil()
 
 			recordedEntities = []server.Entity{}
-			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				lastToken,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					lastToken = token
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
-			g.Assert(len(recordedEntities)).Eql(1, "YardSale change points to non-existing entity 'Franz' in people, therefore only Bob should be emitted")
+			g.Assert(len(recordedEntities)).
+				Eql(1, "YardSale change points to non-existing entity 'Franz' in people, therefore only Bob should be emitted")
 			g.Assert(recordedEntities[0].ID).Eql(peoplePrefix + ":Bob")
-			g.Assert(recordedEntities[0].Properties["name"]).Eql("Bob", "Bob exists in two datasets. making sure we dont get a merged result")
+			g.Assert(recordedEntities[0].Properties["name"]).
+				Eql("Bob", "Bob exists in two datasets. making sure we dont get a merged result")
 		})
 
 		g.Describe("parseDependencies", func() {
@@ -1148,7 +1360,8 @@ func TestMultiSource(t *testing.T) {
 				_, err := dsm.CreateDataset("people", &server.CreateDatasetConfig{
 					ProxyDatasetConfig: &server.ProxyDatasetConfig{
 						RemoteUrl: "http://localhost:7777/datasets/people",
-					}})
+					},
+				})
 				g.Assert(err).IsNil()
 
 				// now instantiate (simulating job start)
@@ -1168,7 +1381,7 @@ func TestMultiSource(t *testing.T) {
 				srcConfig := map[string]interface{}{}
 				_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
 				err = testSource.ParseDependencies(srcConfig["Dependencies"])
-				//t.Log(err)
+				// t.Log(err)
 				g.Assert(err).IsNotNil()
 			})
 			g.It("Should fail if a dependency is a proxy dataset", func() {
@@ -1176,7 +1389,8 @@ func TestMultiSource(t *testing.T) {
 				_, err := dsm.CreateDataset("address", &server.CreateDatasetConfig{
 					ProxyDatasetConfig: &server.ProxyDatasetConfig{
 						RemoteUrl: "http://localhost:7777/datasets/address",
-					}})
+					},
+				})
 				g.Assert(err).IsNil()
 
 				// now instantiate (simulating job start)
@@ -1196,7 +1410,7 @@ func TestMultiSource(t *testing.T) {
 				srcConfig := map[string]interface{}{}
 				_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
 				err = testSource.ParseDependencies(srcConfig["Dependencies"])
-				//t.Log(err)
+				// t.Log(err)
 				g.Assert(err).IsNotNil()
 			})
 		})
@@ -1204,7 +1418,8 @@ func TestMultiSource(t *testing.T) {
 }
 
 func createTestDataset(dsName string, entityNames []string, refMap map[string]map[string]interface{},
-	dsm *server.DsManager, g *goblin.G, store *server.Store) (*server.Dataset, string) {
+	dsm *server.DsManager, g *goblin.G, store *server.Store,
+) (*server.Dataset, string) {
 	dataset, err := dsm.CreateDataset(dsName, nil)
 	g.Assert(err).IsNil()
 	peoplePrefix, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://" + dsName + "/")
@@ -1225,7 +1440,12 @@ func createTestDataset(dsName string, entityNames []string, refMap map[string]ma
 	return dataset, peoplePrefix
 }
 
-func addChanges(dsName string, entityNames []string, dsm *server.DsManager, store *server.Store) (*server.Dataset, string) {
+func addChanges(
+	dsName string,
+	entityNames []string,
+	dsm *server.DsManager,
+	store *server.Store,
+) (*server.Dataset, string) {
 	dataset := dsm.GetDataset(dsName)
 	peoplePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://" + dsName + "/")
 	var entities []*server.Entity
