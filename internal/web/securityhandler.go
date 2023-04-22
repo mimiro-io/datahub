@@ -22,9 +22,10 @@ import (
 	"net/url"
 
 	"github.com/labstack/echo/v4"
-	"github.com/mimiro-io/datahub/internal/security"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/security"
 )
 
 func NewSecurityHandler(

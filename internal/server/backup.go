@@ -23,10 +23,11 @@ import (
 	"path/filepath"
 
 	"github.com/bamzi/jobrunner"
-	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/robfig/cron/v3"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/conf"
 )
 
 const StorageIDFileName = "DATAHUB_BACKUPID"

@@ -18,14 +18,14 @@ import (
 	"context"
 	"strings"
 
-	"github.com/mimiro-io/datahub/internal/security"
-
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"github.com/mimiro-io/datahub/internal/conf"
-	"github.com/mimiro-io/datahub/internal/web/middlewares"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/conf"
+	"github.com/mimiro-io/datahub/internal/security"
+	"github.com/mimiro-io/datahub/internal/web/middlewares"
 )
 
 type Middleware struct {

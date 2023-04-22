@@ -24,18 +24,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mimiro-io/datahub/internal"
-
-	"github.com/dgraph-io/badger/v3"
-
-	"github.com/franela/goblin"
-
 	"github.com/DataDog/datadog-go/v5/statsd"
+	"github.com/dgraph-io/badger/v3"
+	"github.com/franela/goblin"
 	"go.uber.org/fx/fxtest"
-
-	"github.com/mimiro-io/datahub/internal/conf"
-
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal"
+	"github.com/mimiro-io/datahub/internal/conf"
 )
 
 func TestStoreRelations(test *testing.T) {

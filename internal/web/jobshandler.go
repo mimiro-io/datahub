@@ -21,10 +21,11 @@ import (
 	"net/url"
 
 	"github.com/labstack/echo/v4"
-	"github.com/mimiro-io/datahub/internal/jobs"
-	"github.com/mimiro-io/datahub/internal/server"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/jobs"
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 // This is used to give the web handler a type, instead of just a map

@@ -21,10 +21,11 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"github.com/mimiro-io/datahub/internal/content"
-	"github.com/mimiro-io/datahub/internal/server"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/content"
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 type contentHandler struct {

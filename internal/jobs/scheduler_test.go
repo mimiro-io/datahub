@@ -28,20 +28,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mimiro-io/datahub/internal"
-	"github.com/mimiro-io/datahub/internal/security"
-
-	"github.com/bamzi/jobrunner"
-	"github.com/robfig/cron/v3"
-
-	"github.com/franela/goblin"
-	"github.com/mimiro-io/datahub/internal/conf"
-	"go.uber.org/fx/fxtest"
-
 	"github.com/DataDog/datadog-go/v5/statsd"
+	"github.com/bamzi/jobrunner"
+	"github.com/franela/goblin"
 	"github.com/labstack/echo/v4"
-	"github.com/mimiro-io/datahub/internal/server"
+	"github.com/robfig/cron/v3"
+	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal"
+	"github.com/mimiro-io/datahub/internal/conf"
+	"github.com/mimiro-io/datahub/internal/security"
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 var logger = zap.NewNop().Sugar()

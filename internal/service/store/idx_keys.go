@@ -17,9 +17,8 @@ package store
 import (
 	"encoding/binary"
 
-	"github.com/mimiro-io/datahub/internal/service/types"
-
 	"github.com/mimiro-io/datahub/internal/server"
+	"github.com/mimiro-io/datahub/internal/service/types"
 )
 
 func SeekChanges(datasetID types.InternalDatasetID, since types.DatasetOffset) []byte {

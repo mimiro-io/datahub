@@ -21,12 +21,13 @@ import (
 	"testing"
 
 	"github.com/DataDog/datadog-go/v5/statsd"
+	"go.uber.org/fx/fxtest"
+	"go.uber.org/zap"
+
 	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/server"
 	ds "github.com/mimiro-io/datahub/internal/service/dataset"
-	"go.uber.org/fx/fxtest"
-	"go.uber.org/zap"
 )
 
 func BenchmarkChangesIterator(b *testing.B) {

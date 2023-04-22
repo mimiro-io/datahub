@@ -21,9 +21,10 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
-	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/conf"
 )
 
 type GarbageCollector struct {

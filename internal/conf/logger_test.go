@@ -18,7 +18,6 @@ import (
 	"testing"
 
 	"github.com/franela/goblin"
-
 	"go.uber.org/zap/zapcore"
 )
 

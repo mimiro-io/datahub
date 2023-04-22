@@ -21,12 +21,13 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/mimiro-io/datahub/internal/conf"
-	"github.com/mimiro-io/datahub/internal/conf/secrets"
-	"github.com/mimiro-io/datahub/internal/server"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/conf"
+	"github.com/mimiro-io/datahub/internal/conf/secrets"
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 var ErrLoginProviderNotFound = errors.New("login provider not found")

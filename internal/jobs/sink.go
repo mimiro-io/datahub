@@ -25,10 +25,9 @@ import (
 	"strings"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/gojektech/heimdall/v6/httpclient"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/server"
 )

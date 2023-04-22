@@ -28,14 +28,15 @@ import (
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/franela/goblin"
 	"github.com/labstack/echo/v4"
+	"github.com/mustafaturan/bus"
+	"go.uber.org/fx/fxtest"
+	"go.uber.org/zap"
+
 	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/jobs"
 	"github.com/mimiro-io/datahub/internal/server"
 	"github.com/mimiro-io/datahub/internal/web"
-	"github.com/mustafaturan/bus"
-	"go.uber.org/fx/fxtest"
-	"go.uber.org/zap"
 )
 
 func TestEvents(t *testing.T) {

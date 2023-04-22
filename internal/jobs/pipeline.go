@@ -23,7 +23,6 @@ import (
 	"time"
 
 	jobSource "github.com/mimiro-io/datahub/internal/jobs/source"
-
 	"github.com/mimiro-io/datahub/internal/server"
 )
 

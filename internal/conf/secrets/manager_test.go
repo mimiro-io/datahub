@@ -19,8 +19,9 @@ import (
 	"testing"
 
 	"github.com/franela/goblin"
-	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/conf"
 )
 
 func TestNewManager(t *testing.T) {

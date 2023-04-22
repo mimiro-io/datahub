@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	"github.com/dgraph-io/badger/v3"
+
 	"github.com/mimiro-io/datahub/internal/service/types"
 )
 

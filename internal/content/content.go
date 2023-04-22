@@ -18,9 +18,10 @@ import (
 	"encoding/json"
 
 	"github.com/DataDog/datadog-go/v5/statsd"
+	"go.uber.org/zap"
+
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/server"
-	"go.uber.org/zap"
 )
 
 type Content struct {

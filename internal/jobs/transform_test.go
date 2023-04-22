@@ -21,8 +21,9 @@ import (
 
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/franela/goblin"
-	"github.com/mimiro-io/datahub/internal/server"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 func TestTransform(t *testing.T) {

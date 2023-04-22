@@ -17,12 +17,13 @@ package jobs
 import (
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/bamzi/jobrunner"
-	"github.com/mimiro-io/datahub/internal/conf"
-	"github.com/mimiro-io/datahub/internal/security"
-	"github.com/mimiro-io/datahub/internal/server"
 	"github.com/mustafaturan/bus"
 	"github.com/robfig/cron/v3"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/conf"
+	"github.com/mimiro-io/datahub/internal/security"
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 // The Runner is used to organize and keep track of configured jobs. It is also responsible for running (duh) jobs.

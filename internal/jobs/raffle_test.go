@@ -20,9 +20,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/franela/goblin"
-
 	"github.com/DataDog/datadog-go/v5/statsd"
+	"github.com/franela/goblin"
 	"go.uber.org/zap"
 )
 

@@ -19,9 +19,10 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"github.com/mimiro-io/datahub/internal/jobs"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/jobs"
 )
 
 type jobOperationHandler struct {

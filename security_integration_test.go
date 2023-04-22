@@ -25,12 +25,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mimiro-io/datahub"
-
-	"github.com/mimiro-io/datahub/internal/security"
-
 	"github.com/franela/goblin"
 	"go.uber.org/fx"
+
+	"github.com/mimiro-io/datahub"
+	"github.com/mimiro-io/datahub/internal/security"
 )
 
 func TestNodeSecurity(t *testing.T) {

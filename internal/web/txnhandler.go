@@ -19,9 +19,10 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"github.com/mimiro-io/datahub/internal/server"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 func NewTxnHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, store *server.Store) {

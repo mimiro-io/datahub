@@ -27,16 +27,14 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/mimiro-io/datahub/internal/security"
-	"github.com/mimiro-io/datahub/internal/service/types"
-
+	"github.com/labstack/echo/v4"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 
-	"github.com/labstack/echo/v4"
-
+	"github.com/mimiro-io/datahub/internal/security"
 	"github.com/mimiro-io/datahub/internal/server"
 	ds "github.com/mimiro-io/datahub/internal/service/dataset"
+	"github.com/mimiro-io/datahub/internal/service/types"
 )
 
 type datasetHandler struct {

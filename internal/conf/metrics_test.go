@@ -18,13 +18,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/mimiro-io/datahub/internal"
-
 	"github.com/franela/goblin"
 	"go.uber.org/fx"
-
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal"
 )
 
 func TestStatsdClient(t *testing.T) {

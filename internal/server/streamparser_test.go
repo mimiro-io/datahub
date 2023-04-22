@@ -21,15 +21,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mimiro-io/datahub/internal"
-
 	"github.com/DataDog/datadog-go/v5/statsd"
+	"github.com/franela/goblin"
+	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
 
-	"github.com/franela/goblin"
-
+	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
-	"go.uber.org/fx/fxtest"
 )
 
 func TestJsonOmitOnEntity(m *testing.T) {

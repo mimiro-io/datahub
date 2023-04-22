@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/franela/goblin"
+
 	"github.com/mimiro-io/datahub/internal/service/namespace"
 	"github.com/mimiro-io/datahub/internal/service/types"
 )

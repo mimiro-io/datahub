@@ -30,9 +30,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/labstack/echo/v4"
-
 	"github.com/franela/goblin"
+	"github.com/labstack/echo/v4"
 	"go.uber.org/fx"
 
 	"github.com/mimiro-io/datahub"

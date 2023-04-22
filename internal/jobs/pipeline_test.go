@@ -25,10 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mimiro-io/datahub/internal/jobs/source"
-
 	"github.com/franela/goblin"
 
+	"github.com/mimiro-io/datahub/internal/jobs/source"
 	"github.com/mimiro-io/datahub/internal/server"
 )
 

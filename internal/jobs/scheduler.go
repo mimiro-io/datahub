@@ -24,8 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mimiro-io/datahub/internal/jobs/source"
-
 	"github.com/bamzi/jobrunner"
 	"github.com/robfig/cron/v3"
 	"go.uber.org/fx"
@@ -33,6 +31,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/mimiro-io/datahub/internal/conf"
+	"github.com/mimiro-io/datahub/internal/jobs/source"
 	"github.com/mimiro-io/datahub/internal/server"
 )
 

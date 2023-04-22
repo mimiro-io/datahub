@@ -18,12 +18,12 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/mimiro-io/datahub/internal/security"
-
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/juliangruber/go-intersect"
 	"github.com/labstack/echo/v4"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/security"
 )
 
 func JwtAuthorizer(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {

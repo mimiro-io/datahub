@@ -22,13 +22,14 @@ import (
 
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/franela/goblin"
+	"go.uber.org/fx/fxtest"
+	"go.uber.org/zap"
+
 	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/server"
 	ds "github.com/mimiro-io/datahub/internal/service/dataset"
 	"github.com/mimiro-io/datahub/internal/service/types"
-	"go.uber.org/fx/fxtest"
-	"go.uber.org/zap"
 )
 
 func TestDatasetIterator(t *testing.T) {

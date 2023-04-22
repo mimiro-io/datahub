@@ -6,9 +6,10 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/badger/v3"
+	"github.com/pkg/errors"
+
 	"github.com/mimiro-io/datahub/internal/service/store"
 	"github.com/mimiro-io/datahub/internal/service/types"
-	"github.com/pkg/errors"
 )
 
 func (l Lookup) asCURIE(id string) (types.CURIE, error) {
