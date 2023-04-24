@@ -28,7 +28,6 @@ import (
 	"go.uber.org/zap"
 	"os"
 	"testing"
-	"time"
 )
 
 func TestDatasetIterator(t *testing.T) {
@@ -181,7 +180,6 @@ func TestDatasetIterator(t *testing.T) {
 			g.Assert(it.NextOffset()).Equal(types.DatasetOffset(5))
 		})
 		g.It("should list inverse changes from 0", func() {
-			g.Timeout(1 * time.Hour)
 			dataset, err := ds.Of(server.NewBadgerAccess(store, dsm), ds1.ID)
 			g.Assert(err).IsNil()
 			it, err := dataset.At(0)

@@ -20,7 +20,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/labstack/echo/v4"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -32,19 +31,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/labstack/echo/v4"
+
 	"github.com/franela/goblin"
 	"go.uber.org/fx"
 
 	"github.com/mimiro-io/datahub/internal/server"
 )
 
-func TestFullSync(t *testing.T) {
+func TestHttp(t *testing.T) {
 	g := goblin.Goblin(t)
 
 	var app *fx.App
 	var mockLayer *MockLayer
 
-	location := "./dataset_fullsync_integration_test"
+	location := "./http_integration_test"
 	queryUrl := "http://localhost:24997/query"
 	dsUrl := "http://localhost:24997/datasets/bananas"
 	proxyDsUrl := "http://localhost:24997/datasets/cucumbers"
@@ -181,36 +182,6 @@ func TestFullSync(t *testing.T) {
 				err = json.Unmarshal(bodyBytes, &entities)
 				g.Assert(err).IsNil()
 				g.Assert(len(entities)).Eql(12, "expected 10 entities plus @context and @continuation")
-			})
-
-			g.It("Query endpoint can find the changes", func() {
-				// populate dataset
-				payload := strings.NewReader(bananasFromTo(1, 10, false))
-				res, err := http.Post(dsUrl+"/entities", "application/json", payload)
-
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-
-				// do query
-				js := `
-					function do_query() {
-						let obj = { "name": "homer" };
-						WriteQueryResult(obj);
-					}
-					`
-				queryEncoded := base64.StdEncoding.EncodeToString([]byte(js))
-
-				query := map[string]interface{}{"query": queryEncoded}
-				queryBytes, _ := json.Marshal(query)
-
-				res, err = http.Post(queryUrl, "application/x-javascript-query", bytes.NewReader(queryBytes))
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-
-				// get the result
-
 			})
 
 			g.It("Should accept multiple overlapping batches of changes", func() {
@@ -726,7 +697,288 @@ func TestFullSync(t *testing.T) {
 					"basic auth header expected")
 			})
 		})
+		g.Describe("the /query endpoint", func() {
+			g.It("can find changes", func() {
+				// relying on dataset being populated from previous cases
+				// do query
+				js := `
+					function do_query() {
+						const changes = GetDatasetChanges("bananas")
+						let obj = { "bananaCount": changes.Entities.length };
+						WriteQueryResult(obj);
+					}
+					`
+				queryEncoded := base64.StdEncoding.EncodeToString([]byte(js))
+
+				query := map[string]any{"query": queryEncoded}
+				queryBytes, _ := json.Marshal(query)
+
+				res, err := http.Post(queryUrl, "application/x-javascript-query", bytes.NewReader(queryBytes))
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+				body, _ := io.ReadAll(res.Body)
+				g.Assert(string(body)).Eql("[{\"bananaCount\":100}]")
+
+			})
+			g.It("can find single ids", func() {
+				query := map[string]any{"entityId": "ns3:16"}
+				queryBytes, _ := json.Marshal(query)
+				res, err := http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+				body, _ := io.ReadAll(res.Body)
+				var rMap []map[string]any
+				err = json.Unmarshal(body, &rMap)
+				g.Assert(err).IsNil()
+				g.Assert(rMap).IsNotZero()
+				g.Assert(rMap[1]["id"]).Eql("ns3:16")
+				g.Assert(rMap[1]["recorded"]).IsNotZero()
+			})
+			g.It("can find outgoing relations from startUri", func() {
+
+				payload := strings.NewReader(bananaRelations(
+					bananaRel{fromBanana: 1, toBananas: []int{2, 3}},
+					bananaRel{fromBanana: 2, toBananas: []int{3, 4, 5, 6, 7}},
+				))
+				res, err := http.Post(dsUrl+"/entities", "application/json", payload)
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+
+				query := map[string]any{"startingEntities": []string{"ns3:2"}, "predicate": "*"}
+				queryBytes, _ := json.Marshal(query)
+				res, err = http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+				body, _ := io.ReadAll(res.Body)
+				var rArr []any
+				err = json.Unmarshal(body, &rArr)
+				g.Assert(err).IsNil()
+				g.Assert(rArr).IsNotZero()
+				result := rArr[1].([]any)
+				g.Assert(len(result)).Eql(5)
+				g.Assert(result[4].([]any)[2].(map[string]any)["id"]).Eql("ns3:3")
+				g.Assert(result[3].([]any)[2].(map[string]any)["id"]).Eql("ns3:4")
+				g.Assert(result[2].([]any)[2].(map[string]any)["id"]).Eql("ns3:5")
+				g.Assert(result[1].([]any)[2].(map[string]any)["id"]).Eql("ns3:6")
+				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:7")
+			})
+			g.It("can page through queried outgoing relations", func() {
+
+				payload := strings.NewReader(bananaRelations(
+					bananaRel{fromBanana: 1, toBananas: []int{2, 3}},
+					bananaRel{fromBanana: 2, toBananas: []int{3, 4, 5, 6, 7}},
+				))
+				res, err := http.Post(dsUrl+"/entities", "application/json", payload)
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+
+				query := map[string]any{"startingEntities": []string{"ns3:2"}, "predicate": "*", "limit": 2}
+				queryBytes, _ := json.Marshal(query)
+				res, err = http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+				body, _ := io.ReadAll(res.Body)
+				var rArr []any
+				err = json.Unmarshal(body, &rArr)
+				g.Assert(err).IsNil()
+				g.Assert(rArr).IsNotZero()
+				result := rArr[1].([]any)
+				g.Assert(len(result)).Eql(2)
+				g.Assert(result[1].([]any)[2].(map[string]any)["id"]).Eql("ns3:6")
+				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:7")
+				cont := rArr[2]
+				query = map[string]any{"continuations": cont, "limit": 2}
+				queryBytes, _ = json.Marshal(query)
+				res, err = http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+				body, _ = io.ReadAll(res.Body)
+				rArr = []any{}
+				err = json.Unmarshal(body, &rArr)
+				g.Assert(err).IsNil()
+				g.Assert(rArr).IsNotZero()
+				result = rArr[1].([]any)
+				g.Assert(len(result)).Eql(2)
+				g.Assert(result[1].([]any)[2].(map[string]any)["id"]).Eql("ns3:4")
+				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:5")
+
+				cont = rArr[2]
+				query = map[string]any{"continuations": cont, "limit": 2}
+				queryBytes, _ = json.Marshal(query)
+				res, err = http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+				body, _ = io.ReadAll(res.Body)
+				rArr = []any{}
+				err = json.Unmarshal(body, &rArr)
+				g.Assert(err).IsNil()
+				g.Assert(rArr).IsNotZero()
+				result = rArr[1].([]any)
+				g.Assert(len(result)).Eql(1)
+				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:3")
+				cont = rArr[2]
+				g.Assert(len(cont.([]any))).Eql(0)
+			})
+			g.It("can find inverse relations from startUri", func() {
+
+				payload := strings.NewReader(bananaRelations(
+					bananaRel{fromBanana: 1, toBananas: []int{2, 3}},
+					bananaRel{fromBanana: 2, toBananas: []int{3, 4}},
+					bananaRel{fromBanana: 4, toBananas: []int{3, 2, 1}},
+				))
+				res, err := http.Post(dsUrl+"/entities", "application/json", payload)
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+
+				query := map[string]any{"startingEntities": []string{"ns3:3"}, "predicate": "*", "inverse": true}
+				queryBytes, _ := json.Marshal(query)
+				res, err = http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+				body, _ := io.ReadAll(res.Body)
+				var rArr []any
+				err = json.Unmarshal(body, &rArr)
+				g.Assert(err).IsNil()
+				g.Assert(rArr).IsNotZero()
+				result := rArr[1].([]any)
+				g.Assert(len(result)).Eql(3)
+				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:1")
+				g.Assert(result[1].([]any)[2].(map[string]any)["id"]).Eql("ns3:2")
+				g.Assert(result[2].([]any)[2].(map[string]any)["id"]).Eql("ns3:4")
+			})
+
+			g.It("can page through queried inverse relations", func() {
+				payload := strings.NewReader(bananaRelations(
+					bananaRel{fromBanana: 1, toBananas: []int{2, 3}},
+					bananaRel{fromBanana: 2, toBananas: []int{3, 4}},
+					bananaRel{fromBanana: 3, toBananas: []int{2, 1}},
+					bananaRel{fromBanana: 4, toBananas: []int{3, 2, 1}},
+					bananaRel{fromBanana: 5, toBananas: []int{3, 2, 1}},
+					bananaRel{fromBanana: 6, toBananas: []int{3, 2, 1}},
+					bananaRel{fromBanana: 7, toBananas: []int{3, 2, 1}},
+				))
+				res, err := http.Post(dsUrl+"/entities", "application/json", payload)
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+
+				query := map[string]any{"startingEntities": []string{"ns3:3"}, "predicate": "*", "inverse": true, "limit": 2}
+				queryBytes, _ := json.Marshal(query)
+				res, err = http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+				body, _ := io.ReadAll(res.Body)
+				var rArr []any
+				err = json.Unmarshal(body, &rArr)
+				g.Assert(err).IsNil()
+				g.Assert(rArr).IsNotZero()
+				result := rArr[1].([]any)
+				g.Assert(len(result)).Eql(2)
+				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:1")
+				g.Assert(result[1].([]any)[2].(map[string]any)["id"]).Eql("ns3:2")
+
+				cont := rArr[2]
+				savedCont := cont
+				query = map[string]any{"continuations": cont, "limit": 2}
+				queryBytes, _ = json.Marshal(query)
+				res, err = http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+				body, _ = io.ReadAll(res.Body)
+				rArr = []any{}
+				err = json.Unmarshal(body, &rArr)
+				g.Assert(err).IsNil()
+				g.Assert(rArr).IsNotZero()
+				result = rArr[1].([]any)
+				g.Assert(len(result)).Eql(2)
+				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:4")
+				g.Assert(result[1].([]any)[2].(map[string]any)["id"]).Eql("ns3:5")
+
+				cont = rArr[2]
+				query = map[string]any{"continuations": cont, "limit": 2}
+				queryBytes, _ = json.Marshal(query)
+				res, err = http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+				body, _ = io.ReadAll(res.Body)
+				rArr = []any{}
+				err = json.Unmarshal(body, &rArr)
+				g.Assert(err).IsNil()
+				g.Assert(rArr).IsNotZero()
+				result = rArr[1].([]any)
+				g.Assert(len(result)).Eql(2)
+				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:6")
+				g.Assert(result[1].([]any)[2].(map[string]any)["id"]).Eql("ns3:7")
+
+				// go through last pages with different batch sizes
+				query = map[string]any{"continuations": savedCont, "limit": 3}
+				queryBytes, _ = json.Marshal(query)
+				res, err = http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+				body, _ = io.ReadAll(res.Body)
+				rArr = []any{}
+				err = json.Unmarshal(body, &rArr)
+				g.Assert(err).IsNil()
+				g.Assert(rArr).IsNotZero()
+				result = rArr[1].([]any)
+				g.Assert(len(result)).Eql(3)
+				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:4")
+				g.Assert(result[1].([]any)[2].(map[string]any)["id"]).Eql("ns3:5")
+				g.Assert(result[2].([]any)[2].(map[string]any)["id"]).Eql("ns3:6")
+
+				cont = rArr[2]
+				query = map[string]any{"continuations": cont, "limit": 2}
+				queryBytes, _ = json.Marshal(query)
+				res, err = http.Post(queryUrl, "application/javascript", bytes.NewReader(queryBytes))
+				g.Assert(err).IsNil()
+				g.Assert(res).IsNotZero()
+				g.Assert(res.StatusCode).Eql(200)
+				body, _ = io.ReadAll(res.Body)
+				rArr = []any{}
+				err = json.Unmarshal(body, &rArr)
+				g.Assert(err).IsNil()
+				g.Assert(rArr).IsNotZero()
+				result = rArr[1].([]any)
+				g.Assert(len(result)).Eql(1)
+				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:7")
+			})
+		})
 	})
+}
+
+func bananaRelations(rels ...bananaRel) string {
+	prefix := `[ { "id" : "@context", "namespaces" : { "_" : "http://example.com" } }, `
+
+	var bananas []string
+
+	for _, rel := range rels {
+		refStr := ""
+		for i, rStr := range rel.toBananas {
+			refStr = refStr + fmt.Sprintf(`"%v"`, rStr)
+			if i < len(rel.toBananas)-1 {
+				refStr = refStr + ","
+			}
+		}
+		bananas = append(bananas, fmt.Sprintf(`{ "id" : "%v", "refs": {"link": [%v]} }`, rel.fromBanana, refStr))
+	}
+
+	return prefix + strings.Join(bananas, ",") + "]"
+
 }
 
 func bananasFromTo(from, to int, deleted bool) string {
@@ -743,6 +995,11 @@ func bananasFromTo(from, to int, deleted bool) string {
 	}
 
 	return prefix + strings.Join(bananas, ",") + "]"
+}
+
+type bananaRel struct {
+	fromBanana int
+	toBananas  []int
 }
 
 type MockLayer struct {

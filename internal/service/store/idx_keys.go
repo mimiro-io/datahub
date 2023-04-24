@@ -16,6 +16,7 @@ package store
 
 import (
 	"encoding/binary"
+
 	"github.com/mimiro-io/datahub/internal/service/types"
 
 	"github.com/mimiro-io/datahub/internal/server"
@@ -30,11 +31,11 @@ func SeekChanges(datasetID types.InternalDatasetID, since types.DatasetOffset) [
 }
 
 func SeekEntityChanges(datasetID types.InternalDatasetID, entityID types.InternalID) []byte {
-	entityIdBuffer := make([]byte, 14)
-	binary.BigEndian.PutUint16(entityIdBuffer, server.ENTITY_ID_TO_JSON_INDEX_ID)
-	binary.BigEndian.PutUint64(entityIdBuffer[2:], uint64(entityID))
-	binary.BigEndian.PutUint32(entityIdBuffer[10:], uint32(datasetID))
-	return entityIdBuffer
+	entityIDBuffer := make([]byte, 14)
+	binary.BigEndian.PutUint16(entityIDBuffer, server.ENTITY_ID_TO_JSON_INDEX_ID)
+	binary.BigEndian.PutUint64(entityIDBuffer[2:], uint64(entityID))
+	binary.BigEndian.PutUint32(entityIDBuffer[10:], uint32(datasetID))
+	return entityIDBuffer
 }
 
 func SeekDataset(datasetID types.InternalDatasetID) []byte {
@@ -44,10 +45,10 @@ func SeekDataset(datasetID types.InternalDatasetID) []byte {
 	return searchBuffer
 }
 
-func SeekEntity(intenalEntityId types.InternalID) []byte {
+func SeekEntity(intenalEntityID types.InternalID) []byte {
 	entityLocatorPrefixBuffer := make([]byte, 10)
 	binary.BigEndian.PutUint16(entityLocatorPrefixBuffer, server.ENTITY_ID_TO_JSON_INDEX_ID)
-	binary.BigEndian.PutUint64(entityLocatorPrefixBuffer[2:], uint64(intenalEntityId))
+	binary.BigEndian.PutUint64(entityLocatorPrefixBuffer[2:], uint64(intenalEntityID))
 	return entityLocatorPrefixBuffer
 }
 

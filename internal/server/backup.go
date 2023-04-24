@@ -17,15 +17,16 @@ package server
 import (
 	"context"
 	"encoding/binary"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+
 	"github.com/bamzi/jobrunner"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/robfig/cron/v3"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
-	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
 )
 
 const StorageIdFileName = "DATAHUB_BACKUPID"

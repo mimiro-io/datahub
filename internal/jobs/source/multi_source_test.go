@@ -21,14 +21,13 @@ import (
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/franela/goblin"
 	"github.com/mimiro-io/datahub/internal"
+	"github.com/mimiro-io/datahub/internal/conf"
+	"github.com/mimiro-io/datahub/internal/jobs/source"
+	"github.com/mimiro-io/datahub/internal/server"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
 	"os"
 	"testing"
-
-	"github.com/mimiro-io/datahub/internal/conf"
-	"github.com/mimiro-io/datahub/internal/jobs/source"
-	"github.com/mimiro-io/datahub/internal/server"
 )
 
 func TestMultiSource(t *testing.T) {
@@ -687,13 +686,16 @@ func TestMultiSource(t *testing.T) {
 			})
 
 			recordedEntities = []server.Entity{}
-			err = testSource.ReadEntities(lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			batchCnt := 0
+			err = testSource.ReadEntities(lastToken, 1, func(entities []*server.Entity, token source.DatasetContinuation) error {
 				lastToken = token
+				batchCnt++
 				for _, e := range entities {
 					recordedEntities = append(recordedEntities, *e)
 				}
 				return nil
 			})
+			g.Assert(batchCnt).Eql(3, "2 batches of 1, and final main dataset batch is empty")
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(2)
 			var seenBob, seenHank bool

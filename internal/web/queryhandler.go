@@ -16,18 +16,20 @@ package web
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"github.com/mimiro-io/datahub/internal/jobs"
+	"fmt"
+	"github.com/labstack/echo/v4"
+	"go.uber.org/fx"
+	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"net/url"
 
-	"github.com/labstack/echo/v4"
+	"github.com/mimiro-io/datahub/internal/jobs"
 	"github.com/mimiro-io/datahub/internal/server"
 	ent "github.com/mimiro-io/datahub/internal/service/entity"
-	"go.uber.org/fx"
-	"go.uber.org/zap"
 )
 
 type Filter struct {
@@ -51,6 +53,8 @@ type Query struct {
 	Inverse          bool     `json:"inverse"`
 	Datasets         []string `json:"datasets"`
 	Details          bool     `json:"details"`
+	Limit            int      `json:"limit"`
+	Continuations    []string `json:"continuations"`
 }
 
 type NamespacePrefix struct {
@@ -68,7 +72,14 @@ type queryHandler struct {
 	logger         *zap.SugaredLogger
 }
 
-func NewQueryHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, store *server.Store, datasetManager *server.DsManager) {
+func NewQueryHandler(
+	lc fx.Lifecycle,
+	e *echo.Echo,
+	logger *zap.SugaredLogger,
+	mw *Middleware,
+	store *server.Store,
+	datasetManager *server.DsManager,
+) {
 	log := logger.Named("web")
 	handler := &queryHandler{
 		store:          store,
@@ -85,7 +96,6 @@ func NewQueryHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, m
 			return nil
 		},
 	})
-
 }
 
 func (handler *queryHandler) queryNamespacePrefix(c echo.Context) error {
@@ -103,7 +113,6 @@ func (handler *queryHandler) queryNamespacePrefix(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, &NamespacePrefix{Prefix: prefix, Expansion: urlExpansion})
-
 }
 
 type JavascriptQuery struct {
@@ -138,7 +147,6 @@ func (w *HttpQueryResponseWriter) WriteObject(object interface{}) error {
 }
 
 func (handler *queryHandler) queryHandler(c echo.Context) error {
-
 	// get content type
 	contentType := c.Request().Header.Get("Content-Type")
 	if contentType == "application/x-javascript-query" {
@@ -189,18 +197,23 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 		handler.logger.Warn("Unable to parse json")
 		return echo.NewHTTPError(http.StatusBadRequest, server.HttpJsonParsingErr(err).Error())
 	}
+	includeContinuation := true
+	//conservative default
+	if query.Limit == 0 {
+		query.Limit = 100
+		includeContinuation = false
+	}
 
 	if query.EntityId != "" {
 		entity, err := handler.store.GetEntity(query.EntityId, query.Datasets)
-
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
 
 		result := make([]interface{}, 2)
-		//a returned Entity can be the product of multiple entities in multiple datasets with the same ID
-		//To get the correct namespace context, we'd have to use the supplied list of dataset names (query.Datasets)
-		//and merge their respective contexts to our result context here.
+		// a returned Entity can be the product of multiple entities in multiple datasets with the same ID
+		// To get the correct namespace context, we'd have to use the supplied list of dataset names (query.Datasets)
+		// and merge their respective contexts to our result context here.
 		result[0] = handler.store.GetGlobalContext()
 
 		if entity == nil {
@@ -218,20 +231,79 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 
 		// return result as JSON
 		return c.JSON(http.StatusOK, result)
+	} else if query.Continuations != nil {
+		cont, err := decodeCont(query.Continuations)
+		queryresult, err := handler.store.GetManyRelatedEntitiesAtTime(cont, query.Limit)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+
+		result := make([]interface{}, 3)
+		// To get the correct namespace context, we'd have to use the supplied list of dataset names (query.Datasets)
+		// and merge their respective contexts to our result context here.
+		result[0] = handler.store.GetGlobalContext()
+		result[1] = server.ToLegacyQueryResult(queryresult)
+		result[2], err = encodeCont(queryresult.Cont())
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		return c.JSON(http.StatusOK, result)
 	} else {
+		fmt.Printf("query: %+v", query)
 		// do query
-		queryresult, err := handler.store.GetManyRelatedEntities(query.StartingEntities, query.Predicate, query.Inverse, query.Datasets)
+		queryresult, err := handler.store.GetManyRelatedEntitiesBatch(query.StartingEntities, query.Predicate, query.Inverse, query.Datasets, query.Limit)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
 
 		result := make([]interface{}, 2)
-		//To get the correct namespace context, we'd have to use the supplied list of dataset names (query.Datasets)
-		//and merge their respective contexts to our result context here.
+		// To get the correct namespace context, we'd have to use the supplied list of dataset names (query.Datasets)
+		// and merge their respective contexts to our result context here.
 		result[0] = handler.store.GetGlobalContext()
-		result[1] = queryresult
+		result[1] = server.ToLegacyQueryResult(queryresult)
+		// for compatibility with older clients, do not add new array elem when no limit parameter was given
+		if includeContinuation {
+			cont, err := encodeCont(queryresult.Cont())
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
+			result = append(result, cont)
+		}
 
 		// return result as JSON
 		return c.JSON(http.StatusOK, result)
 	}
+}
+
+func encodeCont(relatedFroms []server.RelatedFrom) ([]string, error) {
+	continuations := make([]string, 0)
+	for _, rF := range relatedFroms {
+		if rF.RelationIndexFromKey != nil {
+			j, err := json.Marshal(rF)
+			if err != nil {
+				return nil, err
+			}
+			o2 := base64.StdEncoding.EncodeToString(j)
+
+			continuations = append(continuations, o2)
+		}
+	}
+	return continuations, nil
+}
+
+func decodeCont(continuations []string) ([]server.RelatedFrom, error) {
+	relatedFroms := make([]server.RelatedFrom, len(continuations))
+	for i, c := range continuations {
+		s, err := base64.StdEncoding.DecodeString(c)
+		if err != nil {
+			return nil, err
+		}
+		var out server.RelatedFrom
+		err = json.Unmarshal(s, &out)
+		if err != nil {
+			return nil, err
+		}
+		relatedFroms[i] = out
+	}
+	return relatedFroms, nil
 }

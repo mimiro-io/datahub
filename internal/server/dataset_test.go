@@ -17,17 +17,17 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/DataDog/datadog-go/v5/statsd"
-	"github.com/mimiro-io/datahub/internal"
-	"github.com/mimiro-io/datahub/internal/conf"
-	"go.uber.org/fx/fxtest"
-	"go.uber.org/zap"
 	"os"
 	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/franela/goblin"
+	"github.com/mimiro-io/datahub/internal"
+	"github.com/mimiro-io/datahub/internal/conf"
+	"go.uber.org/fx/fxtest"
+	"go.uber.org/zap"
 )
 
 type testEnv struct {
@@ -60,24 +60,30 @@ func TestDataset(t *testing.T) {
 			g.Assert(err).IsNil()
 
 			// namespaces
-			peopleNamespacePrefix, err := s.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
-			companyNamespacePrefix, err := s.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/company/")
+			peopleNamespacePrefix, err := s.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/people/",
+			)
+			companyNamespacePrefix, err := s.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/company/",
+			)
 
 			// create dataset
 			peopleDataset, err := dsm.CreateDataset("people", nil)
-			env = &testEnv{s,
+			env = &testEnv{
+				s,
 				peopleNamespacePrefix,
 				companyNamespacePrefix,
 				peopleDataset,
 				dsm,
-				storeLocation}
+				storeLocation,
+			}
 		})
 		g.AfterEach(func() {
 			_ = env.store.Close()
 			_ = os.RemoveAll(storeLocation)
 		})
 		g.It("XXX Should accept both single strings and string arrays as refs values", func() {
-			//add a first person with all new refs
+			// add a first person with all new refs
 			person := NewEntity(env.peopleNamespacePrefix+":person-1", 1)
 			person.Properties[env.peopleNamespacePrefix+":Name"] = "person 1"
 			person.References[env.peopleNamespacePrefix+":worksfor"] = env.companyNamespacePrefix + ":company-3"
@@ -87,7 +93,6 @@ func TestDataset(t *testing.T) {
 			}
 			err := env.ds.StoreEntities([]*Entity{person})
 			g.Assert(err).IsNil("Expected entity to be stored without error")
-
 			// query
 			queryIds := []string{"http://data.mimiro.io/people/person-1"}
 			result, err := env.store.GetManyRelatedEntities(queryIds, "*", false, []string{})
@@ -108,7 +113,7 @@ func TestDataset(t *testing.T) {
 			g.Assert(company1Seen).IsTrue("company-1 was not observed in relations")
 			g.Assert(company2Seen).IsTrue("company-2 was not observed in relations")
 
-			//add the same person with updated working relations, thus covering the "not new" branch of code
+			// add the same person with updated working relations, thus covering the "not new" branch of code
 			person = NewEntity(env.peopleNamespacePrefix+":person-"+strconv.Itoa(1), 0)
 			person.Properties[env.peopleNamespacePrefix+":Name"] = "person " + strconv.Itoa(2)
 			person.References[env.peopleNamespacePrefix+":worksfor"] = env.companyNamespacePrefix + ":company-4"
@@ -146,15 +151,17 @@ func TestDataset(t *testing.T) {
 		})
 
 		g.It("Should use it's publicNamespaces property for context", func() {
-			//first part: test that we get global namespace if nothing is overridden
-			_, _ = env.store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/internal/secret/finance")
+			// first part: test that we get global namespace if nothing is overridden
+			_, _ = env.store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/internal/secret/finance",
+			)
 			_, _ = env.store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/profile/")
 			context := env.ds.GetContext()
 			g.Assert(len(context.Namespaces)).Eql(7, "There should have been 7 namespaces in the context "+
 				"since the dataset does not have publicNamespaces declared.")
 
-			//second part: inject publicNamespaces setting for people ds,
-			//and test that it is applied when retrieving context
+			// second part: inject publicNamespaces setting for people ds,
+			// and test that it is applied when retrieving context
 			coreDsInterface, _ := env.store.datasets.Load("core.Dataset")
 			coreDs := coreDsInterface.(*Dataset)
 			res, _ := coreDs.GetEntities("", 10)
@@ -174,7 +181,7 @@ func TestDataset(t *testing.T) {
 			g.Assert(len(context.Namespaces)).Eql(2, "Expected only 2 namespaces now, since we have"+
 				" added a publicNamespaces override")
 
-			//make sure we did not remove the items property when updating publicNamespaces
+			// make sure we did not remove the items property when updating publicNamespaces
 			res, _ = coreDs.GetEntities("", 10)
 			for _, e := range res.Entities {
 				if e.ID == "ns0:people" {
@@ -188,7 +195,9 @@ func TestDataset(t *testing.T) {
 				NewEntityFromMap(map[string]interface{}{
 					"id":    env.peopleNamespacePrefix + ":person-1",
 					"props": map[string]interface{}{env.peopleNamespacePrefix + ":Name": "Lisa"},
-					"refs":  map[string]interface{}{}})})
+					"refs":  map[string]interface{}{},
+				}),
+			})
 			res, _ = coreDs.GetEntities("", 10)
 
 			// verify that the itemcount is updated
