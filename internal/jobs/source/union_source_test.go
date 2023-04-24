@@ -65,8 +65,8 @@ func TestUnionDatasetSource(t *testing.T) {
 		})
 
 		g.It("should emit changes if not in fullsync mode", func() {
-			adults, adultsPrefix := createTestDataset("adults", []string{"Bob", "Alice"}, nil, dsm, g, store)
-			children, childrenPrefix := createTestDataset("children", []string{"Jimmy", "Grace"}, nil, dsm, g, store)
+			adults, adultsPrefix := createTestDataset("adults", []string{"Bob", "Alice"}, nil, dsm, store)
+			children, childrenPrefix := createTestDataset("children", []string{"Jimmy", "Grace"}, nil, dsm, store)
 			// add one change to each entity -> 4 changes
 			addChanges("adults", []string{"Bob", "Alice"}, dsm, store)
 			addChanges("children", []string{"Jimmy", "Grace"}, dsm, store)
@@ -149,8 +149,8 @@ func TestUnionDatasetSource(t *testing.T) {
 			g.Assert(recordedEntities[0].Properties["name"]).Eql("Grace-changed")
 		})
 		g.It("should support fullsync", func() {
-			createTestDataset("adults", []string{"Bob", "Alice"}, nil, dsm, g, store)
-			createTestDataset("children", []string{"Jimmy", "Grace"}, nil, dsm, g, store)
+			createTestDataset("adults", []string{"Bob", "Alice"}, nil, dsm, store)
+			createTestDataset("children", []string{"Jimmy", "Grace"}, nil, dsm, store)
 			// add one change to each entity -> 4 changes
 			addChanges("adults", []string{"Bob", "Alice"}, dsm, store)
 			addChanges("children", []string{"Jimmy", "Grace"}, dsm, store)
@@ -181,8 +181,8 @@ func TestUnionDatasetSource(t *testing.T) {
 			g.Assert(len(recordedEntities)).Eql(4, "two entities per dataset in latest state")
 		})
 		g.It("should respect latestOnly", func() {
-			createTestDataset("adults", []string{"Bob", "Alice"}, nil, dsm, g, store)
-			createTestDataset("children", []string{"Jimmy", "Grace"}, nil, dsm, g, store)
+			createTestDataset("adults", []string{"Bob", "Alice"}, nil, dsm, store)
+			createTestDataset("children", []string{"Jimmy", "Grace"}, nil, dsm, store)
 			// add one change to each entity -> 4 changes
 			addChanges("adults", []string{"Bob", "Alice"}, dsm, store)
 			addChanges("children", []string{"Jimmy", "Grace"}, dsm, store)
@@ -212,13 +212,12 @@ func TestUnionDatasetSource(t *testing.T) {
 		})
 
 		g.It("should respect batch sizes", func() {
-			createTestDataset("adults", []string{"Bob", "Alice", "a", "b", "c"}, nil, dsm, g, store)
+			createTestDataset("adults", []string{"Bob", "Alice", "a", "b", "c"}, nil, dsm, store)
 			createTestDataset(
 				"children",
 				[]string{"Jimmy", "Grace", "1", "2", "3", "4", "5", "6", "7", "8"},
 				nil,
 				dsm,
-				g,
 				store,
 			)
 
@@ -250,8 +249,8 @@ func TestUnionDatasetSource(t *testing.T) {
 		})
 
 		g.It("should recognize it's tokens", func() {
-			createTestDataset("adults", []string{"Bob", "Alice"}, nil, dsm, g, store)
-			createTestDataset("children", []string{"Jimmy", "Grace"}, nil, dsm, g, store)
+			createTestDataset("adults", []string{"Bob", "Alice"}, nil, dsm, store)
+			createTestDataset("children", []string{"Jimmy", "Grace"}, nil, dsm, store)
 
 			testSource := source.UnionDatasetSource{
 				[]*source.DatasetSource{

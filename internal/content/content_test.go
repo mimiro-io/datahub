@@ -21,104 +21,106 @@ import (
 	"testing"
 
 	"github.com/DataDog/datadog-go/v5/statsd"
-	"github.com/franela/goblin"
-	"go.uber.org/fx/fxtest"
-	"go.uber.org/zap"
-
 	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/server"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"go.uber.org/fx/fxtest"
+	"go.uber.org/zap"
 )
 
 func TestContent(t *testing.T) {
-	g := goblin.Goblin(t)
-	g.Describe("The content API", func() {
-		var store *server.Store
-		var contentConfig *Config
-		var e *conf.Env
-		testCnt := 0
-		js := ` {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Content Suite")
+}
+
+var _ = Describe("The content API", func() {
+	var store *server.Store
+	var contentConfig *Config
+	var e *conf.Env
+	testCnt := 0
+	js := ` {
 		  "id": "test-import-content",
 		  "data": {
 			  "databaseServer" : "example",
 			  "baseUri" : "https://servers.example.io/",
 			  "baseNamespace": "http://server.example.io"
 		} } `
-		g.BeforeEach(func() {
-			testCnt = testCnt + 1
-			e = &conf.Env{
-				Logger:        zap.NewNop().Sugar(),
-				StoreLocation: "./test_add_content_" + strconv.Itoa(testCnt),
-			}
-			err := os.RemoveAll(e.StoreLocation)
-			g.Assert(err).IsNil("should be allowed to clean testfiles in " + e.StoreLocation)
-			lc := fxtest.NewLifecycle(internal.FxTestLog(t, false))
-			sc := &statsd.NoOpClient{}
-			store = server.NewStore(lc, e, sc)
-			lc.RequireStart()
-			contentConfig = NewContent(e, store, sc)
-		})
-		g.AfterEach(func() {
-			_ = store.Close()
-			_ = os.RemoveAll(e.StoreLocation)
-		})
-		g.It("Should store added content so that it can be read back again", func() {
-			content := &Content{}
-			err := json.Unmarshal([]byte(js), &content)
-			g.Assert(err).IsNil()
-
-			err = contentConfig.AddContent("test-import-content", content)
-			g.Assert(err).IsNil()
-
-			content2 := &Content{}
-			err = store.GetObject(server.ContentIndex, "test-import-content", content2)
-			g.Assert(err).IsNil()
-
-			g.Assert(content2.ID).Eql("test-import-content")
-		})
-
-		g.It("Should update content", func() {
-			content := &Content{}
-			err := json.Unmarshal([]byte(js), content)
-			g.Assert(err).IsNil()
-
-			// save new content
-			err = contentConfig.AddContent("test-import-content", content)
-			g.Assert(err).IsNil()
-			g.Assert(content.Data["baseUri"]).Eql("https://servers.example.io/")
-
-			// update content
-			content.Data["baseUri"] = "http://data.mimiro.io/test/"
-			err = contentConfig.UpdateContent("test-import-content", content)
-			g.Assert(err).IsNil()
-
-			// read it back
-			content2 := &Content{}
-			err = store.GetObject(server.ContentIndex, "test-import-content", content2)
-			g.Assert(err).IsNil()
-			g.Assert(content2.ID).Eql(content.ID)
-			g.Assert(content2.Data["baseUri"]).Eql("http://data.mimiro.io/test/")
-		})
-
-		g.It("Should list stored contents", func() {
-			content := &Content{}
-			err := json.Unmarshal([]byte(js), content)
-			g.Assert(err).IsNil()
-
-			err = contentConfig.AddContent("test-import-content", content)
-			g.Assert(err).IsNil()
-
-			content2 := &Content{}
-			err = json.Unmarshal([]byte(js), content2)
-			g.Assert(err).IsNil()
-
-			content2.ID = "test-2"
-			err = contentConfig.AddContent("test2", content2)
-			g.Assert(err).IsNil()
-
-			res, err := contentConfig.ListContents()
-			g.Assert(err).IsNil()
-			g.Assert(len(res)).Eql(2)
-		})
+	BeforeEach(func() {
+		testCnt = testCnt + 1
+		e = &conf.Env{
+			Logger:        zap.NewNop().Sugar(),
+			StoreLocation: "./test_add_content_" + strconv.Itoa(testCnt),
+		}
+		err := os.RemoveAll(e.StoreLocation)
+		Expect(err).To(BeNil(), "should be allowed to clean testfiles in "+e.StoreLocation)
+		lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
+		sc := &statsd.NoOpClient{}
+		store = server.NewStore(lc, e, sc)
+		lc.RequireStart()
+		contentConfig = NewContent(e, store, sc)
 	})
-}
+	AfterEach(func() {
+		_ = store.Close()
+		_ = os.RemoveAll(e.StoreLocation)
+	})
+	It("Should store added content so that it can be read back again", func() {
+		content := &Content{}
+		err := json.Unmarshal([]byte(js), &content)
+		Expect(err).To(BeNil())
+
+		err = contentConfig.AddContent("test-import-content", content)
+		Expect(err).To(BeNil())
+
+		content2 := &Content{}
+		err = store.GetObject(server.ContentIndex, "test-import-content", content2)
+		Expect(err).To(BeNil())
+
+		Expect(content2.ID).To(Equal("test-import-content"))
+	})
+
+	It("Should update content", func() {
+		content := &Content{}
+		err := json.Unmarshal([]byte(js), content)
+		Expect(err).To(BeNil())
+
+		// save new content
+		err = contentConfig.AddContent("test-import-content", content)
+		Expect(err).To(BeNil())
+		Expect(content.Data["baseUri"]).To(Equal("https://servers.example.io/"))
+
+		// update content
+		content.Data["baseUri"] = "http://data.mimiro.io/test/"
+		err = contentConfig.UpdateContent("test-import-content", content)
+		Expect(err).To(BeNil())
+
+		// read it back
+		content2 := &Content{}
+		err = store.GetObject(server.ContentIndex, "test-import-content", content2)
+		Expect(err).To(BeNil())
+		Expect(content2.ID).To(Equal(content.ID))
+		Expect(content2.Data["baseUri"]).To(Equal("http://data.mimiro.io/test/"))
+	})
+
+	It("Should list stored contents", func() {
+		content := &Content{}
+		err := json.Unmarshal([]byte(js), content)
+		Expect(err).To(BeNil())
+
+		err = contentConfig.AddContent("test-import-content", content)
+		Expect(err).To(BeNil())
+
+		content2 := &Content{}
+		err = json.Unmarshal([]byte(js), content2)
+		Expect(err).To(BeNil())
+
+		content2.ID = "test-2"
+		err = contentConfig.AddContent("test2", content2)
+		Expect(err).To(BeNil())
+
+		res, err := contentConfig.ListContents()
+		Expect(err).To(BeNil())
+		Expect(len(res)).To(Equal(2))
+	})
+})
