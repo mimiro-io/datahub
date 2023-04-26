@@ -17,10 +17,11 @@ package secrets
 import (
 	"testing"
 
-	"github.com/mimiro-io/datahub/internal/conf"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/conf"
 )
 
 func TestNewManager(t *testing.T) {
