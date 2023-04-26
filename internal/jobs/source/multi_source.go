@@ -1,4 +1,5 @@
 // Copyright 2021 MIMIRO AS
+
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -104,12 +105,14 @@ func (multiSource *MultiSource) EndFullSync() {
 	multiSource.isFullSync = false
 }
 
-var ErrDatasetMissing = fmt.Errorf("dataset is missing")
-var ErrTokenType = fmt.Errorf("continuation token is of wrong type")
+var (
+	ErrDatasetMissing = fmt.Errorf("dataset is missing")
+	ErrTokenType      = fmt.Errorf("continuation token is of wrong type")
+)
 
 func (multiSource *MultiSource) ReadEntities(since DatasetContinuation, batchSize int,
-	processEntities func([]*server.Entity, DatasetContinuation) error) error {
-
+	processEntities func([]*server.Entity, DatasetContinuation) error,
+) error {
 	multiSource.resetChangesCache()
 	defer multiSource.resetChangesCache()
 
@@ -121,7 +124,11 @@ func (multiSource *MultiSource) ReadEntities(since DatasetContinuation, batchSiz
 
 	d, ok := since.(*MultiDatasetContinuation)
 	if !ok {
-		return fmt.Errorf("continuation in multisource is not a *MulitDatasetContinuation, but %t, %w", since, ErrTokenType)
+		return fmt.Errorf(
+			"continuation in multisource is not a *MulitDatasetContinuation, but %t, %w",
+			since,
+			ErrTokenType,
+		)
 	}
 
 	if !multiSource.isFullSync {
@@ -132,7 +139,7 @@ func (multiSource *MultiSource) ReadEntities(since DatasetContinuation, batchSiz
 			}
 		}
 	} else {
-		//set watermarks before starting fullsync
+		// set watermarks before starting fullsync
 		for depName, waterMark := range multiSource.waterMarks {
 			if d.DependencyTokens == nil {
 				d.DependencyTokens = make(map[string]*StringDatasetContinuation)
@@ -152,7 +159,8 @@ func (multiSource *MultiSource) resetChangesCache() {
 }
 
 func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatasetContinuation, batchSize int,
-	processEntities func([]*server.Entity, DatasetContinuation) error) error {
+	processEntities func([]*server.Entity, DatasetContinuation) error,
+) error {
 	depDataset, err2 := multiSource.getDatasetFor(dep)
 	targetDs := multiSource.Store.DatasetsToInternalIDs([]string{multiSource.DatasetName})
 	if err2 != nil {
@@ -173,14 +181,14 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 
 	queryTime := time.Now().UnixNano()
 	entities := make([]*server.Entity, 0)
-	//go through joins in sequence
+	// go through joins in sequence
 	prevDataset := dep.Dataset
 	for idx, join := range dep.Joins {
 		joinLvlChan := make(chan uint64)
 		errChan := make(chan error)
 		currentStartPoints := startPoints // copy by value
-		predId, err := multiSource.Store.GetPredicateID(join.Predicate, nil)
-		if err != nil {
+		predID, err2 := multiSource.Store.GetPredicateID(join.Predicate, nil)
+		if err2 != nil {
 			// predicate does not exist (yet), so we can drop out
 			startPoints = nil
 			continue
@@ -196,15 +204,15 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 				// 1. build a RelatedFrom query input
 				searchBuffer := make([]byte, 10)
 				if join.Inverse {
-					binary.BigEndian.PutUint16(searchBuffer, server.INCOMING_REF_INDEX)
+					binary.BigEndian.PutUint16(searchBuffer, server.IncomingRefIndex)
 				} else {
-					binary.BigEndian.PutUint16(searchBuffer, server.OUTGOING_REF_INDEX)
+					binary.BigEndian.PutUint16(searchBuffer, server.OutgoingRefIndex)
 				}
 				binary.BigEndian.PutUint64(searchBuffer[2:], rid)
 
 				relatedFrom := server.RelatedFrom{
 					RelationIndexFromKey: searchBuffer,
-					Predicate:            predId,
+					Predicate:            predID,
 					Inverse:              join.Inverse,
 					Datasets:             datasets,
 					At:                   queryTime,
@@ -212,9 +220,9 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 				nextRelatedFrom := relatedFrom
 			repeatQuery:
 				// 2. run query
-				relatedEntities, cont, err := multiSource.Store.GetRelatedAtTime(nextRelatedFrom, batchSize)
-				if err != nil {
-					errChan <- err
+				relatedEntities, cont, err2 := multiSource.Store.GetRelatedAtTime(nextRelatedFrom, batchSize)
+				if err2 != nil {
+					errChan <- err2
 				}
 				// 3. put all query results onto channel
 				for _, r := range relatedEntities {
@@ -229,14 +237,14 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 				// For non-inverse first-joins, we need to query back in time as well,
 				// to find related entities that have had their relation removed since "then"
 				if idx == 0 && !join.Inverse {
-					//get last change of previous run (cont-token minus 1 should give the last change index of previous processing run)
+					// get last change of previous run (cont-token minus 1 should give the last change index of previous processing run)
 					since := uint64(0)
 					if depSince.AsIncrToken() > 0 {
 						since = depSince.AsIncrToken() - 1
 					}
-					changes, err := depDataset.GetChanges(since, 1, multiSource.LatestOnly)
-					if err != nil {
-						errChan <- err
+					changes, err2 := depDataset.GetChanges(since, 1, multiSource.LatestOnly)
+					if err2 != nil {
+						errChan <- err2
 					}
 					if len(changes.Entities) > 0 {
 						timestamp := int64(changes.Entities[0].Recorded)
@@ -245,9 +253,9 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 						prevRelatedFrom.At = timestamp
 					repeatPrevQuery:
 						// same query paging logic as lines 213-227, just different point in time. duplicates may be put onto channel here
-						prevRelatedEntities, cont, err := multiSource.Store.GetRelatedAtTime(prevRelatedFrom, batchSize)
-						if err != nil {
-							errChan <- fmt.Errorf("previous GetRelatedAtTime failed for Join %+v at timestamp %v, %w", join, timestamp, err)
+						prevRelatedEntities, cont, err2 := multiSource.Store.GetRelatedAtTime(prevRelatedFrom, batchSize)
+						if err2 != nil {
+							errChan <- fmt.Errorf("previous GetRelatedAtTime failed for Join %+v at timestamp %v, %w", join, timestamp, err2)
 						}
 						for _, r := range prevRelatedEntities {
 							joinLvlChan <- r.EntityID
@@ -273,14 +281,14 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 				if ok {
 					// if we are in the middle of a join-chain, all we need to do here is to preapare a list of input entities for the next join
 					if idx != len(dep.Joins)-1 {
-						//prepare uris list for next join
+						// prepare uris list for next join
 						e := internalEntityID
 						if _, ok := dedupCache[e]; !ok {
 							dedupCache[e] = true
 							startPoints = append(startPoints, e)
 						}
 					} else {
-						//we reached the end of the join chain, here we can emit what we found
+						// we reached the end of the join chain, here we can emit what we found
 						e := internalEntityID
 						if _, ok := dedupCache[e]; !ok {
 							dedupCache[e] = true
@@ -298,9 +306,9 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 							// a new API function which includes the target dataset in the bagder search key this would be more performant in
 							// cases where the ID exists in many datasets. Even better if we can have an API function version that allows
 							// reuse of a common read transaction.
-							mainEntity, err := multiSource.Store.GetEntityWithInternalId(e, targetDs)
-							if err != nil {
-								return fmt.Errorf("could not load entity %+v from dataset %v", e, multiSource.DatasetName)
+							mainEntity, err2 := multiSource.Store.GetEntityWithInternalID(e, targetDs)
+							if err2 != nil {
+								return fmt.Errorf("could not load entity %+v from dataset %v: %w", e, multiSource.DatasetName, err2)
 							}
 							// GetEntity is a Query Function. As such it returns skeleton Entities which only contain an ID for
 							// references to non-existing entities. Checking for recorded tells us whether this is a real entity hit
@@ -319,9 +327,9 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 					// channel close from go routine means we can stop listening
 					break readRelations
 				}
-			case err, ok := <-errChan:
+			case err2, ok := <-errChan:
 				if ok {
-					return err
+					return err2
 				} else {
 					// channel close from go routine means we can stop listening
 					break readRelations
@@ -353,7 +361,8 @@ type changeURIData struct {
 
 // returns array of internal entity ids, changes-continuation, error
 func (multiSource *MultiSource) findChanges(depDataset *server.Dataset, depSince *StringDatasetContinuation,
-	batchSize int) ([]uint64, uint64, error) {
+	batchSize int,
+) ([]uint64, uint64, error) {
 	if changes, ok := multiSource.changesCache[depDataset.ID]; ok {
 		return changes.ids, changes.continuation, nil
 	}
@@ -378,7 +387,8 @@ func (multiSource *MultiSource) getDatasetFor(dep Dependency) (*server.Dataset, 
 }
 
 func (multiSource *MultiSource) incrementalRead(since DatasetContinuation, batchSize int,
-	processEntities func([]*server.Entity, DatasetContinuation) error, dataset *server.Dataset) error {
+	processEntities func([]*server.Entity, DatasetContinuation) error, dataset *server.Dataset,
+) error {
 	entities := make([]*server.Entity, 0)
 	continuation, err := dataset.ProcessChanges(since.AsIncrToken(), batchSize, multiSource.LatestOnly,
 		func(entity *server.Entity) {
@@ -410,7 +420,11 @@ func (multiSource *MultiSource) ParseDependencies(dependenciesConfig interface{}
 				newDep.Dataset = m["dataset"].(string)
 				depDataset := multiSource.DatasetManager.GetDataset(newDep.Dataset)
 				if depDataset != nil && depDataset.IsProxy() {
-					return fmt.Errorf("dependency dataset %v in multiSource %v must not be a proxy dataset", newDep.Dataset, multiSource.DatasetName)
+					return fmt.Errorf(
+						"dependency dataset %v in multiSource %v must not be a proxy dataset",
+						newDep.Dataset,
+						multiSource.DatasetName,
+					)
 				}
 
 				for _, j := range m["joins"].([]interface{}) {

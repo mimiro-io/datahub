@@ -34,6 +34,7 @@ func (l *FxLogger) Logf(f string, a ...interface{}) {
 		l.t.Logf(f, a...)
 	}
 }
+
 func FxTestLog(t testing.TB, active bool) *FxLogger {
 	return &FxLogger{t: t, active: active}
 }

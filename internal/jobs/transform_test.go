@@ -16,12 +16,14 @@ package jobs
 
 import (
 	"encoding/base64"
-	"github.com/DataDog/datadog-go/v5/statsd"
-	"github.com/franela/goblin"
-	"github.com/mimiro-io/datahub/internal/server"
-	"go.uber.org/zap"
 	"strings"
 	"testing"
+
+	"github.com/DataDog/datadog-go/v5/statsd"
+	"github.com/franela/goblin"
+	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 func TestTransform(t *testing.T) {
@@ -122,7 +124,7 @@ func TestTransform(t *testing.T) {
 
 			r, _ := transform.transformEntities(&Runner{statsdClient: &statsd.NoOpClient{}}, entities, "")
 			g.Assert(len(r)).Eql(1)
-			//t.Logf("%+v", r[0])
+			// t.Logf("%+v", r[0])
 			g.Assert(r[0].Properties["b:output"].(*server.Entity).
 				Properties["b:num"]).Eql(entities[0].Properties["a:input"])
 		})
@@ -151,7 +153,7 @@ func TestTransform(t *testing.T) {
 			r, err := transform.transformEntities(&Runner{statsdClient: &statsd.NoOpClient{}}, entities, "")
 			g.Assert(err).IsNil()
 			g.Assert(len(r)).Eql(1)
-			//t.Logf("%+v", r[0])
+			// t.Logf("%+v", r[0])
 			g.Assert(r[0].Properties["b:output"]).Eql([]interface{}{
 				entities[0].Properties["a:input"],
 				entities[0].Properties["a:input"],
@@ -192,7 +194,6 @@ func TestJavascriptTransform_ToString(t *testing.T) {
 
 			ret := transform.ToString(lemap)
 			g.Assert(ret).Equal("map[field1:1 field2:2]")
-
 		})
 		g.It("an entity should be formatted correctly", func() {
 			transform := &JavascriptTransform{}
@@ -215,14 +216,24 @@ func TestHttpTransformConfig(t *testing.T) {
 	g := goblin.Goblin(t)
 	g.Describe("Test that httpTransform picks up timeout from config", func() {
 		g.It("Should return correct httpTransform", func() {
-			c := &JobConfiguration{Id: "oes3fjudqn", Title: "my-test-title", Description: "my-description", Source: map[string]interface{}{"Type": "DatasetSource", "Name": "test-dataset"}, Sink: map[string]interface{}{"Type": "DatasetSink", "Name": "test-transformed"}, Transform: map[string]interface{}{"TimeOut": 70.00, "Type": "HttpTransform", "Url": "https://very-external"}}
-			transform := &HttpTransform{TimeOut: 70.00, Url: "https://very-external"}
+			c := &JobConfiguration{
+				ID:          "oes3fjudqn",
+				Title:       "my-test-title",
+				Description: "my-description",
+				Source:      map[string]interface{}{"Type": "DatasetSource", "Name": "test-dataset"},
+				Sink:        map[string]interface{}{"Type": "DatasetSink", "Name": "test-transformed"},
+				Transform: map[string]interface{}{
+					"TimeOut": 70.00,
+					"Type":    "HttpTransform",
+					"Url":     "https://very-external",
+				},
+			}
+			transform := &HTTPTransform{TimeOut: 70.00, URL: "https://very-external"}
 			scheduler := Scheduler{}
 			test, err := scheduler.parseTransform(c)
 			g.Assert(err).IsNil("should not error here")
 
 			g.Assert(transform).Equal(test, "Bare minimum transform")
-
 		})
 	})
 }

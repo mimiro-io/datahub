@@ -16,10 +16,11 @@ package jobs
 
 import (
 	"fmt"
-	"github.com/bamzi/jobrunner"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/bamzi/jobrunner"
 
 	"github.com/mimiro-io/datahub/internal/server"
 )
@@ -35,7 +36,7 @@ type job struct {
 }
 
 type jobResult struct {
-	Id        string    `json:"id"`
+	ID        string    `json:"id"`
 	Title     string    `json:"title"`
 	Start     time.Time `json:"start"`
 	End       time.Time `json:"end"`
@@ -54,7 +55,7 @@ func (job *job) Run() {
 	if ticket == nil {
 		if job.pipeline.isFullSync() { // reschedule to try again in a bit
 			duration := 5 * time.Second
-			//TODO: read this through viper into env.Config? curretnly only used in unit test but could be useful as general config?
+			// TODO: read this through viper into env.Config? curretnly only used in unit test but could be useful as general config?
 			durationOverride, found := os.LookupEnv("JOB_FULLSYNC_RETRY_INTERVAL")
 			if found {
 				d, err := time.ParseDuration(durationOverride)
@@ -132,15 +133,17 @@ func (job *job) Run() {
 		_ = job.runner.statsdClient.Count("jobs.success", timed.Nanoseconds(), tags, 1)
 	}
 
-	job.runner.logger.Infow(fmt.Sprintf("Finished %s with id '%s' (%s) - duration was %s", msg, job.title, job.id, timed),
+	job.runner.logger.Infow(
+		fmt.Sprintf("Finished %s with id '%s' (%s) - duration was %s", msg, job.title, job.id, timed),
 		"job.jobId", job.id,
 		"job.jobTitle", job.title,
 		"job.state", "Finished",
-		"job.jobType", jobType)
+		"job.jobType", jobType,
+	)
 
 	// we store the last run info
 	lastRun := &jobResult{
-		Id:        job.id,
+		ID:        job.id,
 		Title:     job.title,
 		Start:     ticket.runState.started,
 		End:       time.Now(),
@@ -150,7 +153,7 @@ func (job *job) Run() {
 		lastRun.LastError = err.Error()
 	}
 	// its not really a problem to ignore this error
-	_ = job.runner.store.StoreObject(server.JOB_RESULT_INDEX, job.id, lastRun)
+	_ = job.runner.store.StoreObject(server.JobResultIndex, job.id, lastRun)
 }
 
 var retryJobIds sync.Map

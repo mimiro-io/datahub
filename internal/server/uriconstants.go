@@ -14,10 +14,12 @@
 
 package server
 
-const RdfNamespaceExpansion = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+const (
+	RdfNamespaceExpansion = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 
-// rdf and rdfs core uris
-const RdfTypeUri string = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+	// rdf and rdfs core uris
+	RdfTypeURI string = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 
-const RdfsClassUri string = "http://www.w3.org/2000/01/rdf-schema#Class"
-const RdfsLabelUri string = "http://www.w3.org/2000/01/rdf-schema#label"
+	RdfsClassURI string = "http://www.w3.org/2000/01/rdf-schema#Class"
+	RdfsLabelURI string = "http://www.w3.org/2000/01/rdf-schema#label"
+)

@@ -24,10 +24,11 @@ import (
 
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/franela/goblin"
-	"github.com/mimiro-io/datahub/internal"
-	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal"
+	"github.com/mimiro-io/datahub/internal/conf"
 )
 
 type testEnv struct {
@@ -60,15 +61,15 @@ func TestDataset(t *testing.T) {
 			g.Assert(err).IsNil()
 
 			// namespaces
-			peopleNamespacePrefix, err := s.NamespaceManager.AssertPrefixMappingForExpansion(
+			peopleNamespacePrefix, _ := s.NamespaceManager.AssertPrefixMappingForExpansion(
 				"http://data.mimiro.io/people/",
 			)
-			companyNamespacePrefix, err := s.NamespaceManager.AssertPrefixMappingForExpansion(
+			companyNamespacePrefix, _ := s.NamespaceManager.AssertPrefixMappingForExpansion(
 				"http://data.mimiro.io/company/",
 			)
 
 			// create dataset
-			peopleDataset, err := dsm.CreateDataset("people", nil)
+			peopleDataset, _ := dsm.CreateDataset("people", nil)
 			env = &testEnv{
 				s,
 				peopleNamespacePrefix,
@@ -100,14 +101,14 @@ func TestDataset(t *testing.T) {
 
 			var company2Seen, company1Seen bool
 			for _, r := range result {
-				refEntityId := r[2].(*Entity).ID
+				refEntityID := r[2].(*Entity).ID
 				relation := r[1].(string)
 				if strings.Contains(relation, "worksfor") {
-					g.Assert(refEntityId == "ns4:company-3").IsTrue("worksfor should be company-3")
+					g.Assert(refEntityID == "ns4:company-3").IsTrue("worksfor should be company-3")
 				}
 				if strings.Contains(relation, "workedfor") {
-					company1Seen = company1Seen || strings.Contains(refEntityId, "company-1")
-					company2Seen = company2Seen || strings.Contains(refEntityId, "company-2")
+					company1Seen = company1Seen || strings.Contains(refEntityID, "company-1")
+					company2Seen = company2Seen || strings.Contains(refEntityID, "company-2")
 				}
 			}
 			g.Assert(company1Seen).IsTrue("company-1 was not observed in relations")
@@ -134,15 +135,15 @@ func TestDataset(t *testing.T) {
 			company2Seen = false
 			company1Seen = false
 			for _, r := range result {
-				refEntityId := r[2].(*Entity).ID
+				refEntityID := r[2].(*Entity).ID
 				relation := r[1].(string)
 				if strings.Contains(relation, "worksfor") {
-					g.Assert(refEntityId == "ns4:company-4").IsTrue("worksfor should be company-4")
+					g.Assert(refEntityID == "ns4:company-4").IsTrue("worksfor should be company-4")
 				}
 				if strings.Contains(relation, "workedfor") {
-					company1Seen = company1Seen || strings.Contains(refEntityId, "company-1")
-					company2Seen = company2Seen || strings.Contains(refEntityId, "company-2")
-					company3Seen = company3Seen || strings.Contains(refEntityId, "company-3")
+					company1Seen = company1Seen || strings.Contains(refEntityID, "company-1")
+					company2Seen = company2Seen || strings.Contains(refEntityID, "company-2")
+					company3Seen = company3Seen || strings.Contains(refEntityID, "company-3")
 				}
 			}
 			g.Assert(company1Seen).IsTrue("company-1 was not observed in relations")

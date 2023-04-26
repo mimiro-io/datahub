@@ -15,23 +15,24 @@
 package security
 
 import (
-	"github.com/DataDog/datadog-go/v5/statsd"
-	"github.com/franela/goblin"
-	"github.com/mimiro-io/datahub/internal"
-	"github.com/mimiro-io/datahub/internal/conf"
-	"github.com/mimiro-io/datahub/internal/server"
-	"go.uber.org/fx/fxtest"
-	"go.uber.org/zap"
 	"os"
 	"strconv"
 	"testing"
+
+	"github.com/DataDog/datadog-go/v5/statsd"
+	"github.com/franela/goblin"
+	"go.uber.org/fx/fxtest"
+	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal"
+	"github.com/mimiro-io/datahub/internal/conf"
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 func TestCrud(t *testing.T) {
 	g := goblin.Goblin(t)
 
 	g.Describe("Login Provider Crud operations", func() {
-
 		var store *server.Store
 		var e *conf.Env
 		var pm *ProviderManager
@@ -91,7 +92,6 @@ func TestCrud(t *testing.T) {
 
 			_, err = pm.FindByName("test-jwt-4")
 			g.Assert(err).Eql(ErrLoginProviderNotFound)
-
 		})
 		g.It("should be able to delete a config", func() {
 			p := createConfig("test-jwt-5")
@@ -118,7 +118,6 @@ func TestCrud(t *testing.T) {
 			items, err := pm.ListProviders()
 			g.Assert(err).IsNil()
 			g.Assert(len(items)).Equal(2)
-
 		})
 	})
 }
@@ -127,7 +126,7 @@ func createConfig(name string) ProviderConfig {
 	return ProviderConfig{
 		Name: name,
 		Type: "bearer",
-		ClientId: &ValueReader{
+		ClientID: &ValueReader{
 			Type:  "text",
 			Value: "id1",
 		},

@@ -16,7 +16,6 @@ package source
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -30,7 +29,7 @@ import (
 	"github.com/mimiro-io/datahub/internal/server"
 )
 
-type HttpDatasetSource struct {
+type HTTPDatasetSource struct {
 	Endpoint       string
 	Authentication string            // "none, basic, token"
 	User           string            // for use in basic auth
@@ -40,19 +39,20 @@ type HttpDatasetSource struct {
 	Logger         *zap.SugaredLogger
 }
 
-func (httpDatasetSource *HttpDatasetSource) StartFullSync() {
+func (httpDatasetSource *HTTPDatasetSource) StartFullSync() {
 	// empty for now (this makes sonar not complain)
 }
 
-func (httpDatasetSource *HttpDatasetSource) EndFullSync() {
+func (httpDatasetSource *HTTPDatasetSource) EndFullSync() {
 	// empty for now (this makes sonar not complain)
 }
 
-func (httpDatasetSource *HttpDatasetSource) ReadEntities(since DatasetContinuation, batchSize int,
-	processEntities func([]*server.Entity, DatasetContinuation) error) error {
+func (httpDatasetSource *HTTPDatasetSource) ReadEntities(since DatasetContinuation, batchSize int,
+	processEntities func([]*server.Entity, DatasetContinuation) error,
+) error {
 	// open connection
-	//timeout := 60 * time.Minute
-	//client := httpclient.NewClient(httpclient.WithHTTPTimeout(timeout))
+	// timeout := 60 * time.Minute
+	// client := httpclient.NewClient(httpclient.WithHTTPTimeout(timeout))
 
 	// create headers if needed
 	endpoint, err := url.Parse(httpDatasetSource.Endpoint)
@@ -76,13 +76,13 @@ func (httpDatasetSource *HttpDatasetSource) ReadEntities(since DatasetContinuati
 	defer cancel()
 
 	// set up a transport with sane defaults, but with a default content timeout of 0 (infinite)
-	var netTransport = &http.Transport{
+	netTransport := &http.Transport{
 		DialContext: (&net.Dialer{
 			Timeout: 5 * time.Second,
 		}).DialContext,
 		TLSHandshakeTimeout: 5 * time.Second,
 	}
-	var netClient = &http.Client{
+	netClient := &http.Client{
 		Transport: netTransport,
 	}
 
@@ -98,7 +98,7 @@ func (httpDatasetSource *HttpDatasetSource) ReadEntities(since DatasetContinuati
 	}
 	defer res.Body.Close()
 	if res.StatusCode != 200 {
-		return handleHttpError(res)
+		return handleHTTPError(res)
 	}
 
 	// set default batch size if not specified
@@ -118,9 +118,9 @@ func (httpDatasetSource *HttpDatasetSource) ReadEntities(since DatasetContinuati
 			read++
 			if read == batchSize {
 				read = 0
-				err := processEntities(entities, continuationToken)
-				if err != nil {
-					return err
+				err2 := processEntities(entities, continuationToken)
+				if err2 != nil {
+					return err2
 				}
 				entities = make([]*server.Entity, 0)
 			}
@@ -144,7 +144,7 @@ func (httpDatasetSource *HttpDatasetSource) ReadEntities(since DatasetContinuati
 	return nil
 }
 
-func (httpDatasetSource *HttpDatasetSource) GetConfig() map[string]interface{} {
+func (httpDatasetSource *HTTPDatasetSource) GetConfig() map[string]interface{} {
 	config := make(map[string]interface{})
 	config["Type"] = "HttpDatasetSource"
 	config["Url"] = httpDatasetSource.Endpoint
@@ -152,10 +152,10 @@ func (httpDatasetSource *HttpDatasetSource) GetConfig() map[string]interface{} {
 	return config
 }
 
-func handleHttpError(response *http.Response) error {
+func handleHTTPError(response *http.Response) error {
 	bodyBytes, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		return errors.New(fmt.Sprintf("Received http source error (%d). Unable to read error body", response.StatusCode))
+		return fmt.Errorf("received http source error (%d). Unable to read error body", response.StatusCode)
 	}
-	return errors.New(fmt.Sprintf("Received http source error (%d): %s", response.StatusCode, string(bodyBytes)))
+	return fmt.Errorf("received http source error (%d): %s", response.StatusCode, string(bodyBytes))
 }

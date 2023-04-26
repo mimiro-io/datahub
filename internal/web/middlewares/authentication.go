@@ -18,12 +18,14 @@ import (
 	"context"
 	"crypto/rsa"
 	"errors"
+	"net/http"
+
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/lestrrat-go/jwx/v2/jwk"
+
 	"github.com/mimiro-io/datahub/internal/security"
-	"net/http"
 )
 
 type (
@@ -145,7 +147,6 @@ func (config *JwtConfig) ValidateToken(auth string) (*jwt.Token, error) {
 			}
 		}
 	})
-
 	if err != nil {
 		return nil, err
 	}

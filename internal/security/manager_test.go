@@ -15,23 +15,24 @@
 package security
 
 import (
-	"github.com/DataDog/datadog-go/v5/statsd"
-	"github.com/franela/goblin"
-	"github.com/mimiro-io/datahub/internal"
-	"github.com/mimiro-io/datahub/internal/conf"
-	"github.com/mimiro-io/datahub/internal/server"
-	"go.uber.org/fx/fxtest"
-	"go.uber.org/zap"
 	"os"
 	"strconv"
 	"testing"
+
+	"github.com/DataDog/datadog-go/v5/statsd"
+	"github.com/franela/goblin"
+	"go.uber.org/fx/fxtest"
+	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal"
+	"github.com/mimiro-io/datahub/internal/conf"
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 func TestManager(t *testing.T) {
 	g := goblin.Goblin(t)
 
 	g.Describe("Security Manager", func() {
-
 		var store *server.Store
 		var e *conf.Env
 		var pm *ProviderManager

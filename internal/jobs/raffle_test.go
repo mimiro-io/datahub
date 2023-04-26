@@ -20,9 +20,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/franela/goblin"
-
 	"github.com/DataDog/datadog-go/v5/statsd"
+	"github.com/franela/goblin"
 	"go.uber.org/zap"
 )
 
@@ -73,7 +72,7 @@ func TestRaffle(t *testing.T) {
 			// start 30 jobs
 			for i := 0; i < 30; i++ {
 				if running == 3 {
-					//make sure we only start 3 at a time by using a wait-group
+					// make sure we only start 3 at a time by using a wait-group
 					wg.Wait()
 					running = 0
 				} else {
@@ -84,7 +83,7 @@ func TestRaffle(t *testing.T) {
 						job := &job{id: "test" + id, pipeline: &IncrementalPipeline{}}
 						ticket := raffle.borrowTicket(job)
 						g.Assert(ticket).IsNotZero("Expected to get ticket for job " + id)
-						//simulate work
+						// simulate work
 						time.Sleep(10 * time.Millisecond)
 						raffle.returnTicket(ticket)
 						wg.Done()

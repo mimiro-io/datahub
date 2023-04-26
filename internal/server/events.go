@@ -22,11 +22,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mustafaturan/bus"
 	"github.com/mustafaturan/monoton"
 	"github.com/mustafaturan/monoton/sequencer"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/conf"
 )
 
 type EventBus interface {
@@ -43,8 +44,7 @@ type MEventBus struct {
 	logger *zap.SugaredLogger
 }
 
-type NoOp struct {
-}
+type NoOp struct{}
 
 func NewBus(env *conf.Env) (EventBus, error) {
 	// configure id generator (it doesn't have to be monoton)

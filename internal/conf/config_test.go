@@ -36,7 +36,6 @@ func TestLoadEnv(t *testing.T) {
 				g.Fail(err)
 			}
 			currentDir = d + "/../../.env-test"
-
 		})
 		g.It("should parse the test env file", func() {
 			env, err := loadEnv(&currentDir, false)
@@ -51,7 +50,6 @@ func TestLoadEnv(t *testing.T) {
 			_ = os.Unsetenv("PROFILE")
 		})
 	})
-
 }
 
 func TestParseEnvFromFile(t *testing.T) {
@@ -78,11 +76,10 @@ func TestParseEnvFromFile(t *testing.T) {
 			g.Assert(env.Port).Equal("9999")
 			g.Assert(env.StoreLocation).Equal("./test")
 			g.Assert(env.AgentHost).Equal("127.0.0.1:8125")
-
 		})
 
 		g.It("should have correct dl jwt values", func() {
-			g.Assert(env.DlJwtConfig.ClientId).Equal("id1")
+			g.Assert(env.DlJwtConfig.ClientID).Equal("id1")
 			g.Assert(env.DlJwtConfig.ClientSecret).Equal("some-secret")
 			g.Assert(env.DlJwtConfig.Audience).Equal("yes")
 			g.Assert(env.DlJwtConfig.GrantType).Equal("test")
@@ -94,7 +91,6 @@ func TestParseEnvFromFile(t *testing.T) {
 			g.Assert(env.Auth.Audience).Equal([]string{"https://example.io"})
 			g.Assert(env.Auth.Issuer).Equal([]string{"https://example.io"})
 			g.Assert(env.Auth.Middleware).Equal("noop")
-
 		})
 
 		g.It("should have opa configuration", func() {
@@ -152,7 +148,7 @@ func TestLoadEnvVariables(t *testing.T) {
 
 		g.It("should have read some env variables", func() {
 			g.Assert(c.Auth.WellKnown).Equal("https://example.io/jwks/.well-known/jwks.json")
-			g.Assert(c.DlJwtConfig.ClientId).Equal("12345")
+			g.Assert(c.DlJwtConfig.ClientID).Equal("12345")
 		})
 
 		g.It("should have set some default values", func() {

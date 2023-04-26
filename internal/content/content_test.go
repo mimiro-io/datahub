@@ -16,18 +16,18 @@ package content
 
 import (
 	"encoding/json"
-	"github.com/mimiro-io/datahub/internal"
 	"os"
 	"strconv"
 	"testing"
 
-	"github.com/franela/goblin"
-
 	"github.com/DataDog/datadog-go/v5/statsd"
-	"github.com/mimiro-io/datahub/internal/conf"
-	"github.com/mimiro-io/datahub/internal/server"
+	"github.com/franela/goblin"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal"
+	"github.com/mimiro-io/datahub/internal/conf"
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 func TestContent(t *testing.T) {
@@ -37,7 +37,7 @@ func TestContent(t *testing.T) {
 		var contentConfig *Config
 		var e *conf.Env
 		testCnt := 0
-		var js = ` {
+		js := ` {
 		  "id": "test-import-content",
 		  "data": {
 			  "databaseServer" : "example",
@@ -71,10 +71,10 @@ func TestContent(t *testing.T) {
 			g.Assert(err).IsNil()
 
 			content2 := &Content{}
-			err = store.GetObject(server.CONTENT_INDEX, "test-import-content", content2)
+			err = store.GetObject(server.ContentIndex, "test-import-content", content2)
 			g.Assert(err).IsNil()
 
-			g.Assert(content2.Id).Eql("test-import-content")
+			g.Assert(content2.ID).Eql("test-import-content")
 		})
 
 		g.It("Should update content", func() {
@@ -82,21 +82,21 @@ func TestContent(t *testing.T) {
 			err := json.Unmarshal([]byte(js), content)
 			g.Assert(err).IsNil()
 
-			//save new content
+			// save new content
 			err = contentConfig.AddContent("test-import-content", content)
 			g.Assert(err).IsNil()
 			g.Assert(content.Data["baseUri"]).Eql("https://servers.example.io/")
 
-			//update content
+			// update content
 			content.Data["baseUri"] = "http://data.mimiro.io/test/"
 			err = contentConfig.UpdateContent("test-import-content", content)
 			g.Assert(err).IsNil()
 
-			//read it back
+			// read it back
 			content2 := &Content{}
-			err = store.GetObject(server.CONTENT_INDEX, "test-import-content", content2)
+			err = store.GetObject(server.ContentIndex, "test-import-content", content2)
 			g.Assert(err).IsNil()
-			g.Assert(content2.Id).Eql(content.Id)
+			g.Assert(content2.ID).Eql(content.ID)
 			g.Assert(content2.Data["baseUri"]).Eql("http://data.mimiro.io/test/")
 		})
 
@@ -112,7 +112,7 @@ func TestContent(t *testing.T) {
 			err = json.Unmarshal([]byte(js), content2)
 			g.Assert(err).IsNil()
 
-			content2.Id = "test-2"
+			content2.ID = "test-2"
 			err = contentConfig.AddContent("test2", content2)
 			g.Assert(err).IsNil()
 

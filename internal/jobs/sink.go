@@ -25,10 +25,10 @@ import (
 	"strings"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/gojektech/heimdall/v6/httpclient"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
+
 	"github.com/mimiro-io/datahub/internal/server"
 )
 
@@ -46,14 +46,15 @@ func (s *Scheduler) parseSink(jobConfig *JobConfiguration) (Sink, error) {
 	if sinkConfig != nil {
 		sinkTypeName := sinkConfig["Type"]
 		if sinkTypeName != nil {
-			if sinkTypeName == "DatasetSink" {
+			switch sinkTypeName {
+			case "DatasetSink":
 				dsname := (sinkConfig["Name"]).(string)
 				dataset := s.DatasetManager.GetDataset(dsname)
 				if dataset != nil && dataset.IsProxy() {
 					sink := &httpDatasetSink{}
 					sink.Store = s.Store
 					sink.logger = s.Logger.Named("sink")
-					sink.Endpoint, _ = server.UrlJoin(dataset.ProxyConfig.RemoteUrl, "/entities")
+					sink.Endpoint, _ = server.URLJoin(dataset.ProxyConfig.RemoteURL, "/entities")
 
 					if dataset.ProxyConfig.AuthProviderName != "" {
 						sink.TokenProvider = dataset.ProxyConfig.AuthProviderName
@@ -65,10 +66,10 @@ func (s *Scheduler) parseSink(jobConfig *JobConfiguration) (Sink, error) {
 				sink.Store = s.Store
 				sink.DatasetManager = s.DatasetManager
 				return sink, nil
-			} else if sinkTypeName == "DevNullSink" {
+			case "DevNullSink":
 				sink := &devNullSink{}
 				return sink, nil
-			} else if sinkTypeName == "ConsoleSink" {
+			case "ConsoleSink":
 				sink := &consoleSink{}
 				v, ok := sinkConfig["Prefix"]
 				if ok {
@@ -80,7 +81,7 @@ func (s *Scheduler) parseSink(jobConfig *JobConfiguration) (Sink, error) {
 				}
 
 				return sink, nil
-			} else if sinkTypeName == "HttpDatasetSink" {
+			case "HttpDatasetSink":
 				sink := &httpDatasetSink{}
 				sink.Store = s.Store
 				sink.logger = s.Logger.Named("sink")
@@ -94,14 +95,13 @@ func (s *Scheduler) parseSink(jobConfig *JobConfiguration) (Sink, error) {
 					sink.TokenProvider = tokenProvider.(string)
 				}
 				return sink, nil
-			} else {
+			default:
 				return nil, errors.New("unknown sink type: " + sinkTypeName.(string))
 			}
 		}
 		return nil, errors.New("missing sink type")
 	}
 	return nil, errors.New("missing or wrong sink type")
-
 }
 
 type devNullSink struct{}
@@ -181,7 +181,6 @@ func (httpDatasetSink *httpDatasetSink) startFullSync(runner *Runner) error {
 }
 
 func (httpDatasetSink *httpDatasetSink) endFullSync(runner *Runner) error {
-
 	// send empty batch to server with end
 	timeout := 60 * time.Minute
 	client := httpclient.NewClient(httpclient.WithHTTPTimeout(timeout))
@@ -190,7 +189,7 @@ func (httpDatasetSink *httpDatasetSink) endFullSync(runner *Runner) error {
 	url := httpDatasetSink.Endpoint
 
 	allObjects := make([]interface{}, 1)
-	//TODO: https://mimiro.atlassian.net/browse/MIM-693
+	// TODO: https://mimiro.atlassian.net/browse/MIM-693
 	allObjects[0] = runner.store.GetGlobalContext()
 
 	jsonEntities, err := json.Marshal(allObjects)
@@ -220,7 +219,7 @@ func (httpDatasetSink *httpDatasetSink) endFullSync(runner *Runner) error {
 	}
 
 	if res.StatusCode != 200 {
-		return handleHttpError(res)
+		return handleHTTPError(res)
 	}
 
 	// reset full sync state
@@ -232,7 +231,6 @@ func (httpDatasetSink *httpDatasetSink) endFullSync(runner *Runner) error {
 }
 
 func (httpDatasetSink *httpDatasetSink) processEntities(runner *Runner, entities []*server.Entity) error {
-
 	timeout := 60 * time.Minute
 	client := httpclient.NewClient(httpclient.WithHTTPTimeout(timeout))
 
@@ -240,7 +238,7 @@ func (httpDatasetSink *httpDatasetSink) processEntities(runner *Runner, entities
 	url := httpDatasetSink.Endpoint
 
 	allObjects := make([]interface{}, len(entities)+1)
-	//TODO: https://mimiro.atlassian.net/browse/MIM-693
+	// TODO: https://mimiro.atlassian.net/browse/MIM-693
 	allObjects[0] = runner.store.GetGlobalContext()
 	for i := 0; i < len(entities); i++ {
 		allObjects[i+1] = entities[i]
@@ -285,7 +283,7 @@ func (httpDatasetSink *httpDatasetSink) processEntities(runner *Runner, entities
 	}
 
 	if res.StatusCode != 200 {
-		return handleHttpError(res)
+		return handleHTTPError(res)
 	}
 
 	return nil
@@ -347,10 +345,11 @@ func (datasetSink *datasetSink) GetConfig() map[string]interface{} {
 	config["Name"] = datasetSink.DatasetName
 	return config
 }
-func handleHttpError(response *http.Response) error {
+
+func handleHTTPError(response *http.Response) error {
 	bodyBytes, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		return errors.New(fmt.Sprintf("Received http sink error (%d). Unable to read error body", response.StatusCode))
+		return fmt.Errorf("received http sink error (%d). Unable to read error body", response.StatusCode)
 	}
-	return errors.New(fmt.Sprintf("Received http sink error (%d): %s", response.StatusCode, string(bodyBytes)))
+	return fmt.Errorf("received http sink error (%d): %s", response.StatusCode, string(bodyBytes))
 }

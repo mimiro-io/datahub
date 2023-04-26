@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/mimiro-io/datahub/internal"
 	"math"
 	"os"
 	"reflect"
@@ -26,11 +25,12 @@ import (
 	"time"
 
 	"github.com/DataDog/datadog-go/v5/statsd"
-	"github.com/mimiro-io/datahub/internal/conf"
+	"github.com/franela/goblin"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
 
-	"github.com/franela/goblin"
+	"github.com/mimiro-io/datahub/internal"
+	"github.com/mimiro-io/datahub/internal/conf"
 )
 
 func TestDatasetManager(t *testing.T) {
@@ -82,11 +82,11 @@ func TestDatasetManager(t *testing.T) {
 			err = ds.StoreEntities([]*Entity{{ID: "hei"}})
 			g.Assert(err).IsNil()
 
-			details, found, err = dsm.GetDatasetDetails("people")
+			details, _, _ = dsm.GetDatasetDetails("people")
 			g.Assert(details.Properties).Eql(map[string]interface{}{"ns0:items": 0, "ns0:name": "people"},
 				"people dataset was not unchanged")
 
-			details, found, err = dsm.GetDatasetDetails("more.people")
+			details, _, _ = dsm.GetDatasetDetails("more.people")
 			g.Assert(details.Properties).Eql(map[string]interface{}{"ns0:items": 1, "ns0:name": "more.people"})
 		})
 
@@ -107,7 +107,6 @@ func TestDatasetManager(t *testing.T) {
 			g.Assert(len(store.deletedDatasets)).Eql(1, "Deleted datasets should have surviced restart of store")
 			_, ok := store.deletedDatasets[ds.InternalID]
 			g.Assert(ok).IsTrue("our ds should still be deleted")
-
 		})
 
 		g.It("Should assign a new internal id to re-created datasets", func() {
@@ -119,7 +118,8 @@ func TestDatasetManager(t *testing.T) {
 			ds1, _ := dsm.CreateDataset("people", nil)
 			g.Assert(ds1).IsNotZero()
 
-			g.Assert(ds1.InternalID == ds.InternalID).IsFalse("re-creating the same dataset after deletin should result in new internal id")
+			g.Assert(ds1.InternalID == ds.InternalID).
+				IsFalse("re-creating the same dataset after deletin should result in new internal id")
 			g.Assert(ds1.ID).Eql(ds.ID, "the re-created dataset's ID should be equal to previously deleted ID")
 		})
 
@@ -138,7 +138,6 @@ func TestDatasetManager(t *testing.T) {
 			ds2, _ := dsm.CreateDataset("animals", nil)
 			g.Assert(ds2).IsNotZero()
 			g.Assert(ds2.InternalID).Eql(uint32(3))
-
 		})
 
 		g.It("Should store and overwrite and restore datasets at same pace", func() {
@@ -156,12 +155,12 @@ func TestDatasetManager(t *testing.T) {
 			//  - third iteration after a dataset delete + dataset create, no GC
 			// all three write processes should be in the same performance range
 			for deletes := 0; deletes < 3; deletes++ {
-				//t.Log("restored dataset times: ", deletes)
+				// t.Log("restored dataset times: ", deletes)
 				var times []time.Duration
 				for rewrites := 0; rewrites < 2; rewrites++ {
 					prefix := "http://data.mimiro.io/people/p1-"
 					idcounter := uint64(0)
-					//write 5 batches
+					// write 5 batches
 					for j := 0; j < iterationSize; j++ {
 						entities := make([]*Entity, batchSize)
 						// of 10000 entities each
@@ -187,8 +186,8 @@ func TestDatasetManager(t *testing.T) {
 						ts := time.Now()
 						totalcnt += len(entities)
 						_ = ds.StoreEntities(entities)
-						//t.Log("StoreEntities of batch took ", time.Now().Sub(ts))
-						times = append(times, time.Now().Sub(ts))
+						// t.Log("StoreEntities of batch took ", time.Now().Sub(ts))
+						times = append(times, time.Since(ts))
 					}
 				}
 				totalDur := time.Duration(0)
@@ -223,7 +222,7 @@ func TestDatasetManager(t *testing.T) {
 			g.It("should replace entry in system collection", func() {
 				_, _ = dsm.CreateDataset("people0", nil)
 				prefix := make([]byte, 2)
-				binary.BigEndian.PutUint16(prefix, SYS_DATASETS_ID)
+				binary.BigEndian.PutUint16(prefix, SysDatasetsID)
 				storedDatasets := map[string]*Dataset{}
 				dsm.store.iterateObjects(prefix, reflect.TypeOf(Dataset{}), func(i interface{}) error {
 					ds := i.(*Dataset)
@@ -251,7 +250,6 @@ func TestDatasetManager(t *testing.T) {
 				g.Assert(storedDatasets["people1"].SubjectIdentifier).Eql("http://data.mimiro.io/datasets/people1")
 			})
 			g.It("should replace entry in cached dataset list", func() {
-
 				_, _ = dsm.CreateDataset("people0", nil)
 				g.Assert(len(dsm.GetDatasetNames())).Eql(2)
 				seen := false

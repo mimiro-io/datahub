@@ -17,14 +17,16 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/DataDog/datadog-go/v5/statsd"
-	"github.com/franela/goblin"
-	"github.com/mimiro-io/datahub/internal"
-	"github.com/mimiro-io/datahub/internal/conf"
-	"go.uber.org/fx/fxtest"
-	"go.uber.org/zap"
 	"os"
 	"testing"
+
+	"github.com/DataDog/datadog-go/v5/statsd"
+	"github.com/franela/goblin"
+	"go.uber.org/fx/fxtest"
+	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal"
+	"github.com/mimiro-io/datahub/internal/conf"
 )
 
 func TestGC(t *testing.T) {
@@ -108,7 +110,9 @@ func TestGC(t *testing.T) {
 
 		g.It("Should delete the correct incoming and outgoing references", func() {
 			b := store.database
-			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
+			peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
+				"http://data.mimiro.io/people/",
+			)
 			workPrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/work/")
 			g.Assert(count(b)).Eql(16)
 
@@ -122,23 +126,39 @@ func TestGC(t *testing.T) {
 				NewEntityFromMap(map[string]interface{}{
 					"id":    peopleNamespacePrefix + ":person-1",
 					"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Lisa"},
-					"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-3"}}),
+					"refs": map[string]interface{}{
+						peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-3",
+					},
+				}),
 				NewEntityFromMap(map[string]interface{}{
 					"id":    peopleNamespacePrefix + ":person-2",
 					"props": map[string]interface{}{peopleNamespacePrefix + ":Name": "Bob"},
-					"refs":  map[string]interface{}{peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-1"}}),
+					"refs": map[string]interface{}{
+						peopleNamespacePrefix + ":Friend": peopleNamespacePrefix + ":person-1",
+					},
+				}),
 			})
 			g.Assert(count(b)).Eql(55)
 
 			// check that we can query outgoing
-			result, err := store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			result, err := store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"},
+				peopleNamespacePrefix+":Friend",
+				false,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(result[0][1]).Eql(peopleNamespacePrefix + ":Friend")
 			g.Assert(result[0][2].(*Entity).ID).Eql(peopleNamespacePrefix + ":person-3")
 
 			// check that we can query incoming
-			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"},
+				peopleNamespacePrefix+":Friend",
+				true,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(result[0][1]).Eql(peopleNamespacePrefix + ":Friend")
@@ -148,22 +168,34 @@ func TestGC(t *testing.T) {
 				NewEntityFromMap(map[string]interface{}{
 					"id":    peopleNamespacePrefix + ":person-1",
 					"props": map[string]interface{}{workPrefix + ":Wage": "110"},
-					"refs":  map[string]interface{}{workPrefix + ":Coworker": peopleNamespacePrefix + ":person-2"}}),
+					"refs":  map[string]interface{}{workPrefix + ":Coworker": peopleNamespacePrefix + ":person-2"},
+				}),
 				NewEntityFromMap(map[string]interface{}{
 					"id":    peopleNamespacePrefix + ":person-2",
 					"props": map[string]interface{}{workPrefix + ":Wage": "100"},
-					"refs":  map[string]interface{}{workPrefix + ":Coworker": peopleNamespacePrefix + ":person-3"}}),
+					"refs":  map[string]interface{}{workPrefix + ":Coworker": peopleNamespacePrefix + ":person-3"},
+				}),
 			})
 			g.Assert(count(b)).Eql(72)
 
 			// check that we can still query outgoing
-			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", false, nil)
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"},
+				peopleNamespacePrefix+":Friend",
+				false,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1, "Expected still to find person-3 as a friend")
 			g.Assert(result[0][2].(*Entity).ID).Eql(peopleNamespacePrefix + ":person-3")
 
 			// and incoming
-			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, peopleNamespacePrefix+":Friend", true, nil)
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"},
+				peopleNamespacePrefix+":Friend",
+				true,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1, "Expected still to find person-2 as reverse friend")
 			g.Assert(result[0][2].(*Entity).ID).Eql(peopleNamespacePrefix + ":person-2")
@@ -176,13 +208,23 @@ func TestGC(t *testing.T) {
 			g.Assert(count(b)).Eql(66, "two entities with 5 keys each should be removed now")
 
 			// make sure we still can query
-			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-1"}, "*", false, nil)
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-1"},
+				"*",
+				false,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(result[0][1]).Eql(peopleNamespacePrefix + ":Friend")
 			g.Assert(result[0][2].(*Entity).ID).Eql(peopleNamespacePrefix + ":person-3")
 
-			result, err = store.GetManyRelatedEntities([]string{"http://data.mimiro.io/people/person-2"}, "*", false, nil)
+			result, err = store.GetManyRelatedEntities(
+				[]string{"http://data.mimiro.io/people/person-2"},
+				"*",
+				false,
+				nil,
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(result)).Eql(1)
 			g.Assert(result[0][1]).Eql(peopleNamespacePrefix + ":Friend")

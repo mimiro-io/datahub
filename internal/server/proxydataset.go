@@ -30,25 +30,25 @@ import (
 type ProxyDataset struct {
 	badgerDataset *Dataset
 	*ProxyDatasetConfig
-	RemoteChangesUrl  string
-	RemoteEntitiesUrl string
+	RemoteChangesURL  string
+	RemoteEntitiesURL string
 	auth              func(req *http.Request)
 }
 
 func (ds *Dataset) IsProxy() bool {
-	return ds.ProxyConfig != nil && ds.ProxyConfig.RemoteUrl != ""
+	return ds.ProxyConfig != nil && ds.ProxyConfig.RemoteURL != ""
 }
 
 func (ds *Dataset) AsProxy(auth func(req *http.Request)) *ProxyDataset {
 	res := &ProxyDataset{badgerDataset: ds, ProxyDatasetConfig: ds.ProxyConfig}
-	res.RemoteChangesUrl, _ = UrlJoin(ds.ProxyConfig.RemoteUrl, "/changes")
-	res.RemoteEntitiesUrl, _ = UrlJoin(ds.ProxyConfig.RemoteUrl, "/entities")
+	res.RemoteChangesURL, _ = URLJoin(ds.ProxyConfig.RemoteURL, "/changes")
+	res.RemoteEntitiesURL, _ = URLJoin(ds.ProxyConfig.RemoteURL, "/entities")
 	res.auth = auth
 	return res
 }
 
-func UrlJoin(baseUrl string, elem ...string) (result string, err error) {
-	u, err := url.Parse(baseUrl)
+func URLJoin(baseURL string, elem ...string) (result string, err error) {
+	u, err := url.Parse(baseURL)
 	if err != nil {
 		return
 	}
@@ -60,8 +60,13 @@ func UrlJoin(baseUrl string, elem ...string) (result string, err error) {
 	return
 }
 
-func (d *ProxyDataset) StreamEntitiesRaw(from string, limit int, f func(jsonData []byte) error, preStream func() error) (string, error) {
-	uri, err := url.Parse(d.RemoteEntitiesUrl)
+func (d *ProxyDataset) StreamEntitiesRaw(
+	from string,
+	limit int,
+	f func(jsonData []byte) error,
+	preStream func() error,
+) (string, error) {
+	uri, err := url.Parse(d.RemoteEntitiesURL)
 	if err != nil {
 		return "", err
 	}
@@ -73,10 +78,10 @@ func (d *ProxyDataset) StreamEntitiesRaw(from string, limit int, f func(jsonData
 		q.Add("limit", strconv.Itoa(limit))
 	}
 	uri.RawQuery = q.Encode()
-	fullUri := uri.String()
+	fullURI := uri.String()
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "GET", fullUri, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", fullURI, nil)
 	if err != nil {
 		return "", err
 	}
@@ -119,15 +124,21 @@ func (d *ProxyDataset) StreamEntitiesRaw(from string, limit int, f func(jsonData
 		return "", nil
 	}
 	return cont.Properties["token"].(string), nil
-
 }
 
 // StreamChangesRaw stream through the dataset's changes and call `f` for each entity.
 // a `preStream` function can be provided if StreamChangesRaw is used in a web handler. It allows
 // to leave the http response uncommitted until `f` is called, so that an http error handler
 // still can modify status code while the response is uncommitted
-func (d *ProxyDataset) StreamChangesRaw(since string, limit int, latestOnly bool, reverse bool, f func(jsonData []byte) error, preStream func()) (string, error) {
-	uri, err := url.Parse(d.RemoteChangesUrl)
+func (d *ProxyDataset) StreamChangesRaw(
+	since string,
+	limit int,
+	latestOnly bool,
+	reverse bool,
+	f func(jsonData []byte) error,
+	preStream func(),
+) (string, error) {
+	uri, err := url.Parse(d.RemoteChangesURL)
 	if err != nil {
 		return "", err
 	}
@@ -146,10 +157,10 @@ func (d *ProxyDataset) StreamChangesRaw(since string, limit int, latestOnly bool
 	}
 
 	uri.RawQuery = q.Encode()
-	fullUri := uri.String()
+	fullURI := uri.String()
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "GET", fullUri, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", fullURI, nil)
 	if err != nil {
 		return "", err
 	}
@@ -188,13 +199,12 @@ func (d *ProxyDataset) StreamChangesRaw(since string, limit int, latestOnly bool
 		return "", nil
 	}
 	return cont.Properties["token"].(string), nil
-
 }
 
 func (d *ProxyDataset) ForwardEntities(sourceBody io.ReadCloser, sourceHeader http.Header) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, "POST", d.RemoteEntitiesUrl, sourceBody)
+	req, _ := http.NewRequestWithContext(ctx, "POST", d.RemoteEntitiesURL, sourceBody)
 	for k, v := range sourceHeader {
 		if strings.HasPrefix(strings.ToLower(k), "universal-data-api") {
 			for _, val := range v {

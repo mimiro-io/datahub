@@ -16,13 +16,15 @@ package web
 
 import (
 	"context"
-	"github.com/labstack/echo/v4"
-	"github.com/mimiro-io/datahub/internal/security"
-	"github.com/mimiro-io/datahub/internal/server"
-	"go.uber.org/fx"
-	"go.uber.org/zap"
 	"net/http"
 	"net/url"
+
+	"github.com/labstack/echo/v4"
+	"go.uber.org/fx"
+	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/security"
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 type providerHandler struct {
@@ -30,14 +32,20 @@ type providerHandler struct {
 	tokenProviders *security.TokenProviders
 }
 
-func NewProviderHandler(lc fx.Lifecycle, e *echo.Echo, log *zap.SugaredLogger, mw *Middleware, tokenProviders *security.TokenProviders) {
+func NewProviderHandler(
+	lc fx.Lifecycle,
+	e *echo.Echo,
+	log *zap.SugaredLogger,
+	mw *Middleware,
+	tokenProviders *security.TokenProviders,
+) {
 	handler := &providerHandler{
 		log:            log.Named("web"),
 		tokenProviders: tokenProviders,
 	}
 
 	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
+		OnStart: func(_ context.Context) error {
 			e.POST("/provider/logins", handler.loginCreate, mw.authorizer(log, datahubWrite))
 			e.GET("/provider/logins", handler.loginList, mw.authorizer(log, datahubRead))
 			e.POST("/provider/login/:providerName", handler.loginUpdate, mw.authorizer(log, datahubWrite))
@@ -51,11 +59,11 @@ func NewProviderHandler(lc fx.Lifecycle, e *echo.Echo, log *zap.SugaredLogger, m
 func (handler *providerHandler) loginCreate(c echo.Context) error {
 	var provider security.ProviderConfig
 	if err := c.Bind(&provider); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpGenericErr(err).Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HTTPGenericErr(err).Error())
 	}
 
 	if err := handler.tokenProviders.Add(provider); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, server.HttpGenericErr(err).Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, server.HTTPGenericErr(err).Error())
 	}
 
 	return c.NoContent(http.StatusOK)
@@ -64,15 +72,15 @@ func (handler *providerHandler) loginCreate(c echo.Context) error {
 func (handler *providerHandler) loginUpdate(c echo.Context) error {
 	providerName, err := url.QueryUnescape(c.Param("providerName"))
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpGenericErr(err).Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HTTPGenericErr(err).Error())
 	}
 	var provider security.ProviderConfig
 	if err := c.Bind(&provider); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpGenericErr(err).Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HTTPGenericErr(err).Error())
 	}
 
 	if err := handler.tokenProviders.UpdateProvider(providerName, provider); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, server.HttpGenericErr(err).Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, server.HTTPGenericErr(err).Error())
 	}
 
 	return c.NoContent(http.StatusOK)
@@ -80,7 +88,7 @@ func (handler *providerHandler) loginUpdate(c echo.Context) error {
 
 func (handler *providerHandler) loginList(c echo.Context) error {
 	if providers, err := handler.tokenProviders.ListProviders(); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, server.HttpGenericErr(err).Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, server.HTTPGenericErr(err).Error())
 	} else {
 		return c.JSON(http.StatusOK, providers)
 	}
@@ -89,7 +97,7 @@ func (handler *providerHandler) loginList(c echo.Context) error {
 func (handler *providerHandler) loginGet(c echo.Context) error {
 	providerName, err := url.QueryUnescape(c.Param("providerName"))
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpGenericErr(err).Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HTTPGenericErr(err).Error())
 	}
 	if provider, err := handler.tokenProviders.GetProviderConfig(providerName); err != nil {
 		return c.NoContent(http.StatusNotFound)
@@ -101,7 +109,7 @@ func (handler *providerHandler) loginGet(c echo.Context) error {
 func (handler *providerHandler) loginDelete(c echo.Context) error {
 	providerName, err := url.QueryUnescape(c.Param("providerName"))
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, server.HttpGenericErr(err).Error())
+		return echo.NewHTTPError(http.StatusBadRequest, server.HTTPGenericErr(err).Error())
 	}
 	if err := handler.tokenProviders.DeleteProvider(providerName); err != nil {
 		return c.NoContent(http.StatusNotFound)

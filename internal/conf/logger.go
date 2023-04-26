@@ -60,7 +60,8 @@ func GetLogger(env string, level zapcore.Level) *zap.SugaredLogger {
 		}
 
 		logger, _ := cfg.Build()
-		slogger = logger.With(zap.String("service", "datahub"), zap.String("source", "go")).Sugar() // reconfigure with default field
+		// reconfigure with default field
+		slogger = logger.With(zap.String("service", "datahub"), zap.String("source", "go")).Sugar()
 	}
 
 	return slogger

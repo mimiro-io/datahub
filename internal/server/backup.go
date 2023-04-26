@@ -23,13 +23,14 @@ import (
 	"path/filepath"
 
 	"github.com/bamzi/jobrunner"
-	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/robfig/cron/v3"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/conf"
 )
 
-const StorageIdFileName = "DATAHUB_BACKUPID"
+const StorageIDFileName = "DATAHUB_BACKUPID"
 
 type BackupManager struct {
 	backupLocation       string
@@ -43,7 +44,6 @@ type BackupManager struct {
 }
 
 func NewBackupManager(lc fx.Lifecycle, store *Store, env *conf.Env) (*BackupManager, error) {
-
 	if env.BackupLocation == "" {
 		return nil, nil
 	}
@@ -65,14 +65,14 @@ func NewBackupManager(lc fx.Lifecycle, store *Store, env *conf.Env) (*BackupMana
 	backup.logger = env.Logger.Named("backup")
 
 	// load last id
-	lastID, err := backup.LoadLastId()
+	lastID, err := backup.LoadLastID()
 	if err != nil {
 		return nil, err
 	}
 	backup.lastID = lastID
 
 	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
+		OnStart: func(_ context.Context) error {
 			backup.logger.Info("init backup via hook")
 			schedule, err := cron.ParseStandard(backup.schedule)
 			if err != nil {
@@ -114,14 +114,14 @@ func (backupManager *BackupManager) Run() {
 			}
 		}
 	} else {
-		backupManager.logger.Panicf("invalid backup location. %v out of sync", StorageIdFileName)
+		backupManager.logger.Panicf("invalid backup location. %v out of sync", StorageIDFileName)
 	}
 
 	backupManager.isRunning = false
 }
 
 func (backupManager *BackupManager) DoRsyncBackup() error {
-	err := os.MkdirAll(backupManager.backupLocation, 0700)
+	err := os.MkdirAll(backupManager.backupLocation, 0o700)
 	if err != nil {
 		return err
 	}
@@ -132,7 +132,7 @@ func (backupManager *BackupManager) DoRsyncBackup() error {
 }
 
 func (backupManager *BackupManager) DoNativeBackup() error {
-	err := os.MkdirAll(backupManager.backupLocation, 0700)
+	err := os.MkdirAll(backupManager.backupLocation, 0o700)
 	if err != nil {
 		return err
 	}
@@ -148,10 +148,10 @@ func (backupManager *BackupManager) DoNativeBackup() error {
 	backupManager.lastID = since
 
 	// store last id
-	return backupManager.StoreLastId()
+	return backupManager.StoreLastID()
 }
 
-func (backupManager *BackupManager) StoreLastId() error {
+func (backupManager *BackupManager) StoreLastID() error {
 	lastIDFilename := backupManager.backupLocation + string(os.PathSeparator) + "datahub-backup.lastseen"
 	file, _ := os.Create(lastIDFilename)
 	defer file.Close()
@@ -162,7 +162,7 @@ func (backupManager *BackupManager) StoreLastId() error {
 	return err
 }
 
-func (backupManager *BackupManager) LoadLastId() (uint64, error) {
+func (backupManager *BackupManager) LoadLastID() (uint64, error) {
 	lastIDFilename := backupManager.backupLocation + string(os.PathSeparator) + "datahub-backupManager.lastseen"
 	file, err := os.Open(lastIDFilename)
 	if err != nil {
@@ -172,6 +172,9 @@ func (backupManager *BackupManager) LoadLastId() (uint64, error) {
 
 	data := make([]byte, 8)
 	_, err = file.Read(data)
+	if err != nil {
+		return 0, err
+	}
 	lastID := binary.LittleEndian.Uint64(data)
 	return lastID, nil
 }
@@ -185,45 +188,42 @@ func (backupManager *BackupManager) fileExists(filename string) bool {
 }
 
 func (backupManager *BackupManager) validLocation() bool {
-	dhIdFile := filepath.Join(backupManager.store.storeLocation, StorageIdFileName)
-	b, err := os.ReadFile(dhIdFile)
+	dhIDFile := filepath.Join(backupManager.store.storeLocation, StorageIDFileName)
+	b, err := os.ReadFile(dhIDFile)
 	if err != nil {
 		backupManager.logger.Warnf("could not read DATAHUB_BACKUPID file")
 		return false
 	}
-	dhId := string(b)
-	backedUpDhIdFile := filepath.Join(backupManager.backupLocation, StorageIdFileName)
-	b, err = os.ReadFile(backedUpDhIdFile)
+	dhID := string(b)
+	backedUpDhIDFile := filepath.Join(backupManager.backupLocation, StorageIDFileName)
+	b, err = os.ReadFile(backedUpDhIDFile)
 	if err != nil {
 		backupManager.logger.Infof("could not read DATAHUB_BACKUPID file at backup location. copying now")
-		source, err := os.Open(dhIdFile)
+		source, err := os.Open(dhIDFile)
 		if err != nil {
-			backupManager.logger.Errorf("Could not open backup id file at %v.", dhIdFile)
+			backupManager.logger.Errorf("Could not open backup id file at %v.", dhIDFile)
 			return false
 		}
 		defer source.Close()
 
-		err = os.MkdirAll(backupManager.backupLocation, 0700)
+		err = os.MkdirAll(backupManager.backupLocation, 0o700)
 		if err != nil {
 			backupManager.logger.Errorf("Could create backup dir at %v. (%w)", backupManager.backupLocation, err)
 			return false
 		}
-		destination, err := os.Create(backedUpDhIdFile)
+		destination, err := os.Create(backedUpDhIDFile)
 		if err != nil {
-			backupManager.logger.Errorf("Could not open backed up id file at %v. (%w)", backedUpDhIdFile, err)
+			backupManager.logger.Errorf("Could not open backed up id file at %v. (%w)", backedUpDhIDFile, err)
 			return false
 		}
 		defer destination.Close()
 		_, err = io.Copy(destination, source)
 		if err != nil {
-			backupManager.logger.Errorf("Could not copý %v to %v.", dhIdFile, backedUpDhIdFile)
-			return false
-		}
-		if err != nil {
+			backupManager.logger.Errorf("Could not copý %v to %v.", dhIDFile, backedUpDhIDFile)
 			return false
 		}
 		return true
 	}
-	buDhId := string(b)
-	return dhId == buDhId
+	buDhID := string(b)
+	return dhID == buDhID
 }

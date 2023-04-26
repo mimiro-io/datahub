@@ -17,12 +17,12 @@ package dataset
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/mimiro-io/datahub/internal/service/types"
 	"io"
 
 	"github.com/dgraph-io/badger/v3"
 
 	"github.com/mimiro-io/datahub/internal/service/store"
+	"github.com/mimiro-io/datahub/internal/service/types"
 )
 
 type IterableDataset interface {

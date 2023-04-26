@@ -32,7 +32,7 @@ func TestDlJwt(t *testing.T) {
 			provider := ProviderConfig{
 				Name: "jwt",
 				Type: "bearer",
-				ClientId: &ValueReader{
+				ClientID: &ValueReader{
 					Type:  "text",
 					Value: "id1",
 				},
@@ -55,7 +55,7 @@ func TestDlJwt(t *testing.T) {
 			}
 
 			config := NewDlJwtConfig(zap.NewNop().Sugar(), provider, &ProviderManager{})
-			g.Assert(config.ClientId).Eql("id1")
+			g.Assert(config.ClientID).Eql("id1")
 			g.Assert(config.ClientSecret).Eql("some-secret")
 		})
 
@@ -63,7 +63,7 @@ func TestDlJwt(t *testing.T) {
 			srv := serverMock()
 
 			config := JwtBearerProvider{
-				ClientId:     "123",
+				ClientID:     "123",
 				ClientSecret: "456",
 				Audience:     "",
 				GrantType:    "",
@@ -82,7 +82,7 @@ func TestDlJwt(t *testing.T) {
 			srv := serverMock()
 
 			config := JwtBearerProvider{
-				ClientId:     "123",
+				ClientID:     "123",
 				ClientSecret: "456",
 				Audience:     "",
 				GrantType:    "",
@@ -97,7 +97,7 @@ func TestDlJwt(t *testing.T) {
 
 			// cache is set and time is in the future, so it should return the cached version
 			config = JwtBearerProvider{
-				ClientId:     "123",
+				ClientID:     "123",
 				ClientSecret: "456",
 				Audience:     "",
 				GrantType:    "",
@@ -115,7 +115,7 @@ func TestDlJwt(t *testing.T) {
 
 			// cache is set but time is in the past, so it should return a new token
 			config = JwtBearerProvider{
-				ClientId:     "123",
+				ClientID:     "123",
 				ClientSecret: "456",
 				Audience:     "",
 				GrantType:    "",

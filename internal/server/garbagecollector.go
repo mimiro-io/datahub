@@ -18,11 +18,13 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"time"
+
 	"github.com/dgraph-io/badger/v3"
-	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
-	"time"
+
+	"github.com/mimiro-io/datahub/internal/conf"
 )
 
 type GarbageCollector struct {
@@ -39,7 +41,7 @@ func NewGarbageCollector(lc fx.Lifecycle, store *Store, env *conf.Env) *GarbageC
 	}
 
 	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
+		OnStart: func(_ context.Context) error {
 			if env.GcOnStartup {
 				gc.logger.Info("Starting inital GC in background")
 				go func() {
@@ -67,7 +69,7 @@ func NewGarbageCollector(lc fx.Lifecycle, store *Store, env *conf.Env) *GarbageC
 			}
 			return nil
 		},
-		OnStop: func(ctx context.Context) error {
+		OnStop: func(_ context.Context) error {
 			go func() { gc.quit <- true }()
 			return nil
 		},
@@ -97,12 +99,11 @@ func (garbageCollector *GarbageCollector) Cleandeleted() error {
 	binary.BigEndian.PutUint16(entityIdBuffer[22:], uint16(jsonLength))
 	*/
 	index := make([]byte, 2)
-	binary.BigEndian.PutUint16(index, ENTITY_ID_TO_JSON_INDEX_ID)
+	binary.BigEndian.PutUint16(index, EntityIDToJSONIndexID)
 	err := garbageCollector.deleteByPrefixAndSelectorFunction(index, func(key []byte) bool {
 		dsInternalID := binary.BigEndian.Uint32(key[10:])
 		return garbageCollector.store.deletedDatasets[dsInternalID]
 	})
-
 	if err != nil {
 		return err
 	}
@@ -119,7 +120,7 @@ func (garbageCollector *GarbageCollector) Cleandeleted() error {
 			binary.BigEndian.PutUint64(entityIdChangeTimeBuffer[14:], rid)
 		*/
 		index = make([]byte, 6)
-		binary.BigEndian.PutUint16(index, DATASET_ENTITY_CHANGE_LOG)
+		binary.BigEndian.PutUint16(index, DatasetEntityChangeLog)
 		binary.BigEndian.PutUint32(index[2:], deletedDsID)
 		err = garbageCollector.deleteByPrefixAndSelectorFunction(index, func(key []byte) bool {
 			return true
@@ -133,7 +134,7 @@ func (garbageCollector *GarbageCollector) Cleandeleted() error {
 		binary.BigEndian.PutUint32(datasetEntitiesLatestVersionKey[2:], ds.InternalID)
 		binary.BigEndian.PutUint64(datasetEntitiesLatestVersionKey[6:], rid) */
 		index = make([]byte, 6)
-		binary.BigEndian.PutUint16(index, DATASET_LATEST_ENTITIES)
+		binary.BigEndian.PutUint16(index, DatasetLatestEntities)
 		binary.BigEndian.PutUint32(index[2:], deletedDsID)
 		err = garbageCollector.deleteByPrefixAndSelectorFunction(index, func(key []byte) bool {
 			return true
@@ -155,7 +156,7 @@ func (garbageCollector *GarbageCollector) Cleandeleted() error {
 		binary.BigEndian.PutUint32(outgoingBuffer[36:], ds.InternalID)
 	*/
 	index = make([]byte, 2)
-	binary.BigEndian.PutUint16(index, OUTGOING_REF_INDEX)
+	binary.BigEndian.PutUint16(index, OutgoingRefIndex)
 	err = garbageCollector.deleteByPrefixAndSelectorFunction(index, func(key []byte) bool {
 		dsInternalID := binary.BigEndian.Uint32(key[36:])
 		return garbageCollector.store.deletedDatasets[dsInternalID]
@@ -176,7 +177,7 @@ func (garbageCollector *GarbageCollector) Cleandeleted() error {
 		binary.BigEndian.PutUint32(incomingBuffer[36:], ds.InternalID)
 	*/
 	index = make([]byte, 2)
-	binary.BigEndian.PutUint16(index, INCOMING_REF_INDEX)
+	binary.BigEndian.PutUint16(index, IncomingRefIndex)
 	err = garbageCollector.deleteByPrefixAndSelectorFunction(index, func(key []byte) bool {
 		dsInternalID := binary.BigEndian.Uint32(key[36:])
 		return garbageCollector.store.deletedDatasets[dsInternalID]
@@ -189,7 +190,10 @@ func (garbageCollector *GarbageCollector) Cleandeleted() error {
 	return nil
 }
 
-func (garbageCollector *GarbageCollector) deleteByPrefixAndSelectorFunction(prefix []byte, selector func(key []byte) bool) error {
+func (garbageCollector *GarbageCollector) deleteByPrefixAndSelectorFunction(
+	prefix []byte,
+	selector func(key []byte) bool,
+) error {
 	deleteKeys := func(keysForDelete [][]byte) error {
 		return garbageCollector.store.database.Update(func(txn *badger.Txn) error {
 			for _, key := range keysForDelete {

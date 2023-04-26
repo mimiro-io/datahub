@@ -17,16 +17,18 @@ package source_test
 import (
 	"context"
 	"fmt"
+	"os"
+	"testing"
+
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/franela/goblin"
+	"go.uber.org/fx/fxtest"
+	"go.uber.org/zap"
+
 	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/jobs/source"
 	"github.com/mimiro-io/datahub/internal/server"
-	"go.uber.org/fx/fxtest"
-	"go.uber.org/zap"
-	"os"
-	"testing"
 )
 
 func TestDatasetSource(t *testing.T) {
@@ -37,7 +39,6 @@ func TestDatasetSource(t *testing.T) {
 		var store *server.Store
 		var storeLocation string
 		g.BeforeEach(func() {
-
 			testCnt += 1
 			storeLocation = fmt.Sprintf("./test_dataset_source_%v", testCnt)
 			err := os.RemoveAll(storeLocation)
@@ -57,7 +58,6 @@ func TestDatasetSource(t *testing.T) {
 				fmt.Println(err.Error())
 				t.FailNow()
 			}
-
 		})
 		g.AfterEach(func() {
 			_ = store.Close()
@@ -73,19 +73,23 @@ func TestDatasetSource(t *testing.T) {
 			var tokens []source.DatasetContinuation
 			var recordedEntities []server.Entity
 			token := &source.StringDatasetContinuation{}
-			//testSource.StartFullSync()
-			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				tokens = append(tokens, token)
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			// testSource.StartFullSync()
+			err := testSource.ReadEntities(
+				token,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					tokens = append(tokens, token)
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			testSource.EndFullSync()
 			g.Assert(len(recordedEntities)).Eql(4, "two entities with 2 changes each expected")
 
-			//now, modify alice and verify that we get alice emitted in next read
+			// now, modify alice and verify that we get alice emitted in next read
 			err = people.StoreEntities([]*server.Entity{
 				server.NewEntityFromMap(map[string]interface{}{
 					"id":    peoplePrefix + ":Alice",
@@ -93,16 +97,21 @@ func TestDatasetSource(t *testing.T) {
 					"refs":  map[string]interface{}{},
 				}),
 			})
+			g.Assert(err).IsNil()
 			since := tokens[len(tokens)-1]
 			tokens = []source.DatasetContinuation{}
 			recordedEntities = []server.Entity{}
-			err = testSource.ReadEntities(since, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				tokens = append(tokens, token)
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				since,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					tokens = append(tokens, token)
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(1)
 			g.Assert(recordedEntities[0].Properties["name"]).Eql("Alice-changed")
@@ -118,13 +127,17 @@ func TestDatasetSource(t *testing.T) {
 			var recordedEntities []server.Entity
 			token := &source.StringDatasetContinuation{}
 			testSource.StartFullSync()
-			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				tokens = append(tokens, token)
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err := testSource.ReadEntities(
+				token,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					tokens = append(tokens, token)
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			testSource.EndFullSync()
 			g.Assert(len(recordedEntities)).Eql(2, "two entities")
@@ -147,13 +160,17 @@ func TestDatasetSource(t *testing.T) {
 			tokens = []source.DatasetContinuation{}
 			recordedEntities = []server.Entity{}
 			testSource.StartFullSync()
-			err = testSource.ReadEntities(since, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				tokens = append(tokens, token)
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				since,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					tokens = append(tokens, token)
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			testSource.EndFullSync()
 			g.Assert(len(recordedEntities)).Eql(1)
@@ -166,23 +183,30 @@ func TestDatasetSource(t *testing.T) {
 			// add one change to each entity -> 4 changes
 			addChanges("people", []string{"Bob", "Alice"}, dsm, store)
 
-			testSource := source.DatasetSource{DatasetName: "people", Store: store, DatasetManager: dsm,
-				LatestOnly: true}
+			testSource := source.DatasetSource{
+				DatasetName: "people", Store: store, DatasetManager: dsm,
+				LatestOnly: true,
+			}
 			var tokens []source.DatasetContinuation
 			var recordedEntities []server.Entity
 			token := &source.StringDatasetContinuation{}
-			err := testSource.ReadEntities(token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				tokens = append(tokens, token)
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err := testSource.ReadEntities(
+				token,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					tokens = append(tokens, token)
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			testSource.EndFullSync()
-			g.Assert(len(recordedEntities)).Eql(2, "There are 4 changes present, we expect only 2 (latest) changes emitted")
+			g.Assert(len(recordedEntities)).
+				Eql(2, "There are 4 changes present, we expect only 2 (latest) changes emitted")
 
-			//now, modify alice and verify that we get alice emitted in next read
+			// now, modify alice and verify that we get alice emitted in next read
 			err = people.StoreEntities([]*server.Entity{
 				server.NewEntityFromMap(map[string]interface{}{
 					"id":    peoplePrefix + ":Alice",
@@ -190,20 +214,24 @@ func TestDatasetSource(t *testing.T) {
 					"refs":  map[string]interface{}{},
 				}),
 			})
+			g.Assert(err).IsNil()
 			since := tokens[len(tokens)-1]
 			tokens = []source.DatasetContinuation{}
 			recordedEntities = []server.Entity{}
-			err = testSource.ReadEntities(since, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
-				tokens = append(tokens, token)
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			})
+			err = testSource.ReadEntities(
+				since,
+				1000,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					tokens = append(tokens, token)
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					return nil
+				},
+			)
 			g.Assert(err).IsNil()
 			g.Assert(len(recordedEntities)).Eql(1)
 			g.Assert(recordedEntities[0].Properties["name"]).Eql("Alice-changed")
 		})
-
 	})
 }
