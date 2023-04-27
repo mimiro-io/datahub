@@ -1046,7 +1046,7 @@ func (s *Store) GetRelatedAtTime(from RelatedFrom, limit int) ([]qresult, Relate
 			outgoingIterator := txn.NewIterator(opts1)
 			defer outgoingIterator.Close()
 
-			seenIds := map[uint64]bool{}
+			seenIds := map[uint64]map[uint64]bool{}
 			var hasReachedStartKey bool
 			if len(from.RelationIndexFromKey) == 10 {
 				hasReachedStartKey = true
@@ -1087,13 +1087,16 @@ func (s *Store) GetRelatedAtTime(from RelatedFrom, limit int) ([]qresult, Relate
 				if from.Predicate != predID && from.Predicate > 0 {
 					continue
 				}
+				if seenIds[predID] == nil {
+					seenIds[predID] = map[uint64]bool{}
+				}
 
 				// get related
 				relatedID := binary.BigEndian.Uint64(k[26:])
-				if _, seen := seenIds[relatedID]; seen {
+				if _, seen := seenIds[predID][relatedID]; seen {
 					continue
 				}
-				seenIds[relatedID] = true
+				seenIds[predID][relatedID] = true
 				// get deleted
 				del := binary.BigEndian.Uint16(k[34:])
 				if del != 1 && hasReachedStartKey {

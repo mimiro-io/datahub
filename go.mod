@@ -9,7 +9,6 @@ require (
 	github.com/bamzi/jobrunner v1.0.0
 	github.com/dgraph-io/badger/v3 v3.2103.5
 	github.com/dop251/goja v1.0.0
-	github.com/franela/goblin v0.0.0-20211003143422-0a4f594942bf
 	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/gojektech/heimdall/v6 v6.1.0
 	github.com/golang-jwt/jwt/v4 v4.5.0
@@ -30,6 +29,8 @@ replace github.com/dop251/goja => github.com/mimiro-io/goja v1.0.0
 
 require (
 	github.com/lestrrat-go/jwx/v2 v2.0.9
+	github.com/onsi/ginkgo/v2 v2.9.2
+	github.com/onsi/gomega v1.27.6
 	github.com/pkg/errors v0.9.1
 )
 
@@ -71,8 +72,6 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.18 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
-	github.com/onsi/ginkgo/v2 v2.9.2 // indirect
-	github.com/onsi/gomega v1.27.6 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.7 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/spf13/afero v1.9.5 // indirect
