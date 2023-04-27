@@ -27,20 +27,18 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"testing"
 	"time"
 
-	"github.com/franela/goblin"
 	"github.com/labstack/echo/v4"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"go.uber.org/fx"
 
 	"github.com/mimiro-io/datahub"
 	"github.com/mimiro-io/datahub/internal/server"
 )
 
-func TestHttp(t *testing.T) {
-	g := goblin.Goblin(t)
-
+var _ = Describe("The dataset endpoint", Ordered, func() {
 	var app *fx.App
 	var mockLayer *MockLayer
 
@@ -49,929 +47,926 @@ func TestHttp(t *testing.T) {
 	dsURL := "http://localhost:24997/datasets/bananas"
 	proxyDsURL := "http://localhost:24997/datasets/cucumbers"
 	datasetsURL := "http://localhost:24997/datasets"
+	BeforeAll(func() {
+		_ = os.RemoveAll(location)
+		_ = os.Setenv("STORE_LOCATION", location)
+		_ = os.Setenv("PROFILE", "test")
+		_ = os.Setenv("SERVER_PORT", "24997")
+		_ = os.Setenv("FULLSYNC_LEASE_TIMEOUT", "500ms")
 
-	g.Describe("The dataset endpoint", func() {
-		g.Before(func() {
-			_ = os.RemoveAll(location)
-			_ = os.Setenv("STORE_LOCATION", location)
-			_ = os.Setenv("PROFILE", "test")
-			_ = os.Setenv("SERVER_PORT", "24997")
-			_ = os.Setenv("FULLSYNC_LEASE_TIMEOUT", "500ms")
+		oldOut := os.Stdout
+		oldErr := os.Stderr
+		devNull, _ := os.Open("/dev/null")
+		os.Stdout = devNull
+		os.Stderr = devNull
+		app, _ = datahub.Start(context.Background())
+		mockLayer = NewMockLayer()
+		go func() {
+			_ = mockLayer.echo.Start(":7778")
+		}()
+		os.Stdout = oldOut
+		os.Stderr = oldErr
+	})
+	AfterAll(func() {
+		_ = mockLayer.echo.Shutdown(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+		err := app.Stop(ctx)
+		defer cancel()
+		Expect(err).To(BeNil())
+		err = os.RemoveAll(location)
+		Expect(err).To(BeNil())
+		_ = os.Unsetenv("STORE_LOCATION")
+		_ = os.Unsetenv("PROFILE")
+		_ = os.Unsetenv("SERVER_PORT")
+		_ = os.Unsetenv("FULLSYNC_LEASE_TIMEOUT")
+	})
 
-			oldOut := os.Stdout
-			oldErr := os.Stderr
-			devNull, _ := os.Open("/dev/null")
-			os.Stdout = devNull
-			os.Stderr = devNull
-			app, _ = datahub.Start(context.Background())
-			os.Stdout = oldOut
-			os.Stderr = oldErr
-			mockLayer = NewMockLayer()
-			go func() {
-				_ = mockLayer.echo.Start(":7778")
-			}()
+	Describe("The dataset root API", func() {
+		It("Should create a regular dataset", func() {
+			// create new dataset
+			res, err := http.Post(dsURL, "application/json", strings.NewReader(""))
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
 		})
-		g.After(func() {
-			_ = mockLayer.echo.Shutdown(context.Background())
+		It("Should retrieve a regular dataset", func() {
+			res, err := http.Get(dsURL)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			b, _ := io.ReadAll(res.Body)
+			m := map[string]interface{}{}
+			_ = json.Unmarshal(b, &m)
+			Expect(m["id"]).To(Equal("ns0:bananas"))
+			refs := m["refs"].(map[string]interface{})
+			Expect(refs["ns2:type"]).To(Equal("ns1:dataset"))
+		})
+		It("Should create a proxy dataset", func() {
+			// create new dataset
+			/*
+				type createDatasetConfig struct {
+					ProxyDatasetConfig *proxyDatasetConfig `json:"proxyDatasetConfig"`
+					PublicNamespaces   []string            `json:"publicNamespaces"`
+				}
+
+				type proxyDatasetConfig struct {
+					AuthProvider        string `json:"authProvider"`
+					RemoteUrl           string `json:"remoteUrl"`
+					UpstreamTransform   string `json:"upstreamTransform"`
+					DownstreamTransform string `json:"downstreamTransform"`
+				}
+			*/
+			res, err := http.Post(proxyDsURL+"?proxy=true", "application/json", strings.NewReader(
+				`{"proxyDatasetConfig": {"remoteUrl": "http://localhost:7778/datasets/tomatoes"}}`))
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+		})
+		It("Should reject a proxy dataset if misconfigured", func() {
+			res, err := http.Post(proxyDsURL+"2?proxy=true", "application/json", strings.NewReader(
+				`{"proxyDatasetConfig": {"remoteUrl": ""}}`))
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(400))
+			b, _ := io.ReadAll(res.Body)
+			Expect(string(b)).To(Equal("{\"message\":\"invalid proxy configuration provided\"}\n"))
+		})
+		It("Should retrieve a proxy dataset", func() {
+			res, err := http.Get(proxyDsURL)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			b, _ := io.ReadAll(res.Body)
+			m := map[string]interface{}{}
+			_ = json.Unmarshal(b, &m)
+			Expect(m["id"]).To(Equal("ns0:cucumbers"))
+			refs := m["refs"].(map[string]interface{})
+			Expect(refs["ns2:type"]).To(Equal("ns1:proxy-dataset"))
+		})
+		It("Should list both regular and proxy datasets", func() {
+			res, err := http.Get(datasetsURL)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			b, _ := io.ReadAll(res.Body)
+			var l []map[string]interface{}
+			_ = json.Unmarshal(b, &l)
+			Expect(len(l)).To(Equal(3), "core.Dataset, bananas, cucumbers are listed")
+		})
+	})
+	Describe("The /entities and /changes API endpoints for regular datasets", func() {
+		It("Should accept a single batch of changes", func() {
+			// populate dataset
+			payload := strings.NewReader(bananasFromTo(1, 10, false))
+			res, err := http.Post(dsURL+"/entities", "application/json", payload)
+
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+
+			// read it back
+			res, err = http.Get(dsURL + "/changes")
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+
+			bodyBytes, err := io.ReadAll(res.Body)
+			Expect(err).To(BeNil())
+			var entities []*server.Entity
+			err = json.Unmarshal(bodyBytes, &entities)
+			Expect(err).To(BeNil())
+			Expect(len(entities)).To(Equal(12), "expected 10 entities plus @context and @continuation")
+		})
+
+		It("Should accept multiple overlapping batches of changes", func() {
+			// replace 5-10 and add 11-15
+			payload := strings.NewReader(bananasFromTo(5, 15, false))
+			res, err := http.Post(dsURL+"/entities", "application/json", payload)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+
+			// replace 10-15 and add 16-20
+			payload = strings.NewReader(bananasFromTo(10, 20, false))
+			res, err = http.Post(dsURL+"/entities", "application/json", payload)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+
+			// read it back
+			res, err = http.Get(dsURL + "/changes")
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			bodyBytes, _ := io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			var entities []*server.Entity
+			err = json.Unmarshal(bodyBytes, &entities)
+			Expect(err).To(BeNil())
+			Expect(len(entities)).To(Equal(22), "expected 20 entities plus @context and @continuation")
+		})
+
+		It("Should record deleted states", func() {
+			payload := strings.NewReader(bananasFromTo(7, 8, true))
+			res, err := http.Post(dsURL+"/entities", "application/json", payload)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+
+			// read changes back
+			res, err = http.Get(dsURL + "/changes")
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			bodyBytes, _ := io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			var entities []*server.Entity
+			err = json.Unmarshal(bodyBytes, &entities)
+			Expect(err).To(BeNil())
+			Expect(len(entities)).
+				To(Equal(24), "expected 20 entities plus 2 deleted-changes plus @context and @continuation")
+			Expect(entities[7].IsDeleted).To(BeFalse(), "original change 7 is still undeleted")
+			Expect(entities[22].IsDeleted).To(BeTrue(), "deleted state for 7  is a new change at end of list")
+
+			// read entities back
+			res, err = http.Get(dsURL + "/entities")
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			bodyBytes, _ = io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			entities = nil
+			err = json.Unmarshal(bodyBytes, &entities)
+			Expect(err).To(BeNil())
+			Expect(len(entities)).To(Equal(22), "expected 20 entities plus @context and @continuation")
+			Expect(entities[7].IsDeleted).To(BeTrue(), "entity 7 is deleted")
+		})
+
+		It("Should do deletion detection in a fullsync", func() {
+			// only send IDs 4 through 16 in batches as fullsync
+			// 1-3 and 17-20 should end up deleted
+
+			// first batch with "start" header
+			payload := strings.NewReader(bananasFromTo(4, 8, false))
 			ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-			err := app.Stop(ctx)
-			defer cancel()
-			g.Assert(err).IsNil()
-			err = os.RemoveAll(location)
-			g.Assert(err).IsNil()
-			_ = os.Unsetenv("STORE_LOCATION")
-			_ = os.Unsetenv("PROFILE")
-			_ = os.Unsetenv("SERVER_PORT")
-			_ = os.Unsetenv("FULLSYNC_LEASE_TIMEOUT")
+			req, _ := http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-start", "true")
+			req.Header.Add("universal-data-api-full-sync-id", "42")
+			_, err := http.DefaultClient.Do(req)
+			Expect(err).To(BeNil())
+			cancel()
+
+			// 2nd batch
+			payload = strings.NewReader(bananasFromTo(9, 12, false))
+			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-id", "42")
+			_, _ = http.DefaultClient.Do(req)
+			cancel()
+
+			// last batch with "end" signal
+			payload = strings.NewReader(bananasFromTo(13, 16, false))
+			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-id", "42")
+			req.Header.Add("universal-data-api-full-sync-end", "true")
+			_, _ = http.DefaultClient.Do(req)
+			cancel()
+
+			// read changes back
+			res, err := http.Get(dsURL + "/changes")
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			bodyBytes, _ := io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			var entities []*server.Entity
+			err = json.Unmarshal(bodyBytes, &entities)
+			Expect(err).To(BeNil())
+			Expect(len(entities)).To(Equal(33), "expected 20 entities plus 11 changes and @context and @continuation")
+			Expect(entities[7].IsDeleted).To(BeFalse(), "original change 7 is still undeleted")
+			Expect(entities[21].IsDeleted).To(BeTrue(), "deleted state for 7  is a new change at end of list")
+
+			// read entities back
+			res, err = http.Get(dsURL + "/entities")
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			bodyBytes, _ = io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			entities = nil
+			err = json.Unmarshal(bodyBytes, &entities)
+			Expect(err).To(BeNil())
+			Expect(len(entities)).To(Equal(22), "expected 20 entities plus @context and @continuation")
+			// remove context
+			entities = entities[1:]
+			for i := 0; i < 3; i++ {
+				Expect(entities[i].IsDeleted).To(BeTrue(), "entity was not part of fullsync, should be deleted: ", i)
+			}
+			for i := 3; i < 16; i++ {
+				Expect(entities[i].IsDeleted).To(BeFalse(), "entity was part of fullsync, should be active: ", i)
+			}
+			for i := 16; i < 20; i++ {
+				Expect(entities[i].IsDeleted).To(BeTrue(), "entity was not part of fullsync, should be deleted: ", i)
+			}
 		})
 
-		g.Describe("The dataset root API", func() {
-			g.It("Should create a regular dataset", func() {
-				// create new dataset
-				res, err := http.Post(dsURL, "application/json", strings.NewReader(""))
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-			})
-			g.It("Should retrieve a regular dataset", func() {
-				res, err := http.Get(dsURL)
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				b, _ := io.ReadAll(res.Body)
-				m := map[string]interface{}{}
-				_ = json.Unmarshal(b, &m)
-				g.Assert(m["id"]).Eql("ns0:bananas")
-				refs := m["refs"].(map[string]interface{})
-				g.Assert(refs["ns2:type"]).Eql("ns1:dataset")
-			})
-			g.It("Should create a proxy dataset", func() {
-				// create new dataset
-				/*
-					type createDatasetConfig struct {
-						ProxyDatasetConfig *proxyDatasetConfig `json:"proxyDatasetConfig"`
-						PublicNamespaces   []string            `json:"publicNamespaces"`
-					}
+		It("should keep fullsync requests with same sync-id in parallel", func() {
+			// only send IDs 4 through 16 in batches as fullsync
+			// 1-3 and 17-20 should end up deleted
 
-					type proxyDatasetConfig struct {
-						AuthProvider        string `json:"authProvider"`
-						RemoteUrl           string `json:"remoteUrl"`
-						UpstreamTransform   string `json:"upstreamTransform"`
-						DownstreamTransform string `json:"downstreamTransform"`
-					}
-				*/
-				res, err := http.Post(proxyDsURL+"?proxy=true", "application/json", strings.NewReader(
-					`{"proxyDatasetConfig": {"remoteUrl": "http://localhost:7778/datasets/tomatoes"}}`))
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-			})
-			g.It("Should reject a proxy dataset if misconfigured", func() {
-				res, err := http.Post(proxyDsURL+"2?proxy=true", "application/json", strings.NewReader(
-					`{"proxyDatasetConfig": {"remoteUrl": ""}}`))
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(400)
-				b, _ := io.ReadAll(res.Body)
-				g.Assert(string(b)).Eql("{\"message\":\"invalid proxy configuration provided\"}\n")
-			})
-			g.It("Should retrieve a proxy dataset", func() {
-				res, err := http.Get(proxyDsURL)
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				b, _ := io.ReadAll(res.Body)
-				m := map[string]interface{}{}
-				_ = json.Unmarshal(b, &m)
-				g.Assert(m["id"]).Eql("ns0:cucumbers")
-				refs := m["refs"].(map[string]interface{})
-				g.Assert(refs["ns2:type"]).Eql("ns1:proxy-dataset")
-			})
-			g.It("Should list both regular and proxy datasets", func() {
-				res, err := http.Get(datasetsURL)
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				b, _ := io.ReadAll(res.Body)
-				var l []map[string]interface{}
-				_ = json.Unmarshal(b, &l)
-				g.Assert(len(l)).Eql(3, "core.Dataset, bananas, cucumbers are listed")
-			})
+			// first batch with "start" header
+			payload := strings.NewReader(bananasFromTo(4, 4, false))
+			ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ := http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-start", "true")
+			req.Header.Add("universal-data-api-full-sync-id", "43")
+			_, _ = http.DefaultClient.Do(req)
+			cancel()
+
+			// next, updated id 5 with wrong sync-id. should not be registered as "seen" and therefore be deleted after fs
+			payload = strings.NewReader(bananasFromTo(5, 5, false))
+			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-id", "44")
+			res, err := http.DefaultClient.Do(req)
+			Expect(err).To(BeNil())
+			cancel()
+			Expect(res.StatusCode).To(Equal(409), "request should be rejected because fullsync is going on")
+
+			// also try to add id 5 without sync-id. should still be rejected
+			payload = strings.NewReader(bananasFromTo(5, 5, false))
+			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
+			res, err = http.DefaultClient.Do(req)
+			Expect(err).To(BeNil())
+			cancel()
+			Expect(res.StatusCode).To(Equal(409), "request should be rejected because fullsync is going on")
+
+			// 10 batches in parallel with correct sync-id
+			wg := sync.WaitGroup{}
+			for i := 6; i < 16; i++ {
+				wg.Add(1)
+				id := i
+				go func() {
+					payloadLocal := strings.NewReader(bananasFromTo(id, id, false))
+					ctxLocal, cancelLocal := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+					reqLocal, _ := http.NewRequestWithContext(ctxLocal, "POST", dsURL+"/entities", payloadLocal)
+					reqLocal.Header.Add("universal-data-api-full-sync-id", "43")
+					_, _ = http.DefaultClient.Do(reqLocal)
+					cancelLocal()
+					wg.Done()
+				}()
+			}
+
+			wg.Wait()
+
+			// last batch with "end" signal
+			payload = strings.NewReader(bananasFromTo(16, 16, false))
+			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-id", "43")
+			req.Header.Add("universal-data-api-full-sync-end", "true")
+			_, _ = http.DefaultClient.Do(req)
+			cancel()
+
+			// read changes back
+			res, err = http.Get(dsURL + "/changes")
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			bodyBytes, _ := io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			var entities []*server.Entity
+			err = json.Unmarshal(bodyBytes, &entities)
+			Expect(err).To(BeNil())
+			Expect(len(entities)).
+				To(Equal(34), "expected 31 changes from before plus deletion of id5 and @context and @continuation")
+			Expect(entities[32].IsDeleted).To(BeTrue(), "deleted state for 5  is a new change at end of list")
 		})
-		g.Describe("The /entities and /changes API endpoints for regular datasets", func() {
-			g.It("Should accept a single batch of changes", func() {
-				// populate dataset
-				payload := strings.NewReader(bananasFromTo(1, 10, false))
-				res, err := http.Post(dsURL+"/entities", "application/json", payload)
+		It("should abandon fullsync when new fullsync is started", func() {
+			// start a fullsync
+			payload := strings.NewReader(bananasFromTo(1, 1, false))
+			ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ := http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-start", "true")
+			req.Header.Add("universal-data-api-full-sync-id", "45")
+			res, err := http.DefaultClient.Do(req)
+			cancel()
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
 
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
+			// start another fullsync
+			payload = strings.NewReader(bananasFromTo(1, 1, false))
+			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-start", "true")
+			req.Header.Add("universal-data-api-full-sync-id", "46")
+			res, err = http.DefaultClient.Do(req)
+			cancel()
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
 
-				// read it back
-				res, err = http.Get(dsURL + "/changes")
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
+			// try to append to first fullsync, should be rejected
+			payload = strings.NewReader(bananasFromTo(2, 2, false))
+			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-id", "45")
+			res, err = http.DefaultClient.Do(req)
+			cancel()
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(409), "expect rejection since syncid 45 is not active anymore")
 
-				bodyBytes, err := io.ReadAll(res.Body)
-				g.Assert(err).IsNil()
-				var entities []*server.Entity
-				err = json.Unmarshal(bodyBytes, &entities)
-				g.Assert(err).IsNil()
-				g.Assert(len(entities)).Eql(12, "expected 10 entities plus @context and @continuation")
-			})
-
-			g.It("Should accept multiple overlapping batches of changes", func() {
-				// replace 5-10 and add 11-15
-				payload := strings.NewReader(bananasFromTo(5, 15, false))
-				res, err := http.Post(dsURL+"/entities", "application/json", payload)
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-
-				// replace 10-15 and add 16-20
-				payload = strings.NewReader(bananasFromTo(10, 20, false))
-				res, err = http.Post(dsURL+"/entities", "application/json", payload)
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-
-				// read it back
-				res, err = http.Get(dsURL + "/changes")
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				bodyBytes, _ := io.ReadAll(res.Body)
-				_ = res.Body.Close()
-				var entities []*server.Entity
-				err = json.Unmarshal(bodyBytes, &entities)
-				g.Assert(err).IsNil()
-				g.Assert(len(entities)).Eql(22, "expected 20 entities plus @context and @continuation")
-			})
-
-			g.It("Should record deleted states", func() {
-				payload := strings.NewReader(bananasFromTo(7, 8, true))
-				res, err := http.Post(dsURL+"/entities", "application/json", payload)
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-
-				// read changes back
-				res, err = http.Get(dsURL + "/changes")
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				bodyBytes, _ := io.ReadAll(res.Body)
-				_ = res.Body.Close()
-				var entities []*server.Entity
-				err = json.Unmarshal(bodyBytes, &entities)
-				g.Assert(err).IsNil()
-				g.Assert(len(entities)).
-					Eql(24, "expected 20 entities plus 2 deleted-changes plus @context and @continuation")
-				g.Assert(entities[7].IsDeleted).IsFalse("original change 7 is still undeleted")
-				g.Assert(entities[22].IsDeleted).IsTrue("deleted state for 7  is a new change at end of list")
-
-				// read entities back
-				res, err = http.Get(dsURL + "/entities")
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				bodyBytes, _ = io.ReadAll(res.Body)
-				_ = res.Body.Close()
-				entities = nil
-				err = json.Unmarshal(bodyBytes, &entities)
-				g.Assert(err).IsNil()
-				g.Assert(len(entities)).Eql(22, "expected 20 entities plus @context and @continuation")
-				g.Assert(entities[7].IsDeleted).IsTrue("entity 7 is deleted")
-			})
-
-			g.It("Should do deletion detection in a fullsync", func() {
-				// only send IDs 4 through 16 in batches as fullsync
-				// 1-3 and 17-20 should end up deleted
-
-				// first batch with "start" header
-				payload := strings.NewReader(bananasFromTo(4, 8, false))
-				ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ := http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
-				req.Header.Add("universal-data-api-full-sync-start", "true")
-				req.Header.Add("universal-data-api-full-sync-id", "42")
-				_, err := http.DefaultClient.Do(req)
-				g.Assert(err).IsNil()
-				cancel()
-
-				// 2nd batch
-				payload = strings.NewReader(bananasFromTo(9, 12, false))
-				ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
-				req.Header.Add("universal-data-api-full-sync-id", "42")
-				_, _ = http.DefaultClient.Do(req)
-				cancel()
-
-				// last batch with "end" signal
-				payload = strings.NewReader(bananasFromTo(13, 16, false))
-				ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
-				req.Header.Add("universal-data-api-full-sync-id", "42")
-				req.Header.Add("universal-data-api-full-sync-end", "true")
-				_, _ = http.DefaultClient.Do(req)
-				cancel()
-
-				// read changes back
-				res, err := http.Get(dsURL + "/changes")
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				bodyBytes, _ := io.ReadAll(res.Body)
-				_ = res.Body.Close()
-				var entities []*server.Entity
-				err = json.Unmarshal(bodyBytes, &entities)
-				g.Assert(err).IsNil()
-				g.Assert(len(entities)).Eql(33, "expected 20 entities plus 11 changes and @context and @continuation")
-				g.Assert(entities[7].IsDeleted).IsFalse("original change 7 is still undeleted")
-				g.Assert(entities[21].IsDeleted).IsTrue("deleted state for 7  is a new change at end of list")
-
-				// read entities back
-				res, err = http.Get(dsURL + "/entities")
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				bodyBytes, _ = io.ReadAll(res.Body)
-				_ = res.Body.Close()
-				entities = nil
-				err = json.Unmarshal(bodyBytes, &entities)
-				g.Assert(err).IsNil()
-				g.Assert(len(entities)).Eql(22, "expected 20 entities plus @context and @continuation")
-				// remove context
-				entities = entities[1:]
-				for i := 0; i < 3; i++ {
-					g.Assert(entities[i].IsDeleted).IsTrue("entity was not part of fullsync, should be deleted: ", i)
-				}
-				for i := 3; i < 16; i++ {
-					g.Assert(entities[i].IsDeleted).IsFalse("entity was part of fullsync, should be active: ", i)
-				}
-				for i := 16; i < 20; i++ {
-					g.Assert(entities[i].IsDeleted).IsTrue("entity was not part of fullsync, should be deleted: ", i)
-				}
-			})
-
-			g.It("should keep fullsync requests with same sync-id in parallel", func() {
-				// only send IDs 4 through 16 in batches as fullsync
-				// 1-3 and 17-20 should end up deleted
-
-				// first batch with "start" header
-				payload := strings.NewReader(bananasFromTo(4, 4, false))
-				ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ := http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
-				req.Header.Add("universal-data-api-full-sync-start", "true")
-				req.Header.Add("universal-data-api-full-sync-id", "43")
-				_, _ = http.DefaultClient.Do(req)
-				cancel()
-
-				// next, updated id 5 with wrong sync-id. should not be registered as "seen" and therefore be deleted after fs
-				payload = strings.NewReader(bananasFromTo(5, 5, false))
-				ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
-				req.Header.Add("universal-data-api-full-sync-id", "44")
-				res, err := http.DefaultClient.Do(req)
-				g.Assert(err).IsNil()
-				cancel()
-				g.Assert(res.StatusCode).Eql(409, "request should be rejected because fullsync is going on")
-
-				// also try to add id 5 without sync-id. should still be rejected
-				payload = strings.NewReader(bananasFromTo(5, 5, false))
-				ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
-				res, err = http.DefaultClient.Do(req)
-				g.Assert(err).IsNil()
-				cancel()
-				g.Assert(res.StatusCode).Eql(409, "request should be rejected because fullsync is going on")
-
-				// 10 batches in parallel with correct sync-id
-				wg := sync.WaitGroup{}
-				for i := 6; i < 16; i++ {
-					wg.Add(1)
-					id := i
-					go func() {
-						payloadLocal := strings.NewReader(bananasFromTo(id, id, false))
-						ctxLocal, cancelLocal := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-						reqLocal, _ := http.NewRequestWithContext(ctxLocal, "POST", dsURL+"/entities", payloadLocal)
-						reqLocal.Header.Add("universal-data-api-full-sync-id", "43")
-						_, _ = http.DefaultClient.Do(reqLocal)
-						cancelLocal()
-						wg.Done()
-					}()
-				}
-
-				wg.Wait()
-
-				// last batch with "end" signal
-				payload = strings.NewReader(bananasFromTo(16, 16, false))
-				ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
-				req.Header.Add("universal-data-api-full-sync-id", "43")
-				req.Header.Add("universal-data-api-full-sync-end", "true")
-				_, _ = http.DefaultClient.Do(req)
-				cancel()
-
-				// read changes back
-				res, err = http.Get(dsURL + "/changes")
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				bodyBytes, _ := io.ReadAll(res.Body)
-				_ = res.Body.Close()
-				var entities []*server.Entity
-				err = json.Unmarshal(bodyBytes, &entities)
-				g.Assert(err).IsNil()
-				g.Assert(len(entities)).
-					Eql(34, "expected 31 changes from before plus deletion of id5 and @context and @continuation")
-				g.Assert(entities[32].IsDeleted).IsTrue("deleted state for 5  is a new change at end of list")
-			})
-			g.It("should abandon fullsync when new fullsync is started", func() {
-				// start a fullsync
-				payload := strings.NewReader(bananasFromTo(1, 1, false))
-				ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ := http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
-				req.Header.Add("universal-data-api-full-sync-start", "true")
-				req.Header.Add("universal-data-api-full-sync-id", "45")
-				res, err := http.DefaultClient.Do(req)
-				cancel()
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-
-				// start another fullsync
-				payload = strings.NewReader(bananasFromTo(1, 1, false))
-				ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
-				req.Header.Add("universal-data-api-full-sync-start", "true")
-				req.Header.Add("universal-data-api-full-sync-id", "46")
-				res, err = http.DefaultClient.Do(req)
-				cancel()
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-
-				// try to append to first fullsync, should be rejected
-				payload = strings.NewReader(bananasFromTo(2, 2, false))
-				ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
-				req.Header.Add("universal-data-api-full-sync-id", "45")
-				res, err = http.DefaultClient.Do(req)
-				cancel()
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(409, "expect rejection since syncid 45 is not active anymore")
-
-				// complete second sync
-				payload = strings.NewReader(bananasFromTo(16, 16, false))
-				ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
-				req.Header.Add("universal-data-api-full-sync-id", "46")
-				req.Header.Add("universal-data-api-full-sync-end", "true")
-				res, err = http.DefaultClient.Do(req)
-				cancel()
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200, "sync 46 accept requests")
-			})
-			g.It("should abandon fullsync after a timeout period without new requests", func() {
-				// start a fullsync
-				payload := strings.NewReader(bananasFromTo(1, 1, false))
-				ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ := http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
-				req.Header.Add("universal-data-api-full-sync-start", "true")
-				req.Header.Add("universal-data-api-full-sync-id", "47")
-				res, err := http.DefaultClient.Do(req)
-				cancel()
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-
-				// exceed fullsync timeout
-				time.Sleep(501 * time.Millisecond)
-
-				// send next fullsync batch. should be OK even though lease is timed out
-				payload = strings.NewReader(bananasFromTo(2, 2, false))
-				ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
-				req.Header.Add("universal-data-api-full-sync-id", "47")
-				res, err = http.DefaultClient.Do(req)
-				cancel()
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-
-				// send next end signal. should produce error since lease should have timed out
-				payload = strings.NewReader(bananasFromTo(3, 3, false))
-				ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
-				req.Header.Add("universal-data-api-full-sync-end", "true")
-				req.Header.Add("universal-data-api-full-sync-id", "47")
-				res, err = http.DefaultClient.Do(req)
-				cancel()
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(410)
-			})
-
-			g.It("Should pageinate over entities with continuation token", func() {
-				payload := strings.NewReader(bananasFromTo(1, 100, false))
-				res, err := http.Post(dsURL+"/entities", "application/json", payload)
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-
-				// read first page of 10 entities back
-				res, err = http.Get(dsURL + "/entities?limit=10")
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				bodyBytes, _ := io.ReadAll(res.Body)
-				_ = res.Body.Close()
-				var entities []*server.Entity
-				err = json.Unmarshal(bodyBytes, &entities)
-				var m []map[string]interface{}
-				_ = json.Unmarshal(bodyBytes, &m)
-				g.Assert(err).IsNil()
-				g.Assert(len(entities)).Eql(12, "expected 10 entities plus @context and @continuation")
-				g.Assert(entities[1].ID).Eql("ns3:1")
-				token := m[11]["token"].(string)
-
-				// read next page
-				res, err = http.Get(dsURL + "/entities?limit=90&from=" + url.QueryEscape(token))
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				bodyBytes, _ = io.ReadAll(res.Body)
-				_ = res.Body.Close()
-				err = json.Unmarshal(bodyBytes, &entities)
-				_ = json.Unmarshal(bodyBytes, &m)
-				g.Assert(err).IsNil()
-				g.Assert(len(entities)).Eql(92, "expected 90 entities plus @context and @continuation")
-				g.Assert(entities[1].ID).Eql("ns3:11")
-				token = m[91]["token"].(string)
-
-				// read next page after all consumed
-				res, err = http.Get(dsURL + "/entities?limit=10&from=" + url.QueryEscape(token))
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				bodyBytes, _ = io.ReadAll(res.Body)
-				_ = res.Body.Close()
-				err = json.Unmarshal(bodyBytes, &entities)
-				_ = json.Unmarshal(bodyBytes, &m)
-				g.Assert(err).IsNil()
-				g.Assert(len(entities)).Eql(2, "expected 0 entities plus @context and @continuation")
-				g.Assert(entities[1].ID).Eql("@continuation")
-			})
+			// complete second sync
+			payload = strings.NewReader(bananasFromTo(16, 16, false))
+			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-id", "46")
+			req.Header.Add("universal-data-api-full-sync-end", "true")
+			res, err = http.DefaultClient.Do(req)
+			cancel()
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200), "sync 46 accept requests")
 		})
-		g.Describe("The /changes and /entities endpoints for proxy datasets", func() {
-			g.It("Should fetch from remote for GET /changes without token", func() {
-				res, err := http.Get(proxyDsURL + "/changes")
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				b, _ := io.ReadAll(res.Body)
-				var entities []*server.Entity
-				err = json.Unmarshal(b, &entities)
-				g.Assert(err).IsNil()
-				g.Assert(len(entities)).Eql(12, "context, 10 entities and continuation")
-				g.Assert(entities[1].ID).Eql("ns4:c-0", "first page id range starts with 0")
-				g.Assert(mockLayer.RecordedURI).Eql("/datasets/tomatoes/changes")
-				var m []map[string]interface{}
-				_ = json.Unmarshal(b, &m)
-				g.Assert(m[11]["token"]).Eql("nextplease")
-			})
-			g.It("Should fetch from remote for GET /changes with token and limit", func() {
-				res, err := http.Get(proxyDsURL + "/changes?since=theweekend&limit=3")
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				b, _ := io.ReadAll(res.Body)
-				var entities []*server.Entity
-				err = json.Unmarshal(b, &entities)
-				g.Assert(err).IsNil()
-				g.Assert(len(entities)).Eql(5, "context, 3 entities and continuation")
-				g.Assert(entities[1].ID).Eql("ns4:c-100", "later page mock id range starts with 100")
-				g.Assert(mockLayer.RecordedURI).Eql("/datasets/tomatoes/changes?limit=3&since=theweekend")
-				var m []map[string]interface{}
-				_ = json.Unmarshal(b, &m)
-				g.Assert(m[4]["token"]).Eql("lastpage")
-				g.Assert(m[0]["namespaces"]).Eql(map[string]interface{}{
-					"ns0": "http://data.mimiro.io/core/dataset/",
-					"ns1": "http://data.mimiro.io/core/",
-					"ns2": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-					"ns3": "http://example.com",
-					"ns4": "http://example.mimiro.io/",
-				})
-			})
-			g.It("Should fetch from remote for GET /entities", func() {
-				res, err := http.Get(proxyDsURL + "/entities?from=theweekend&limit=3")
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				b, _ := io.ReadAll(res.Body)
-				var entities []*server.Entity
-				err = json.Unmarshal(b, &entities)
-				g.Assert(err).IsNil()
-				g.Assert(len(entities)).
-					Eql(11, "context, 10 entities (remote ignored limit) and no continuation (none returned from remote)")
-				g.Assert(entities[1].ID).Eql("ns4:e-0")
-				g.Assert(mockLayer.RecordedURI).Eql("/datasets/tomatoes/entities?from=theweekend&limit=3")
-				var m []map[string]interface{}
-				_ = json.Unmarshal(b, &m)
-				g.Assert(m[0]["namespaces"]).Eql(map[string]interface{}{
-					"ns0": "http://data.mimiro.io/core/dataset/",
-					"ns1": "http://data.mimiro.io/core/",
-					"ns2": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-					"ns3": "http://example.com",
-					"ns4": "http://example.mimiro.io/",
-				})
-			})
-			g.It("Should push to remote for POST /entities", func() {
-				payload := strings.NewReader(bananasFromTo(1, 3, false))
-				ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ := http.NewRequestWithContext(ctx, "POST", proxyDsURL+"/entities", payload)
-				res, err := http.DefaultClient.Do(req)
-				cancel()
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				recorded := mockLayer.RecordedEntities["tomatoes"]
-				g.Assert(len(recorded)).Eql(4, "context and 3 entities")
-				g.Assert(recorded[0].ID).Eql("@context")
-				g.Assert(recorded[1].ID).Eql("1")
-				g.Assert(recorded[2].ID).Eql("2")
-				g.Assert(recorded[3].ID).Eql("3")
-				var m []map[string]interface{}
-				_ = json.Unmarshal(mockLayer.RecordedBytes["tomatoes"], &m)
-				g.Assert(m[0]["namespaces"]).Eql(map[string]interface{}{"_": "http://example.com"})
-			})
-			g.It("Should forward fullsync headers for POST /entities", func() {
-				payload := strings.NewReader(bananasFromTo(1, 17, false))
-				ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-				req, _ := http.NewRequestWithContext(ctx, "POST", proxyDsURL+"/entities", payload)
-				req.Header.Add("universal-data-api-full-sync-start", "true")
-				req.Header.Add("universal-data-api-full-sync-id", "46")
-				req.Header.Add("universal-data-api-full-sync-end", "true")
-				res, err := http.DefaultClient.Do(req)
-				cancel()
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				recorded := mockLayer.RecordedEntities["tomatoes"]
-				g.Assert(mockLayer.RecordedHeaders.Get("universal-data-api-full-sync-start")).Eql("true")
-				g.Assert(mockLayer.RecordedHeaders.Get("universal-data-api-full-sync-id")).Eql("46")
-				g.Assert(mockLayer.RecordedHeaders.Get("universal-data-api-full-sync-end")).Eql("true")
-				g.Assert(len(recorded)).Eql(18, "context and 17 entities")
-			})
-			g.It("Should expose publicNamespaces if configured on proxy dataset", func() {
-				// delete proxy ds
-				req, _ := http.NewRequest("DELETE", proxyDsURL, nil)
-				res, err := http.DefaultClient.Do(req)
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
+		It("should abandon fullsync after a timeout period without new requests", func() {
+			// start a fullsync
+			payload := strings.NewReader(bananasFromTo(1, 1, false))
+			ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ := http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-start", "true")
+			req.Header.Add("universal-data-api-full-sync-id", "47")
+			res, err := http.DefaultClient.Do(req)
+			cancel()
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
 
-				// make sure it's gone
-				res, err = http.Get(proxyDsURL)
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(404)
+			// exceed fullsync timeout
+			time.Sleep(501 * time.Millisecond)
 
-				// recreate with publicNamespaces
-				res, err = http.Post(proxyDsURL+"?proxy=true", "application/json", strings.NewReader(
-					`{
+			// send next fullsync batch. should be OK even though lease is timed out
+			payload = strings.NewReader(bananasFromTo(2, 2, false))
+			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-id", "47")
+			res, err = http.DefaultClient.Do(req)
+			cancel()
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+
+			// send next end signal. should produce error since lease should have timed out
+			payload = strings.NewReader(bananasFromTo(3, 3, false))
+			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-end", "true")
+			req.Header.Add("universal-data-api-full-sync-id", "47")
+			res, err = http.DefaultClient.Do(req)
+			cancel()
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(410))
+		})
+
+		It("Should pageinate over entities with continuation token", func() {
+			payload := strings.NewReader(bananasFromTo(1, 100, false))
+			res, err := http.Post(dsURL+"/entities", "application/json", payload)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+
+			// read first page of 10 entities back
+			res, err = http.Get(dsURL + "/entities?limit=10")
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			bodyBytes, _ := io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			var entities []*server.Entity
+			err = json.Unmarshal(bodyBytes, &entities)
+			var m []map[string]interface{}
+			_ = json.Unmarshal(bodyBytes, &m)
+			Expect(err).To(BeNil())
+			Expect(len(entities)).To(Equal(12), "expected 10 entities plus @context and @continuation")
+			Expect(entities[1].ID).To(Equal("ns3:1"))
+			token := m[11]["token"].(string)
+
+			// read next page
+			res, err = http.Get(dsURL + "/entities?limit=90&from=" + url.QueryEscape(token))
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			bodyBytes, _ = io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			err = json.Unmarshal(bodyBytes, &entities)
+			_ = json.Unmarshal(bodyBytes, &m)
+			Expect(err).To(BeNil())
+			Expect(len(entities)).To(Equal(92), "expected 90 entities plus @context and @continuation")
+			Expect(entities[1].ID).To(Equal("ns3:11"))
+			token = m[91]["token"].(string)
+
+			// read next page after all consumed
+			res, err = http.Get(dsURL + "/entities?limit=10&from=" + url.QueryEscape(token))
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			bodyBytes, _ = io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			err = json.Unmarshal(bodyBytes, &entities)
+			_ = json.Unmarshal(bodyBytes, &m)
+			Expect(err).To(BeNil())
+			Expect(len(entities)).To(Equal(2), "expected 0 entities plus @context and @continuation")
+			Expect(entities[1].ID).To(Equal("@continuation"))
+		})
+	})
+	Describe("The /changes and /entities endpoints for proxy datasets", func() {
+		It("Should fetch from remote for GET /changes without token", func() {
+			res, err := http.Get(proxyDsURL + "/changes")
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			b, _ := io.ReadAll(res.Body)
+			var entities []*server.Entity
+			err = json.Unmarshal(b, &entities)
+			Expect(err).To(BeNil())
+			Expect(len(entities)).To(Equal(12), "context, 10 entities and continuation")
+			Expect(entities[1].ID).To(Equal("ns4:c-0"), "first page id range starts with 0")
+			Expect(mockLayer.RecordedURI).To(Equal("/datasets/tomatoes/changes"))
+			var m []map[string]interface{}
+			_ = json.Unmarshal(b, &m)
+			Expect(m[11]["token"]).To(Equal("nextplease"))
+		})
+		It("Should fetch from remote for GET /changes with token and limit", func() {
+			res, err := http.Get(proxyDsURL + "/changes?since=theweekend&limit=3")
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			b, _ := io.ReadAll(res.Body)
+			var entities []*server.Entity
+			err = json.Unmarshal(b, &entities)
+			Expect(err).To(BeNil())
+			Expect(len(entities)).To(Equal(5), "context, 3 entities and continuation")
+			Expect(entities[1].ID).To(Equal("ns4:c-100"), "later page mock id range starts with 100")
+			Expect(mockLayer.RecordedURI).To(Equal("/datasets/tomatoes/changes?limit=3&since=theweekend"))
+			var m []map[string]interface{}
+			_ = json.Unmarshal(b, &m)
+			Expect(m[4]["token"]).To(Equal("lastpage"))
+			Expect(m[0]["namespaces"]).To(Equal(map[string]interface{}{
+				"ns0": "http://data.mimiro.io/core/dataset/",
+				"ns1": "http://data.mimiro.io/core/",
+				"ns2": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+				"ns3": "http://example.com",
+				"ns4": "http://example.mimiro.io/",
+			}))
+		})
+		It("Should fetch from remote for GET /entities", func() {
+			res, err := http.Get(proxyDsURL + "/entities?from=theweekend&limit=3")
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			b, _ := io.ReadAll(res.Body)
+			var entities []*server.Entity
+			err = json.Unmarshal(b, &entities)
+			Expect(err).To(BeNil())
+			Expect(len(entities)).
+				To(Equal(11), "context, 10 entities (remote ignored limit) and no continuation (none returned from remote)")
+			Expect(entities[1].ID).To(Equal("ns4:e-0"))
+			Expect(mockLayer.RecordedURI).To(Equal("/datasets/tomatoes/entities?from=theweekend&limit=3"))
+			var m []map[string]interface{}
+			_ = json.Unmarshal(b, &m)
+			Expect(m[0]["namespaces"]).To(Equal(map[string]interface{}{
+				"ns0": "http://data.mimiro.io/core/dataset/",
+				"ns1": "http://data.mimiro.io/core/",
+				"ns2": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+				"ns3": "http://example.com",
+				"ns4": "http://example.mimiro.io/",
+			}))
+		})
+		It("Should push to remote for POST /entities", func() {
+			payload := strings.NewReader(bananasFromTo(1, 3, false))
+			ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ := http.NewRequestWithContext(ctx, "POST", proxyDsURL+"/entities", payload)
+			res, err := http.DefaultClient.Do(req)
+			cancel()
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			recorded := mockLayer.RecordedEntities["tomatoes"]
+			Expect(len(recorded)).To(Equal(4), "context and 3 entities")
+			Expect(recorded[0].ID).To(Equal("@context"))
+			Expect(recorded[1].ID).To(Equal("1"))
+			Expect(recorded[2].ID).To(Equal("2"))
+			Expect(recorded[3].ID).To(Equal("3"))
+			var m []map[string]interface{}
+			_ = json.Unmarshal(mockLayer.RecordedBytes["tomatoes"], &m)
+			Expect(m[0]["namespaces"]).To(Equal(map[string]interface{}{"_": "http://example.com"}))
+		})
+		It("Should forward fullsync headers for POST /entities", func() {
+			payload := strings.NewReader(bananasFromTo(1, 17, false))
+			ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ := http.NewRequestWithContext(ctx, "POST", proxyDsURL+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-start", "true")
+			req.Header.Add("universal-data-api-full-sync-id", "46")
+			req.Header.Add("universal-data-api-full-sync-end", "true")
+			res, err := http.DefaultClient.Do(req)
+			cancel()
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			recorded := mockLayer.RecordedEntities["tomatoes"]
+			Expect(mockLayer.RecordedHeaders.Get("universal-data-api-full-sync-start")).To(Equal("true"))
+			Expect(mockLayer.RecordedHeaders.Get("universal-data-api-full-sync-id")).To(Equal("46"))
+			Expect(mockLayer.RecordedHeaders.Get("universal-data-api-full-sync-end")).To(Equal("true"))
+			Expect(len(recorded)).To(Equal(18), "context and 17 entities")
+		})
+		It("Should expose publicNamespaces if configured on proxy dataset", func() {
+			// delete proxy ds
+			req, _ := http.NewRequest("DELETE", proxyDsURL, nil)
+			res, err := http.DefaultClient.Do(req)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+
+			// make sure it's gone
+			res, err = http.Get(proxyDsURL)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(404))
+
+			// recreate with publicNamespaces
+			res, err = http.Post(proxyDsURL+"?proxy=true", "application/json", strings.NewReader(
+				`{
 							"proxyDatasetConfig": {
 								"remoteUrl": "http://localhost:7778/datasets/tomatoes",
                             	"authProviderName": "local"
                          	},
 							"publicNamespaces": ["http://example.com", "http://example.mimiro.io/"]
 						}`))
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
 
-				// read it back, hopefully with with publicNamespaces applied
-				res, err = http.Get(proxyDsURL + "/changes?limit=1")
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				b, _ := io.ReadAll(res.Body)
-				var entities []*server.Entity
-				err = json.Unmarshal(b, &entities)
-				g.Assert(err).IsNil()
-				g.Assert(len(entities)).Eql(3, "context, 1 entity and continuation")
-				g.Assert(entities[1].ID).Eql("ns4:c-0")
-				g.Assert(mockLayer.RecordedURI).Eql("/datasets/tomatoes/changes?limit=1")
-				var m []map[string]interface{}
-				_ = json.Unmarshal(b, &m)
-				g.Assert(m[0]["namespaces"]).Eql(map[string]interface{}{
-					"ns3": "http://example.com",
-					"ns4": "http://example.mimiro.io/",
-				})
-				g.Assert(mockLayer.RecordedHeaders.Get("Authorization")).IsZero(
-					"there is no authProvider, fallback to unauthed")
-			})
+			// read it back, hopefully with with publicNamespaces applied
+			res, err = http.Get(proxyDsURL + "/changes?limit=1")
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			b, _ := io.ReadAll(res.Body)
+			var entities []*server.Entity
+			err = json.Unmarshal(b, &entities)
+			Expect(err).To(BeNil())
+			Expect(len(entities)).To(Equal(3), "context, 1 entity and continuation")
+			Expect(entities[1].ID).To(Equal("ns4:c-0"))
+			Expect(mockLayer.RecordedURI).To(Equal("/datasets/tomatoes/changes?limit=1"))
+			var m []map[string]interface{}
+			_ = json.Unmarshal(b, &m)
+			Expect(m[0]["namespaces"]).To(Equal(map[string]interface{}{
+				"ns3": "http://example.com",
+				"ns4": "http://example.mimiro.io/",
+			}))
+			Expect(mockLayer.RecordedHeaders.Get("Authorization")).To(BeZero(),
+				"there is no authProvider, fallback to unauthed")
+		})
 
-			g.It("Should apply authProvider if configured", func() {
-				payload := strings.NewReader(`{
+		It("Should apply authProvider if configured", func() {
+			payload := strings.NewReader(`{
 					"name": "local",
 					"type": "basic",
 					"user": { "value": "u0", "type":"text" },
 					"password": { "value":"u1","type":"text"}
 				}`)
-				req, _ := http.NewRequest("POST", "http://localhost:24997/provider/logins", payload)
-				req.Header = http.Header{
-					"Content-Type": []string{"application/json"},
-				}
-				res, err := http.DefaultClient.Do(req)
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
+			req, _ := http.NewRequest("POST", "http://localhost:24997/provider/logins", payload)
+			req.Header = http.Header{
+				"Content-Type": []string{"application/json"},
+			}
+			res, err := http.DefaultClient.Do(req)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
 
-				// read changes and verify auth is applied
-				res, err = http.Get(proxyDsURL + "/changes?limit=1")
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				b, _ := io.ReadAll(res.Body)
-				var entities []*server.Entity
-				err = json.Unmarshal(b, &entities)
-				g.Assert(err).IsNil()
-				g.Assert(len(entities)).Eql(3, "context, 1 entity and continuation")
-				g.Assert(entities[1].ID).Eql("ns4:c-0")
-				g.Assert(mockLayer.RecordedURI).Eql("/datasets/tomatoes/changes?limit=1")
-				g.Assert(mockLayer.RecordedHeaders.Get("Authorization")).Eql("Basic dTA6dTE=",
-					"basic auth header expected")
-			})
+			// read changes and verify auth is applied
+			res, err = http.Get(proxyDsURL + "/changes?limit=1")
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			b, _ := io.ReadAll(res.Body)
+			var entities []*server.Entity
+			err = json.Unmarshal(b, &entities)
+			Expect(err).To(BeNil())
+			Expect(len(entities)).To(Equal(3), "context, 1 entity and continuation")
+			Expect(entities[1].ID).To(Equal("ns4:c-0"))
+			Expect(mockLayer.RecordedURI).To(Equal("/datasets/tomatoes/changes?limit=1"))
+			Expect(mockLayer.RecordedHeaders.Get("Authorization")).To(Equal("Basic dTA6dTE="),
+				"basic auth header expected")
 		})
-		g.Describe("the /query endpoint", func() {
-			g.It("can find changes", func() {
-				// relying on dataset being populated from previous cases
-				// do query
-				js := `
+	})
+	Describe("the /query endpoint", func() {
+		It("can find changes", func() {
+			// relying on dataset being populated from previous cases
+			// do query
+			js := `
 					function do_query() {
 						const changes = GetDatasetChanges("bananas")
 						let obj = { "bananaCount": changes.Entities.length };
 						WriteQueryResult(obj);
 					}
 					`
-				queryEncoded := base64.StdEncoding.EncodeToString([]byte(js))
+			queryEncoded := base64.StdEncoding.EncodeToString([]byte(js))
 
-				query := map[string]any{"query": queryEncoded}
-				queryBytes, _ := json.Marshal(query)
+			query := map[string]any{"query": queryEncoded}
+			queryBytes, _ := json.Marshal(query)
 
-				res, err := http.Post(queryURL, "application/x-javascript-query", bytes.NewReader(queryBytes))
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				body, _ := io.ReadAll(res.Body)
-				g.Assert(string(body)).Eql("[{\"bananaCount\":100}]")
-			})
-			g.It("can find single ids", func() {
-				query := map[string]any{"entityId": "ns3:16"}
-				queryBytes, _ := json.Marshal(query)
-				res, err := http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				body, _ := io.ReadAll(res.Body)
-				var rMap []map[string]any
-				err = json.Unmarshal(body, &rMap)
-				g.Assert(err).IsNil()
-				g.Assert(rMap).IsNotZero()
-				g.Assert(rMap[1]["id"]).Eql("ns3:16")
-				g.Assert(rMap[1]["recorded"]).IsNotZero()
-			})
-			g.It("can find outgoing relations from startUri", func() {
-				payload := strings.NewReader(bananaRelations(
-					bananaRel{fromBanana: 1, toBananas: []int{2, 3}},
-					bananaRel{fromBanana: 2, toBananas: []int{3, 4, 5, 6, 7}},
-				))
-				res, err := http.Post(dsURL+"/entities", "application/json", payload)
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
+			res, err := http.Post(queryURL, "application/x-javascript-query", bytes.NewReader(queryBytes))
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			body, _ := io.ReadAll(res.Body)
+			Expect(string(body)).To(Equal("[{\"bananaCount\":100}]"))
+		})
+		It("can find single ids", func() {
+			query := map[string]any{"entityId": "ns3:16"}
+			queryBytes, _ := json.Marshal(query)
+			res, err := http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			body, _ := io.ReadAll(res.Body)
+			var rMap []map[string]any
+			err = json.Unmarshal(body, &rMap)
+			Expect(err).To(BeNil())
+			Expect(rMap).NotTo(BeZero())
+			Expect(rMap[1]["id"]).To(Equal("ns3:16"))
+			Expect(rMap[1]["recorded"]).NotTo(BeZero())
+		})
+		It("can find outgoing relations from startUri", func() {
+			payload := strings.NewReader(bananaRelations(
+				bananaRel{fromBanana: 1, toBananas: []int{2, 3}},
+				bananaRel{fromBanana: 2, toBananas: []int{3, 4, 5, 6, 7}},
+			))
+			res, err := http.Post(dsURL+"/entities", "application/json", payload)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
 
-				query := map[string]any{"startingEntities": []string{"ns3:2"}, "predicate": "*"}
-				queryBytes, _ := json.Marshal(query)
-				res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				body, _ := io.ReadAll(res.Body)
-				var rArr []any
-				err = json.Unmarshal(body, &rArr)
-				g.Assert(err).IsNil()
-				g.Assert(rArr).IsNotZero()
-				result := rArr[1].([]any)
-				g.Assert(len(result)).Eql(5)
-				g.Assert(result[4].([]any)[2].(map[string]any)["id"]).Eql("ns3:3")
-				g.Assert(result[3].([]any)[2].(map[string]any)["id"]).Eql("ns3:4")
-				g.Assert(result[2].([]any)[2].(map[string]any)["id"]).Eql("ns3:5")
-				g.Assert(result[1].([]any)[2].(map[string]any)["id"]).Eql("ns3:6")
-				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:7")
-			})
-			g.It("can page through queried outgoing relations", func() {
-				payload := strings.NewReader(bananaRelations(
-					bananaRel{fromBanana: 1, toBananas: []int{2, 3}},
-					bananaRel{fromBanana: 2, toBananas: []int{3, 4, 5, 6, 7}},
-				))
-				res, err := http.Post(dsURL+"/entities", "application/json", payload)
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
+			query := map[string]any{"startingEntities": []string{"ns3:2"}, "predicate": "*"}
+			queryBytes, _ := json.Marshal(query)
+			res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			body, _ := io.ReadAll(res.Body)
+			var rArr []any
+			err = json.Unmarshal(body, &rArr)
+			Expect(err).To(BeNil())
+			Expect(rArr).NotTo(BeZero())
+			result := rArr[1].([]any)
+			Expect(len(result)).To(Equal(5))
+			Expect(result[4].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:3"))
+			Expect(result[3].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:4"))
+			Expect(result[2].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:5"))
+			Expect(result[1].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:6"))
+			Expect(result[0].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:7"))
+		})
+		It("can page through queried outgoing relations", func() {
+			payload := strings.NewReader(bananaRelations(
+				bananaRel{fromBanana: 1, toBananas: []int{2, 3}},
+				bananaRel{fromBanana: 2, toBananas: []int{3, 4, 5, 6, 7}},
+			))
+			res, err := http.Post(dsURL+"/entities", "application/json", payload)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
 
-				query := map[string]any{"startingEntities": []string{"ns3:2"}, "predicate": "*", "limit": 2}
-				queryBytes, _ := json.Marshal(query)
-				res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				body, _ := io.ReadAll(res.Body)
-				var rArr []any
-				err = json.Unmarshal(body, &rArr)
-				g.Assert(err).IsNil()
-				g.Assert(rArr).IsNotZero()
-				result := rArr[1].([]any)
-				g.Assert(len(result)).Eql(2)
-				g.Assert(result[1].([]any)[2].(map[string]any)["id"]).Eql("ns3:6")
-				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:7")
-				cont := rArr[2]
-				query = map[string]any{"continuations": cont, "limit": 2}
-				queryBytes, _ = json.Marshal(query)
-				res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				body, _ = io.ReadAll(res.Body)
-				rArr = []any{}
-				err = json.Unmarshal(body, &rArr)
-				g.Assert(err).IsNil()
-				g.Assert(rArr).IsNotZero()
-				result = rArr[1].([]any)
-				g.Assert(len(result)).Eql(2)
-				g.Assert(result[1].([]any)[2].(map[string]any)["id"]).Eql("ns3:4")
-				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:5")
+			query := map[string]any{"startingEntities": []string{"ns3:2"}, "predicate": "*", "limit": 2}
+			queryBytes, _ := json.Marshal(query)
+			res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			body, _ := io.ReadAll(res.Body)
+			var rArr []any
+			err = json.Unmarshal(body, &rArr)
+			Expect(err).To(BeNil())
+			Expect(rArr).NotTo(BeZero())
+			result := rArr[1].([]any)
+			Expect(len(result)).To(Equal(2))
+			Expect(result[1].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:6"))
+			Expect(result[0].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:7"))
+			cont := rArr[2]
+			query = map[string]any{"continuations": cont, "limit": 2}
+			queryBytes, _ = json.Marshal(query)
+			res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			body, _ = io.ReadAll(res.Body)
+			rArr = []any{}
+			err = json.Unmarshal(body, &rArr)
+			Expect(err).To(BeNil())
+			Expect(rArr).NotTo(BeZero())
+			result = rArr[1].([]any)
+			Expect(len(result)).To(Equal(2))
+			Expect(result[1].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:4"))
+			Expect(result[0].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:5"))
 
-				cont = rArr[2]
-				query = map[string]any{"continuations": cont, "limit": 2}
-				queryBytes, _ = json.Marshal(query)
-				res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				body, _ = io.ReadAll(res.Body)
-				rArr = []any{}
-				err = json.Unmarshal(body, &rArr)
-				g.Assert(err).IsNil()
-				g.Assert(rArr).IsNotZero()
-				result = rArr[1].([]any)
-				g.Assert(len(result)).Eql(1)
-				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:3")
-				cont = rArr[2]
-				g.Assert(len(cont.([]any))).Eql(0)
-			})
-			g.It("can find inverse relations from startUri", func() {
-				payload := strings.NewReader(bananaRelations(
-					bananaRel{fromBanana: 1, toBananas: []int{2, 3}},
-					bananaRel{fromBanana: 2, toBananas: []int{3, 4}},
-					bananaRel{fromBanana: 4, toBananas: []int{3, 2, 1}},
-				))
-				res, err := http.Post(dsURL+"/entities", "application/json", payload)
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
+			cont = rArr[2]
+			query = map[string]any{"continuations": cont, "limit": 2}
+			queryBytes, _ = json.Marshal(query)
+			res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			body, _ = io.ReadAll(res.Body)
+			rArr = []any{}
+			err = json.Unmarshal(body, &rArr)
+			Expect(err).To(BeNil())
+			Expect(rArr).NotTo(BeZero())
+			result = rArr[1].([]any)
+			Expect(len(result)).To(Equal(1))
+			Expect(result[0].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:3"))
+			cont = rArr[2]
+			Expect(len(cont.([]any))).To(Equal(0))
+		})
+		It("can find inverse relations from startUri", func() {
+			payload := strings.NewReader(bananaRelations(
+				bananaRel{fromBanana: 1, toBananas: []int{2, 3}},
+				bananaRel{fromBanana: 2, toBananas: []int{3, 4}},
+				bananaRel{fromBanana: 4, toBananas: []int{3, 2, 1}},
+			))
+			res, err := http.Post(dsURL+"/entities", "application/json", payload)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
 
-				query := map[string]any{"startingEntities": []string{"ns3:3"}, "predicate": "*", "inverse": true}
-				queryBytes, _ := json.Marshal(query)
-				res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				body, _ := io.ReadAll(res.Body)
-				var rArr []any
-				err = json.Unmarshal(body, &rArr)
-				g.Assert(err).IsNil()
-				g.Assert(rArr).IsNotZero()
-				result := rArr[1].([]any)
-				g.Assert(len(result)).Eql(3)
-				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:1")
-				g.Assert(result[1].([]any)[2].(map[string]any)["id"]).Eql("ns3:2")
-				g.Assert(result[2].([]any)[2].(map[string]any)["id"]).Eql("ns3:4")
-			})
+			query := map[string]any{"startingEntities": []string{"ns3:3"}, "predicate": "*", "inverse": true}
+			queryBytes, _ := json.Marshal(query)
+			res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			body, _ := io.ReadAll(res.Body)
+			var rArr []any
+			err = json.Unmarshal(body, &rArr)
+			Expect(err).To(BeNil())
+			Expect(rArr).NotTo(BeZero())
+			result := rArr[1].([]any)
+			Expect(len(result)).To(Equal(3))
+			Expect(result[0].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:1"))
+			Expect(result[1].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:2"))
+			Expect(result[2].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:4"))
+		})
 
-			g.It("can page through queried inverse relations", func() {
-				payload := strings.NewReader(bananaRelations(
-					bananaRel{fromBanana: 1, toBananas: []int{2, 3}},
-					bananaRel{fromBanana: 2, toBananas: []int{3, 4}},
-					bananaRel{fromBanana: 3, toBananas: []int{2, 1}},
-					bananaRel{fromBanana: 4, toBananas: []int{3, 2, 1}},
-					bananaRel{fromBanana: 5, toBananas: []int{3, 2, 1}},
-					bananaRel{fromBanana: 6, toBananas: []int{3, 2, 1}},
-					bananaRel{fromBanana: 7, toBananas: []int{3, 2, 1}},
-				))
-				res, err := http.Post(dsURL+"/entities", "application/json", payload)
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
+		It("can page through queried inverse relations", func() {
+			payload := strings.NewReader(bananaRelations(
+				bananaRel{fromBanana: 1, toBananas: []int{2, 3}},
+				bananaRel{fromBanana: 2, toBananas: []int{3, 4}},
+				bananaRel{fromBanana: 3, toBananas: []int{2, 1}},
+				bananaRel{fromBanana: 4, toBananas: []int{3, 2, 1}},
+				bananaRel{fromBanana: 5, toBananas: []int{3, 2, 1}},
+				bananaRel{fromBanana: 6, toBananas: []int{3, 2, 1}},
+				bananaRel{fromBanana: 7, toBananas: []int{3, 2, 1}},
+			))
+			res, err := http.Post(dsURL+"/entities", "application/json", payload)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
 
-				query := map[string]any{
-					"startingEntities": []string{"ns3:3"},
-					"predicate":        "*",
-					"inverse":          true,
-					"limit":            2,
-				}
-				queryBytes, _ := json.Marshal(query)
-				res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				body, _ := io.ReadAll(res.Body)
-				var rArr []any
-				err = json.Unmarshal(body, &rArr)
-				g.Assert(err).IsNil()
-				g.Assert(rArr).IsNotZero()
-				result := rArr[1].([]any)
-				g.Assert(len(result)).Eql(2)
-				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:1")
-				g.Assert(result[1].([]any)[2].(map[string]any)["id"]).Eql("ns3:2")
+			query := map[string]any{
+				"startingEntities": []string{"ns3:3"},
+				"predicate":        "*",
+				"inverse":          true,
+				"limit":            2,
+			}
+			queryBytes, _ := json.Marshal(query)
+			res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			body, _ := io.ReadAll(res.Body)
+			var rArr []any
+			err = json.Unmarshal(body, &rArr)
+			Expect(err).To(BeNil())
+			Expect(rArr).NotTo(BeZero())
+			result := rArr[1].([]any)
+			Expect(len(result)).To(Equal(2))
+			Expect(result[0].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:1"))
+			Expect(result[1].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:2"))
 
-				cont := rArr[2]
-				savedCont := cont
-				query = map[string]any{"continuations": cont, "limit": 2}
-				queryBytes, _ = json.Marshal(query)
-				res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				body, _ = io.ReadAll(res.Body)
-				rArr = []any{}
-				err = json.Unmarshal(body, &rArr)
-				g.Assert(err).IsNil()
-				g.Assert(rArr).IsNotZero()
-				result = rArr[1].([]any)
-				g.Assert(len(result)).Eql(2)
-				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:4")
-				g.Assert(result[1].([]any)[2].(map[string]any)["id"]).Eql("ns3:5")
+			cont := rArr[2]
+			savedCont := cont
+			query = map[string]any{"continuations": cont, "limit": 2}
+			queryBytes, _ = json.Marshal(query)
+			res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			body, _ = io.ReadAll(res.Body)
+			rArr = []any{}
+			err = json.Unmarshal(body, &rArr)
+			Expect(err).To(BeNil())
+			Expect(rArr).NotTo(BeZero())
+			result = rArr[1].([]any)
+			Expect(len(result)).To(Equal(2))
+			Expect(result[0].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:4"))
+			Expect(result[1].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:5"))
 
-				cont = rArr[2]
-				query = map[string]any{"continuations": cont, "limit": 2}
-				queryBytes, _ = json.Marshal(query)
-				res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				body, _ = io.ReadAll(res.Body)
-				rArr = []any{}
-				err = json.Unmarshal(body, &rArr)
-				g.Assert(err).IsNil()
-				g.Assert(rArr).IsNotZero()
-				result = rArr[1].([]any)
-				g.Assert(len(result)).Eql(2)
-				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:6")
-				g.Assert(result[1].([]any)[2].(map[string]any)["id"]).Eql("ns3:7")
+			cont = rArr[2]
+			query = map[string]any{"continuations": cont, "limit": 2}
+			queryBytes, _ = json.Marshal(query)
+			res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			body, _ = io.ReadAll(res.Body)
+			rArr = []any{}
+			err = json.Unmarshal(body, &rArr)
+			Expect(err).To(BeNil())
+			Expect(rArr).NotTo(BeZero())
+			result = rArr[1].([]any)
+			Expect(len(result)).To(Equal(2))
+			Expect(result[0].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:6"))
+			Expect(result[1].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:7"))
 
-				// go through last pages with different batch sizes
-				query = map[string]any{"continuations": savedCont, "limit": 3}
-				queryBytes, _ = json.Marshal(query)
-				res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				body, _ = io.ReadAll(res.Body)
-				rArr = []any{}
-				err = json.Unmarshal(body, &rArr)
-				g.Assert(err).IsNil()
-				g.Assert(rArr).IsNotZero()
-				result = rArr[1].([]any)
-				g.Assert(len(result)).Eql(3)
-				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:4")
-				g.Assert(result[1].([]any)[2].(map[string]any)["id"]).Eql("ns3:5")
-				g.Assert(result[2].([]any)[2].(map[string]any)["id"]).Eql("ns3:6")
+			// go through last pages with different batch sizes
+			query = map[string]any{"continuations": savedCont, "limit": 3}
+			queryBytes, _ = json.Marshal(query)
+			res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			body, _ = io.ReadAll(res.Body)
+			rArr = []any{}
+			err = json.Unmarshal(body, &rArr)
+			Expect(err).To(BeNil())
+			Expect(rArr).NotTo(BeZero())
+			result = rArr[1].([]any)
+			Expect(len(result)).To(Equal(3))
+			Expect(result[0].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:4"))
+			Expect(result[1].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:5"))
+			Expect(result[2].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:6"))
 
-				cont = rArr[2]
-				query = map[string]any{"continuations": cont, "limit": 2}
-				queryBytes, _ = json.Marshal(query)
-				res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
-				g.Assert(err).IsNil()
-				g.Assert(res).IsNotZero()
-				g.Assert(res.StatusCode).Eql(200)
-				body, _ = io.ReadAll(res.Body)
-				rArr = []any{}
-				err = json.Unmarshal(body, &rArr)
-				g.Assert(err).IsNil()
-				g.Assert(rArr).IsNotZero()
-				result = rArr[1].([]any)
-				g.Assert(len(result)).Eql(1)
-				g.Assert(result[0].([]any)[2].(map[string]any)["id"]).Eql("ns3:7")
-			})
+			cont = rArr[2]
+			query = map[string]any{"continuations": cont, "limit": 2}
+			queryBytes, _ = json.Marshal(query)
+			res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			body, _ = io.ReadAll(res.Body)
+			rArr = []any{}
+			err = json.Unmarshal(body, &rArr)
+			Expect(err).To(BeNil())
+			Expect(rArr).NotTo(BeZero())
+			result = rArr[1].([]any)
+			Expect(len(result)).To(Equal(1))
+			Expect(result[0].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:7"))
 		})
 	})
-}
+})
 
 func bananaRelations(rels ...bananaRel) string {
 	prefix := `[ { "id" : "@context", "namespaces" : { "_" : "http://example.com" } }, `

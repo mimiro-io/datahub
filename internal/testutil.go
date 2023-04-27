@@ -14,10 +14,12 @@
 
 package internal
 
-import "testing"
+import (
+	"go.uber.org/fx/fxtest"
+)
 
 type FxLogger struct {
-	t      testing.TB
+	t      fxtest.TB
 	active bool
 }
 
@@ -35,6 +37,6 @@ func (l *FxLogger) Logf(f string, a ...interface{}) {
 	}
 }
 
-func FxTestLog(t testing.TB, active bool) *FxLogger {
+func FxTestLog(t fxtest.TB, active bool) *FxLogger {
 	return &FxLogger{t: t, active: active}
 }

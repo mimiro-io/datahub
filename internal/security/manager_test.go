@@ -17,10 +17,10 @@ package security
 import (
 	"os"
 	"strconv"
-	"testing"
 
 	"github.com/DataDog/datadog-go/v5/statsd"
-	"github.com/franela/goblin"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
 
@@ -29,37 +29,33 @@ import (
 	"github.com/mimiro-io/datahub/internal/server"
 )
 
-func TestManager(t *testing.T) {
-	g := goblin.Goblin(t)
+var _ = Describe("Security Manager", func() {
+	var store *server.Store
+	var e *conf.Env
+	var pm *ProviderManager
+	testCnt := 0
 
-	g.Describe("Security Manager", func() {
-		var store *server.Store
-		var e *conf.Env
-		var pm *ProviderManager
-		testCnt := 0
-
-		g.BeforeEach(func() {
-			testCnt = testCnt + 1
-			e = &conf.Env{
-				Logger:        zap.NewNop().Sugar(),
-				StoreLocation: "./test_login_provider_" + strconv.Itoa(testCnt),
-			}
-			err := os.RemoveAll(e.StoreLocation)
-			g.Assert(err).IsNil("should be allowed to clean testfiles in " + e.StoreLocation)
-			lc := fxtest.NewLifecycle(internal.FxTestLog(t, false))
-			sc := &statsd.NoOpClient{}
-			store = server.NewStore(lc, e, sc)
-			lc.RequireStart()
-			pm = NewProviderManager(lc, e, store, zap.NewNop().Sugar())
-		})
-		g.AfterEach(func() {
-			_ = store.Close()
-			_ = os.RemoveAll(e.StoreLocation)
-		})
-		g.It("should add a config", func() {
-			p := createConfig("test-jwt")
-			err := pm.AddProvider(p)
-			g.Assert(err).IsNil()
-		})
+	BeforeEach(func() {
+		testCnt = testCnt + 1
+		e = &conf.Env{
+			Logger:        zap.NewNop().Sugar(),
+			StoreLocation: "./test_login_provider_" + strconv.Itoa(testCnt),
+		}
+		err := os.RemoveAll(e.StoreLocation)
+		Expect(err).To(BeNil())
+		lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
+		sc := &statsd.NoOpClient{}
+		store = server.NewStore(lc, e, sc)
+		lc.RequireStart()
+		pm = NewProviderManager(lc, e, store, zap.NewNop().Sugar())
 	})
-}
+	AfterEach(func() {
+		_ = store.Close()
+		_ = os.RemoveAll(e.StoreLocation)
+	})
+	It("should add a config", func() {
+		p := createConfig("test-jwt")
+		err := pm.AddProvider(p)
+		Expect(err).To(BeNil())
+	})
+})

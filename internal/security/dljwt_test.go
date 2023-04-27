@@ -21,119 +21,122 @@ import (
 	"testing"
 	"time"
 
-	"github.com/franela/goblin"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 )
 
-func TestDlJwt(t *testing.T) {
-	g := goblin.Goblin(t)
-	g.Describe("DL Jwt configuration", func() {
-		g.It("Should be correctly built from env properties", func() {
-			provider := ProviderConfig{
-				Name: "jwt",
-				Type: "bearer",
-				ClientID: &ValueReader{
-					Type:  "text",
-					Value: "id1",
-				},
-				ClientSecret: &ValueReader{
-					Type:  "text",
-					Value: "some-secret",
-				},
-				Audience: &ValueReader{
-					Type:  "text",
-					Value: "mimiro",
-				},
-				GrantType: &ValueReader{
-					Type:  "text",
-					Value: "test_grant",
-				},
-				Endpoint: &ValueReader{
-					Type:  "text",
-					Value: "http://localhost",
-				},
-			}
-
-			config := NewDlJwtConfig(zap.NewNop().Sugar(), provider, &ProviderManager{})
-			g.Assert(config.ClientID).Eql("id1")
-			g.Assert(config.ClientSecret).Eql("some-secret")
-		})
-
-		g.It("Should call a remote token endpoint", func() {
-			srv := serverMock()
-
-			config := JwtBearerProvider{
-				ClientID:     "123",
-				ClientSecret: "456",
-				Audience:     "",
-				GrantType:    "",
-				endpoint:     srv.URL + "/oauth/token",
-				logger:       zap.NewNop().Sugar(),
-			}
-
-			res, err := config.callRemote()
-			g.Assert(err).IsNil()
-			g.Assert(res.AccessToken).Eql("hello-world", "remote mock server should answer hello-world")
-
-			srv.Close()
-		})
-
-		g.It("Should use token cache if configured", func() {
-			srv := serverMock()
-
-			config := JwtBearerProvider{
-				ClientID:     "123",
-				ClientSecret: "456",
-				Audience:     "",
-				GrantType:    "",
-				endpoint:     srv.URL + "/oauth/token",
-				logger:       zap.NewNop().Sugar(),
-			}
-
-			// cache is nil, so it should generate a fresh one
-			res, err := config.generateOrGetToken()
-			g.Assert(err).IsNil()
-			g.Assert(res).Eql("hello-world", "remote mock server should generate hello-world")
-
-			// cache is set and time is in the future, so it should return the cached version
-			config = JwtBearerProvider{
-				ClientID:     "123",
-				ClientSecret: "456",
-				Audience:     "",
-				GrantType:    "",
-				endpoint:     srv.URL + "/oauth/token",
-				logger:       zap.NewNop().Sugar(),
-				cache: &cache{
-					until: time.Now().Add(time.Duration(1000) * time.Second),
-					token: "cached token",
-				},
-			}
-
-			res, err = config.generateOrGetToken()
-			g.Assert(err).IsNil()
-			g.Assert(res).Eql("cached token", "cache should be used")
-
-			// cache is set but time is in the past, so it should return a new token
-			config = JwtBearerProvider{
-				ClientID:     "123",
-				ClientSecret: "456",
-				Audience:     "",
-				GrantType:    "",
-				endpoint:     srv.URL + "/oauth/token",
-				logger:       zap.NewNop().Sugar(),
-				cache: &cache{
-					until: time.Now().Add(time.Duration(-1000) * time.Second),
-					token: "cached token",
-				},
-			}
-			res, err = config.generateOrGetToken()
-			g.Assert(err).IsNil()
-			g.Assert(res).Eql("hello-world", "cache is stale, new remote token should be fetched")
-
-			srv.Close()
-		})
-	})
+func TestSecurity(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Security Suite")
 }
+
+var _ = Describe("DL Jwt configuration", func() {
+	It("Should be correctly built from env properties", func() {
+		provider := ProviderConfig{
+			Name: "jwt",
+			Type: "bearer",
+			ClientID: &ValueReader{
+				Type:  "text",
+				Value: "id1",
+			},
+			ClientSecret: &ValueReader{
+				Type:  "text",
+				Value: "some-secret",
+			},
+			Audience: &ValueReader{
+				Type:  "text",
+				Value: "mimiro",
+			},
+			GrantType: &ValueReader{
+				Type:  "text",
+				Value: "test_grant",
+			},
+			Endpoint: &ValueReader{
+				Type:  "text",
+				Value: "http://localhost",
+			},
+		}
+
+		config := NewDlJwtConfig(zap.NewNop().Sugar(), provider, &ProviderManager{})
+		Expect(config.ClientID).To(Equal("id1"))
+		Expect(config.ClientSecret).To(Equal("some-secret"))
+	})
+
+	It("Should call a remote token endpoint", func() {
+		srv := serverMock()
+
+		config := JwtBearerProvider{
+			ClientID:     "123",
+			ClientSecret: "456",
+			Audience:     "",
+			GrantType:    "",
+			endpoint:     srv.URL + "/oauth/token",
+			logger:       zap.NewNop().Sugar(),
+		}
+
+		res, err := config.callRemote()
+		Expect(err).To(BeNil())
+		Expect(res.AccessToken).To(Equal("hello-world"), "remote mock server should answer hello-world")
+
+		srv.Close()
+	})
+
+	It("Should use token cache if configured", func() {
+		srv := serverMock()
+
+		config := JwtBearerProvider{
+			ClientID:     "123",
+			ClientSecret: "456",
+			Audience:     "",
+			GrantType:    "",
+			endpoint:     srv.URL + "/oauth/token",
+			logger:       zap.NewNop().Sugar(),
+		}
+
+		// cache is nil, so it should generate a fresh one
+		res, err := config.generateOrGetToken()
+		Expect(err).To(BeNil())
+		Expect(res).To(Equal("hello-world"), "remote mock server should generate hello-world")
+
+		// cache is set and time is in the future, so it should return the cached version
+		config = JwtBearerProvider{
+			ClientID:     "123",
+			ClientSecret: "456",
+			Audience:     "",
+			GrantType:    "",
+			endpoint:     srv.URL + "/oauth/token",
+			logger:       zap.NewNop().Sugar(),
+			cache: &cache{
+				until: time.Now().Add(time.Duration(1000) * time.Second),
+				token: "cached token",
+			},
+		}
+
+		res, err = config.generateOrGetToken()
+		Expect(err).To(BeNil())
+		Expect(res).To(Equal("cached token"), "cache should be used")
+
+		// cache is set but time is in the past, so it should return a new token
+		config = JwtBearerProvider{
+			ClientID:     "123",
+			ClientSecret: "456",
+			Audience:     "",
+			GrantType:    "",
+			endpoint:     srv.URL + "/oauth/token",
+			logger:       zap.NewNop().Sugar(),
+			cache: &cache{
+				until: time.Now().Add(time.Duration(-1000) * time.Second),
+				token: "cached token",
+			},
+		}
+		res, err = config.generateOrGetToken()
+		Expect(err).To(BeNil())
+		Expect(res).To(Equal("hello-world"), "cache is stale, new remote token should be fetched")
+
+		srv.Close()
+	})
+})
 
 func serverMock() *httptest.Server {
 	handler := http.NewServeMux()

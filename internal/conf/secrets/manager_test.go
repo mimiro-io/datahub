@@ -15,34 +15,36 @@
 package secrets
 
 import (
-	"errors"
 	"testing"
 
-	"github.com/franela/goblin"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/conf"
 )
 
 func TestNewManager(t *testing.T) {
-	g := goblin.Goblin(t)
-	g.Describe("Testing Secrets Creation", func() {
-		g.It("should return noop manager when given noop", func() {
-			env := &conf.Env{
-				Env:            "test",
-				SecretsManager: "noop",
-			}
-
-			mngr, err := NewManager(env, zap.NewNop().Sugar())
-			if err != nil {
-				g.Fail(err)
-			}
-			switch mngr.(type) {
-			case *NoopStore:
-				// ok
-			default:
-				g.Fail(errors.New("store is not NoopStore"))
-			}
-		})
-	})
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "conf/Secrets Suite")
 }
+
+var _ = Describe("Testing Secrets Creation", func() {
+	It("should return noop manager when given noop", func() {
+		env := &conf.Env{
+			Env:            "test",
+			SecretsManager: "noop",
+		}
+
+		mngr, err := NewManager(env, zap.NewNop().Sugar())
+		if err != nil {
+			Fail(err.Error())
+		}
+		switch mngr.(type) {
+		case *NoopStore:
+			// ok
+		default:
+			Fail("store is not NoopStore")
+		}
+	})
+})
