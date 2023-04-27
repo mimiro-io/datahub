@@ -35,7 +35,7 @@ import (
 
 func TestFromOutside(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Intgration Suite")
+	RunSpecs(t, "Integration Suite")
 }
 
 var _ = Describe("The dataset endpoint", Ordered, func() {

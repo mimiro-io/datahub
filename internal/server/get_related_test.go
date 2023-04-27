@@ -198,6 +198,31 @@ var _ = ginkgo.Describe("The GetManyRelatedEntitiesBatch functions", func() {
 		Expect(queryResult[0].Relations[13].RelatedEntity.ID).To(Equal(pref + ":person-2"))
 		Expect(queryResult[0].Continuation.RelationIndexFromKey).To(BeNil())
 	})
+
+	ginkgo.It("Should work with star queries across multiple predicates", func() {
+		// add friends relations first. they will get a lower internal predicate id
+		pref := persist("friends", store, dsm, buildTestBatch(store, []testPerson{{id: 1, friends: []int{2, 3}}}))
+		// add family, family gets a higher internal predicate id in the outgoing relations index
+		persist("friends", store, dsm,
+			buildTestBatch(store, []testPerson{{id: 1, friends: []int{2, 3}, family: []int{4}}}))
+		// update both relations so that person 4 is deleted in "family" and added in "friends"
+		persist("friends", store, dsm,
+			buildTestBatch(store, []testPerson{{id: 1, friends: []int{2, 3, 4}, family: []int{5}}}))
+
+		// make sure we find person 4 as friend now, even though it is deleted from family.
+		start := []string{pref + ":person-1"}
+		queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+		Expect(err).To(BeNil())
+		Expect(queryResult[0].Relations).To(HaveLen(4))
+		Expect(queryResult[0].Relations[0].PredicateURI).To(Equal("ns3:Family"))
+		Expect(queryResult[0].Relations[0].RelatedEntity.ID).To(Equal("ns3:person-5"))
+		Expect(queryResult[0].Relations[1].PredicateURI).To(Equal("ns3:Friend"))
+		Expect(queryResult[0].Relations[1].RelatedEntity.ID).To(Equal("ns3:person-4"))
+		Expect(queryResult[0].Relations[2].PredicateURI).To(Equal("ns3:Friend"))
+		Expect(queryResult[0].Relations[2].RelatedEntity.ID).To(Equal("ns3:person-3"))
+		Expect(queryResult[0].Relations[3].PredicateURI).To(Equal("ns3:Friend"))
+		Expect(queryResult[0].Relations[3].RelatedEntity.ID).To(Equal("ns3:person-2"))
+	})
 })
 
 func persist(dsName string, store *Store, dsm *DsManager, b []*Entity) string {

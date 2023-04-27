@@ -81,7 +81,7 @@ var _ = ginkgo.Describe("A Dataset", func() {
 		_ = env.store.Close()
 		_ = os.RemoveAll(storeLocation)
 	})
-	ginkgo.It("XXX Should accept both single strings and string arrays as refs values", func() {
+	ginkgo.It("Should accept both single strings and string arrays as refs values", func() {
 		// add a first person with all new refs
 		person := NewEntity(env.peopleNamespacePrefix+":person-1", 1)
 		person.Properties[env.peopleNamespacePrefix+":Name"] = "person 1"
