@@ -17,12 +17,12 @@ package dataset
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/mimiro-io/datahub/internal/service/types"
 	"io"
 
 	"github.com/dgraph-io/badger/v3"
 
 	"github.com/mimiro-io/datahub/internal/service/store"
+	"github.com/mimiro-io/datahub/internal/service/types"
 )
 
 type IterableDataset interface {
@@ -122,6 +122,7 @@ func (b *BadgerDatasetIterator) ensureTxn() error {
 		b.datasetPrefix = store.SeekDataset(b.datasetID)
 		opts := badger.DefaultIteratorOptions
 		searchBuffer := store.SeekChanges(b.datasetID, b.startingOffset)
+		opts.Prefix = searchBuffer[:6]
 		if b.inverse {
 			opts.Reverse = true
 		}

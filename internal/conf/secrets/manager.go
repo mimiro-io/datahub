@@ -15,10 +15,12 @@
 package secrets
 
 import (
-	"github.com/mimiro-io/datahub/internal/conf"
+	"strings"
+
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
-	"strings"
+
+	"github.com/mimiro-io/datahub/internal/conf"
 )
 
 type SecretStore interface {

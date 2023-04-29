@@ -16,45 +16,45 @@ package store
 
 import (
 	"encoding/binary"
-	"github.com/mimiro-io/datahub/internal/service/types"
 
 	"github.com/mimiro-io/datahub/internal/server"
+	"github.com/mimiro-io/datahub/internal/service/types"
 )
 
 func SeekChanges(datasetID types.InternalDatasetID, since types.DatasetOffset) []byte {
 	searchBuffer := make([]byte, 14)
-	binary.BigEndian.PutUint16(searchBuffer, server.DATASET_ENTITY_CHANGE_LOG)
+	binary.BigEndian.PutUint16(searchBuffer, server.DatasetEntityChangeLog)
 	binary.BigEndian.PutUint32(searchBuffer[2:], uint32(datasetID))
 	binary.BigEndian.PutUint64(searchBuffer[6:], uint64(since))
 	return searchBuffer
 }
 
 func SeekEntityChanges(datasetID types.InternalDatasetID, entityID types.InternalID) []byte {
-	entityIdBuffer := make([]byte, 14)
-	binary.BigEndian.PutUint16(entityIdBuffer, server.ENTITY_ID_TO_JSON_INDEX_ID)
-	binary.BigEndian.PutUint64(entityIdBuffer[2:], uint64(entityID))
-	binary.BigEndian.PutUint32(entityIdBuffer[10:], uint32(datasetID))
-	return entityIdBuffer
+	entityIDBuffer := make([]byte, 14)
+	binary.BigEndian.PutUint16(entityIDBuffer, server.EntityIDToJSONIndexID)
+	binary.BigEndian.PutUint64(entityIDBuffer[2:], uint64(entityID))
+	binary.BigEndian.PutUint32(entityIDBuffer[10:], uint32(datasetID))
+	return entityIDBuffer
 }
 
 func SeekDataset(datasetID types.InternalDatasetID) []byte {
 	searchBuffer := make([]byte, 6)
-	binary.BigEndian.PutUint16(searchBuffer, server.DATASET_ENTITY_CHANGE_LOG)
+	binary.BigEndian.PutUint16(searchBuffer, server.DatasetEntityChangeLog)
 	binary.BigEndian.PutUint32(searchBuffer[2:], uint32(datasetID))
 	return searchBuffer
 }
 
-func SeekEntity(intenalEntityId types.InternalID) []byte {
+func SeekEntity(intenalEntityID types.InternalID) []byte {
 	entityLocatorPrefixBuffer := make([]byte, 10)
-	binary.BigEndian.PutUint16(entityLocatorPrefixBuffer, server.ENTITY_ID_TO_JSON_INDEX_ID)
-	binary.BigEndian.PutUint64(entityLocatorPrefixBuffer[2:], uint64(intenalEntityId))
+	binary.BigEndian.PutUint16(entityLocatorPrefixBuffer, server.EntityIDToJSONIndexID)
+	binary.BigEndian.PutUint64(entityLocatorPrefixBuffer[2:], uint64(intenalEntityID))
 	return entityLocatorPrefixBuffer
 }
 
 func GetCurieKey(curie types.CURIE) []byte {
 	curieAsBytes := []byte(curie)
 	buf := make([]byte, len(curieAsBytes)+2)
-	binary.BigEndian.PutUint16(buf, server.URI_TO_ID_INDEX_ID)
+	binary.BigEndian.PutUint16(buf, server.URIToIDIndexID)
 	copy(buf[2:], curieAsBytes)
 	return buf
 }

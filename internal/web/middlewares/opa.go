@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/gojektech/heimdall/v6/httpclient"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -45,12 +45,11 @@ type opaDatasets struct {
 	Result []string `json:"result"`
 }
 
-func OpaAuthorizer(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {
+func OpaAuthorizer(_ *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {
 	opaEndpoint := viper.GetString("OPA_ENDPOINT")
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-
 			token := c.Get("user").(*jwt.Token)
 
 			input := opaRequest{
@@ -83,6 +82,9 @@ func OpaAuthorizer(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareF
 			}
 			resp := opaDatasets{}
 			err = json.Unmarshal(body, &resp)
+			if err != nil {
+				return echo.NewHTTPError(http.StatusForbidden, err.Error())
+			}
 			datasets := pluckDatasets(resp)
 			c.Set("datasets", datasets)
 
@@ -129,10 +131,7 @@ func pluckDatasets(resp opaDatasets) []string {
 	datasets := make([]string, 0)
 
 	if len(resp.Result) > 0 {
-		for _, item := range resp.Result {
-			datasets = append(datasets, item)
-		}
+		datasets = append(datasets, resp.Result...)
 	}
 	return datasets
-
 }

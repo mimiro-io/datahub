@@ -18,13 +18,14 @@ import (
 	"encoding/json"
 
 	"github.com/DataDog/datadog-go/v5/statsd"
+	"go.uber.org/zap"
+
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/server"
-	"go.uber.org/zap"
 )
 
 type Content struct {
-	Id   string                 `json:"id"`
+	ID   string                 `json:"id"`
 	Data map[string]interface{} `json:"data"`
 }
 
@@ -44,7 +45,7 @@ func NewContent(env *conf.Env, store *server.Store, statsd statsd.ClientInterfac
 
 // AddContent adds or replaces a new content entity to the store
 func (contentConfig *Config) AddContent(id string, payload *Content) error {
-	return contentConfig.store.StoreObject(server.CONTENT_INDEX, id, payload)
+	return contentConfig.store.StoreObject(server.ContentIndex, id, payload)
 }
 
 // UpdateContent updates an existing content (by calling AddContent)
@@ -53,14 +54,14 @@ func (contentConfig *Config) UpdateContent(id string, payload *Content) error {
 	return contentConfig.AddContent(id, payload)
 }
 
-// GetContentById returns a single content by its id
-func (contentConfig *Config) GetContentById(id string) (*Content, error) {
+// GetContentByID returns a single content by its id
+func (contentConfig *Config) GetContentByID(id string) (*Content, error) {
 	content := &Content{}
-	err := contentConfig.store.GetObject(server.CONTENT_INDEX, id, &content)
+	err := contentConfig.store.GetObject(server.ContentIndex, id, &content)
 	if err != nil {
 		return nil, err
 	}
-	if content.Id == "" {
+	if content.ID == "" {
 		return nil, nil
 	}
 	return content, nil
@@ -69,7 +70,7 @@ func (contentConfig *Config) GetContentById(id string) (*Content, error) {
 // ListContents returns all content entities, in random order
 func (contentConfig *Config) ListContents() ([]*Content, error) {
 	var contents []*Content
-	err := contentConfig.store.IterateObjectsRaw(server.CONTENT_INDEX_BYTES, func(bytes []byte) error {
+	err := contentConfig.store.IterateObjectsRaw(server.ContentIndexBytes, func(bytes []byte) error {
 		content := &Content{}
 		err := json.Unmarshal(bytes, content)
 		if err != nil {
@@ -84,5 +85,5 @@ func (contentConfig *Config) ListContents() ([]*Content, error) {
 
 // DeleteContent deletes a single content from the store
 func (contentConfig *Config) DeleteContent(id string) error {
-	return contentConfig.store.DeleteObject(server.CONTENT_INDEX, id)
+	return contentConfig.store.DeleteObject(server.ContentIndex, id)
 }

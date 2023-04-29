@@ -15,17 +15,17 @@
 package middlewares
 
 import (
+	"context"
 	"crypto/rsa"
-	"encoding/json"
 	"errors"
-	"github.com/mimiro-io/datahub/internal/security"
 	"net/http"
-	"time"
 
-	"github.com/goburrow/cache"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/lestrrat-go/jwx/v2/jwk"
+
+	"github.com/mimiro-io/datahub/internal/security"
 )
 
 type (
@@ -36,10 +36,10 @@ type (
 		// BeforeFunc defines a function which is executed just before the middleware.
 		BeforeFunc middleware.BeforeFunc
 
-		Cache     cache.LoadingCache
+		Cache     *jwk.Cache
 		Wellknown string
-		Audience  string
-		Issuer    string
+		Audience  []string
+		Issuer    []string
 
 		// This is set if Node security is enabled
 		NodePublicKey *rsa.PublicKey
@@ -74,37 +74,16 @@ type JSONWebKeys struct {
 // Errors
 var (
 	ErrJWTMissing = echo.NewHTTPError(http.StatusBadRequest, "missing or malformed jwt")
-	parser        = jwt.Parser{
-		ValidMethods: []string{"RS256"},
-	}
+	ErrJWTInvalid = echo.NewHTTPError(http.StatusUnauthorized, "invalid or expired jwt")
 )
-
-func newCache(wellknown string) cache.LoadingCache {
-	load := func(k cache.Key) (cache.Value, error) {
-		resp, err := http.Get(wellknown)
-		if err != nil {
-			return nil, err
-		}
-
-		defer resp.Body.Close()
-
-		var jwks = Jwks{}
-		err = json.NewDecoder(resp.Body).Decode(&jwks)
-
-		return jwks, err
-	}
-
-	lc := cache.NewLoadingCache(load,
-		cache.WithMaximumSize(10),
-		cache.WithExpireAfterAccess(10*time.Second),
-		cache.WithRefreshAfterWrite(60*time.Second),
-	)
-	return lc
-}
 
 func JWTHandler(config *JwtConfig) echo.MiddlewareFunc {
 	if config.Cache == nil {
-		config.Cache = newCache(config.Wellknown)
+		c := jwk.NewCache(context.Background())
+		if err := c.Register(config.Wellknown); err != nil {
+			panic(err)
+		}
+		config.Cache = c
 	}
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
@@ -122,50 +101,7 @@ func JWTHandler(config *JwtConfig) echo.MiddlewareFunc {
 				return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 			}
 
-			token, err := parser.ParseWithClaims(auth, &security.CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
-				if config.NodePublicKey != nil {
-					return config.NodePublicKey, nil
-				} else {
-					cert, err := getPemCert(token, config)
-					if err != nil {
-						return nil, err
-					}
-					result, err := jwt.ParseRSAPublicKeyFromPEM([]byte(cert))
-					if err != nil {
-						return nil, err
-					}
-					return result, nil
-				}
-			})
-
-			if !token.Valid {
-				return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
-			}
-
-			if err != nil {
-				return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
-			}
-
-			// we need to handle compatibility between our and auth0 tokens
-			var (
-				audience string
-				issuer   string
-			)
-			claims := token.Claims.(*security.CustomClaims)
-			audience = config.Audience
-			issuer = config.Issuer
-
-			// verify the audience is correct, audience must be set
-			checkAud := claims.VerifyAudience(audience, true)
-			if !checkAud {
-				err = errors.New("invalid audience")
-			}
-
-			// verify the issuer of the token, issuer must be set
-			checkIss := claims.VerifyIssuer(issuer, true)
-			if !checkIss {
-				err = errors.New("invalid issuer")
-			}
+			token, err := config.ValidateToken(auth)
 
 			if err == nil {
 				c.Set("user", token)
@@ -177,44 +113,78 @@ func JWTHandler(config *JwtConfig) echo.MiddlewareFunc {
 	}
 }
 
-func (config *JwtConfig) SigningKey() func(token *jwt.Token) string {
-	return func(token *jwt.Token) string {
-		cert, err := getPemCert(token, config)
-		if err != nil {
-			return ""
-		}
-		result, _ := jwt.ParseRSAPublicKeyFromPEM([]byte(cert))
-		return result.N.String()
-	}
-}
+func (config *JwtConfig) ValidateToken(auth string) (*jwt.Token, error) {
+	token, err := jwt.ParseWithClaims(auth, &security.CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if config.NodePublicKey != nil {
+			return config.NodePublicKey, nil
+		} else {
+			set, err := config.Cache.Get(context.Background(), config.Wellknown)
+			if err != nil {
+				return nil, errors.New("unable to load well-known from cache")
+			}
 
-func getPemCert(token *jwt.Token, config *JwtConfig) (string, error) {
-	cert := ""
-	result, err := config.Cache.Get("well-known")
+			switch jwks := set.(type) {
+			case jwk.Set:
+				kid := token.Header["kid"].(string)
+				k, ok := jwks.LookupKeyID(kid)
+				if !ok {
+					return nil, errors.New("kid not found in jwks")
+				}
 
-	if err != nil {
-		return cert, err
-	}
-
-	switch jwks := result.(type) {
-	case Jwks:
-		for k := range jwks.Keys {
-			if token.Header["kid"] == jwks.Keys[k].Kid {
-				cert = "-----BEGIN CERTIFICATE-----\n" + jwks.Keys[k].X5c[0] + "\n-----END CERTIFICATE-----"
+				// Check for x5c. If present, convert to RSA Public key.
+				// If not present, create raw key.
+				der, ok := k.X509CertChain().Get(0)
+				if ok {
+					pem := "-----BEGIN CERTIFICATE-----\n" + string(der) + "\n-----END CERTIFICATE-----"
+					return jwt.ParseRSAPublicKeyFromPEM([]byte(pem))
+				} else {
+					var pk any
+					err = k.Raw(&pk)
+					return pk, err
+				}
+			default:
+				return nil, errors.New("unknown type in well-known cache")
 			}
 		}
-
-		if cert == "" {
-			err := errors.New("unable to find appropriate key")
-			return cert, err
-		}
-
-		return cert, nil
-	default:
-		err := errors.New("no Jwks returned")
-		return cert, err
+	})
+	if err != nil {
+		return nil, err
 	}
 
+	if !token.Valid {
+		return token, ErrJWTInvalid
+	}
+
+	claims := token.Claims.(*security.CustomClaims)
+	audience := config.Audience
+	issuer := config.Issuer
+
+	checkAud := false
+	for _, aud := range audience {
+		if claims.VerifyAudience(aud, false) {
+			checkAud = true
+		}
+	}
+	if !checkAud {
+		err = errors.New("invalid audience")
+	}
+
+	checkIss := false
+	for _, iss := range issuer {
+		if claims.VerifyIssuer(iss, false) {
+			checkIss = true
+		}
+	}
+	if !checkIss {
+		err = errors.New("invalid issuer")
+	}
+
+	checkSigningMethod := token.Method.Alg() == "RS256"
+	if !checkSigningMethod {
+		err = errors.New("non matching signing method")
+	}
+
+	return token, err
 }
 
 func extractToken(c echo.Context) (string, error) {

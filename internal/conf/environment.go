@@ -36,9 +36,10 @@ type Env struct {
 	FullsyncLeaseTimeout    time.Duration
 	BlockCacheSize          int64
 	ValueLogFileSize        int64
+	MaxCompactionLevels     int
 	AdminUserName           string
 	AdminPassword           string
-	NodeId                  string
+	NodeID                  string
 	SecurityStorageLocation string
 	BackupSourceLocation    string
 	RunnerConfig            *RunnerConfig
@@ -46,13 +47,13 @@ type Env struct {
 
 type AuthConfig struct {
 	WellKnown  string
-	Audience   string
-	Issuer     string
+	Audience   []string
+	Issuer     []string
 	Middleware string
 }
 
 type DatalayerJwtConfig struct {
-	ClientId     string
+	ClientID     string
 	ClientSecret string
 	Audience     string
 	GrantType    string

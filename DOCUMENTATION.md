@@ -281,30 +281,94 @@ SUCCESS  Dataset has been created
 
 The query model is very simple, for now. It is possible to fetch a single entity via its URI, and it is possible to traverse from one, or many entities to related entities via incoming or outgoing references.
 
+Examles are given both using the `mim` CLI
+```
+mim query ...
+```
+and using the HTTP API by posting a query payload to
+```
+POST /query
+```
+
 ### Getting A Single Entity
 
 To lookup a single entity:
 
-```
-> mim query --id="http://data.mimiro.io/people/homer"
-```
+* using `mim`, the datahub CLI
+    ```shell
+    > mim query --id="http://data.mimiro.io/people/homer"
+    ```
+* using the HTTP API, with the following POST body
+    ```json
+    {
+        "entityId": "http://data.mimiro.io/people/homer"
+    }
+    ```
 
 ### Getting Related Entities
 
 To fetch related entities for a given entity:
 
-```
-> mim query --entity="http://data.mimiro.io/people/homer" /
-            --via="http://data.mimiro.io/schema/person/"
-```
+* using `mim`, the datahub CLI
+    ```shell
+    > mim query --entity="http://data.mimiro.io/people/homer" \
+                --via="http://data.mimiro.io/schema/person/"
+    ```
+
+* using the HTTP API, with the following POST body
+    ```json
+    {
+        "startingEntities": [ "http://data.mimiro.io/people/homer" ],
+        "predicate": "http://data.mimiro.io/schema/person/"
+    }
+    ```
+
 
 and to get entities referencing a given entity, e.g. all entities of type person.
 
+* using `mim`, the datahub CLI
+    ```shell
+    > mim query --entity="http://data.mimiro.io/schema/person" \
+                --via="http://www.w3.org/1999/02/22-rdf-syntax-ns#type" \
+                --inverse=true
+    ```
+* using the HTTP API, with the following POST body
+
+    ```json
+    {
+        "startingEntities": [ "http://data.mimiro.io/schema/person" ],
+        "predicate": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+        "inverse": true
+    }
+    ```
+
+### All Query parameters
+
+The query payload for the /query endpoint accepts the following options, all of which have an equivalent
+parameter in `mim query`, please consult `mim query --help` for details.
+
+```json
+{
+    "entityId": "http://some.id",
+    "startingEntities": ["http://one.id", "http://another.id"],
+    "predicate":  "*",
+    "inverse": false,
+    "datasets": ["people", "workplaces"],
+    "details": false,
+    "limit":  100,
+    "continuations": []
+}
 ```
-> mim query --entity="http://data.mimiro.io/schema/person" /
-            --via="http://www.w3.org/1999/02/22-rdf-syntax-ns#type" /
-            --inverse=true
-```
+| parameter        | default value                             | description                                                                                                             |
+|------------------|-------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|
+| entityId         | empty                                     | if set, all other parameters except for datasets are ignored. Ask to lookup one entity                                  |
+| startingEntities | []                                        | if no entityId and no continuations given, start query from these entities                                              |
+| predicate        | none,required when using startingEntities | use '*' to follow all relations, else only follow this relation                                                         |
+| inverse          | false                                     | specify query direction, only relevant when using startingEntities                                                      |
+| datasets         | [] | a filter. if other value than empty list, only consider relations belonging to these datasets                           |
+| details          | false | only reledant when using entityId. if true, augment returned entity with information about datasets and change history  |
+| limit            | 100 | limit number of query results. if set explicitly, response may contain contiuation token list                           |
+| continuations    | [] | value found in a previous query result page. can - together with limit - be used to retrieve next page of query results |                                                                                                                    |
 
 ### Incoming or outgoing query
 
@@ -367,6 +431,57 @@ The outgoing query finds all the reference-ids that your starting entity is poin
     }
 }
 ```
+
+### Javascript Query
+
+As well as entity lookup and traversal, it is possible to run a javascript query against the data hub. This allows for more complex queries, such as filtering and aggregation.
+
+To execute a javascript query it must be sent to the 'query' endpoint of the data hub. The query is sent as a POST request with the query as the body of the request.
+
+````
+POST /query
+````
+
+The query requets must be formatted as a JSON object with the following properties:
+
+- `query`: the javascript query to executed encoded as base64
+
+An example is shown below:
+
+``` json
+{
+  "query": "base64 encoded javascript query"
+}
+```
+
+The request must set the `Content-Type` header to `application/x-javascript-query`.
+
+The query itself is a single function called ´do_query´.
+
+The query function has access to all the functions that a transform has access to as well as the following functions:
+
+- `GetDatasetChanges(name, since, limit)` - returns a list of changes to the dataset since value. The limit parameter is optional and can be used to limit the number of changes returned. The changes object returned has the following properties, NextToken, Entities, and Context.
+- `WriteQueryResult(any)` - writes the object to the output stream. The object must be a valid json object.
+
+An example query that iterates the changes in a dataset and does some counting before writing the result to the output stream is shown below:
+
+```javascript
+function do_query() {
+    let obj = GetDatasetChanges("people", 0, 5);
+    let entities = obj.Entities;
+    let count = 0;
+    for (let i = 0; i < entities.length; i++) {
+        count++;
+    }
+
+    let result = { "count": count };
+    WriteQueryResult(result);
+}
+```
+
+WriteQueryResult can be called multiple times to write multiple objects to the output stream. Array seperators are added automatically.
+
+The result returned from the query is a JSON array containing the objects inserted there by the query. There is no fixed schema for the query results.
 
 ## Data Layers
 
@@ -1384,6 +1499,10 @@ You can tune the LOG_LEVEL of the Datahub. The supported values are DEBUG and IN
 ```DD_AGENT_HOST=```
 
 The Datahub supports reporting metrics trough a StatsD server. This is turned off if left empty, and you can turn it on by giving it an ip-address and a port combination.
+
+```MAX_COMPACTION_LEVELS```
+
+Can be used to override Badger's default 7 LSM levels. When more that 1.1TB disk space usage are exceeded or expected to be exceeded, 8 compaction levels are needed.
 
 #### Securing the Data Hub
 

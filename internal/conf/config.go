@@ -65,12 +65,12 @@ func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 		SecretsManager: viper.GetString("SECRETS_MANAGER"),
 		Auth: &AuthConfig{
 			WellKnown:  viper.GetString("TOKEN_WELL_KNOWN"),
-			Audience:   viper.GetString("TOKEN_AUDIENCE"),
-			Issuer:     viper.GetString("TOKEN_ISSUER"),
+			Audience:   viper.GetStringSlice("TOKEN_AUDIENCE"),
+			Issuer:     viper.GetStringSlice("TOKEN_ISSUER"),
 			Middleware: viper.GetString("AUTHORIZATION_MIDDLEWARE"),
 		},
 		DlJwtConfig: &DatalayerJwtConfig{
-			ClientId:     viper.GetString("DL_JWT_CLIENT_ID"),
+			ClientID:     viper.GetString("DL_JWT_CLIENT_ID"),
 			ClientSecret: viper.GetString("DL_JWT_CLIENT_SECRET"),
 			Audience:     viper.GetString("DL_JWT_AUDIENCE"),
 			GrantType:    viper.GetString("DL_JWT_GRANT_TYPE"),
@@ -80,9 +80,10 @@ func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 		FullsyncLeaseTimeout:    viper.GetDuration("FULLSYNC_LEASE_TIMEOUT"),
 		BlockCacheSize:          viper.GetInt64("BLOCK_CACHE_SIZE"),
 		ValueLogFileSize:        viper.GetInt64("VALUE_LOG_FILE_SIZE"),
+		MaxCompactionLevels:     viper.GetInt("MAX_COMPACTION_LEVELS"),
 		AdminUserName:           viper.GetString("ADMIN_USERNAME"),
 		AdminPassword:           viper.GetString("ADMIN_PASSWORD"),
-		NodeId:                  viper.GetString("NODE_ID"),
+		NodeID:                  viper.GetString("NODE_ID"),
 		SecurityStorageLocation: viper.GetString("SECURITY_STORAGE_LOCATION"),
 		BackupSourceLocation:    viper.GetString("BACKUP_SOURCE_LOCATION"),
 		RunnerConfig: &RunnerConfig{

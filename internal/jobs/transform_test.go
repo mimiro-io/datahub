@@ -16,21 +16,20 @@ package jobs
 
 import (
 	"encoding/base64"
-	"github.com/DataDog/datadog-go/v5/statsd"
 	"strings"
-	"testing"
 
-	"github.com/franela/goblin"
-	"github.com/mimiro-io/datahub/internal/server"
+	"github.com/DataDog/datadog-go/v5/statsd"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
-func TestTransform(t *testing.T) {
-	g := goblin.Goblin(t)
-	g.Describe("A Javascript transformation", func() {
-		g.It("Should return a go error when the script fails", func() {
-			// a failing function
-			js := ` // fail.js
+var _ = Describe("A Javascript transformation", func() {
+	It("Should return a go error when the script fails", func() {
+		// a failing function
+		js := ` // fail.js
 					function transform_entities(entities) {
 						for (e of entities) {
 							var bodyEvent = GetProperty(e, prefix, "failField");
@@ -38,103 +37,193 @@ func TestTransform(t *testing.T) {
 					  	}
 						return entities;
 					}`
-			f := base64.StdEncoding.EncodeToString([]byte(js))
+		f := base64.StdEncoding.EncodeToString([]byte(js))
 
-			transform, err := newJavascriptTransform(zap.NewNop().Sugar(), f, nil)
-			g.Assert(err).IsNil("Expected transform runner to be created without error")
+		transform, err := NewJavascriptTransform(zap.NewNop().Sugar(), f, nil, nil)
+		Expect(err).To(BeNil(), "Expected transform runner to be created without error")
 
-			entities := make([]*server.Entity, 0)
-			entities = append(entities, server.NewEntity("1", 1))
+		entities := make([]*server.Entity, 0)
+		entities = append(entities, server.NewEntity("1", 1))
 
-			_, err = transform.transformEntities(&Runner{statsdClient: &statsd.NoOpClient{}}, entities, "")
-			g.Assert(err).IsNotNil("transform should fail")
-			g.Assert(strings.Split(err.Error(), " (")[0]).
-				Eql("ReferenceError: prefix is not defined at transform_entities")
-		})
-		g.It("Should return a go error when the script emits non-entities", func() {
-			// a failing function
-			js := ` function transform_entities(entities) {
+		_, err = transform.transformEntities(&Runner{statsdClient: &statsd.NoOpClient{}}, entities, "")
+		Expect(err).NotTo(BeNil(), "transform should fail")
+		Expect(strings.Split(err.Error(), " (")[0]).
+			To(Equal("ReferenceError: prefix is not defined at transform_entities"))
+	})
+	It("Should return a go error when the script emits non-entities", func() {
+		// a failing function
+		js := ` function transform_entities(entities) {
 						return ["hello"];
 					}`
-			f := base64.StdEncoding.EncodeToString([]byte(js))
+		f := base64.StdEncoding.EncodeToString([]byte(js))
 
-			transform, err := newJavascriptTransform(zap.NewNop().Sugar(), f, nil)
-			g.Assert(err).IsNil("Expected transform runner to be created without error")
+		transform, err := NewJavascriptTransform(zap.NewNop().Sugar(), f, nil, nil)
+		Expect(err).To(BeNil(), "Expected transform runner to be created without error")
 
-			entities := make([]*server.Entity, 0)
-			entities = append(entities, server.NewEntity("1", 1))
+		entities := make([]*server.Entity, 0)
+		entities = append(entities, server.NewEntity("1", 1))
 
-			_, err = transform.transformEntities(&Runner{statsdClient: &statsd.NoOpClient{}}, entities, "")
-			g.Assert(err).IsNotNil("transform should fail")
-			g.Assert(strings.Split(err.Error(), " (")[0]).
-				Eql("transform emitted invalid entity: hello")
-		})
+		_, err = transform.transformEntities(&Runner{statsdClient: &statsd.NoOpClient{}}, entities, "")
+		Expect(err).NotTo(BeNil(), "transform should fail")
+		Expect(strings.Split(err.Error(), " (")[0]).To(Equal("transform emitted invalid entity: hello"))
 	})
-}
+	It("Should produce type compatible number properties", func() {
+		// goja stores numbers without decimals as int64, we need float64 to be type-compatible with
+		// json deserialized entities
+		js := ` function transform_entities(entities) {
 
-func TestJavascriptTransform_ToString(t *testing.T) {
-	g := goblin.Goblin(t)
-	g.Describe("Calling ToString from a transform", func() {
-		g.It("should return null when nil", func() {
-			transform := &JavascriptTransform{}
-			ret := transform.ToString(nil)
+						for (e of entities) {
+							SetProperty(e, "b", "output", GetProperty(e, "a", "input"))
+						}
+						return entities;
+					}`
+		f := base64.StdEncoding.EncodeToString([]byte(js))
 
-			g.Assert(ret).Equal("undefined")
-		})
-		g.It("number should be formatted as a number", func() {
-			transform := &JavascriptTransform{}
-			ret := transform.ToString(30)
-			g.Assert(ret).Equal("30")
+		transform, err := NewJavascriptTransform(zap.NewNop().Sugar(), f, nil, nil)
+		Expect(err).To(BeNil(), "Expected transform runner to be created without error")
 
-			ret = transform.ToString(2.1)
-			g.Assert(ret).Equal("2.1")
-		})
-		g.It("bool should be formatted with true or false", func() {
-			transform := &JavascriptTransform{}
-			ret := transform.ToString(true)
-			g.Assert(ret).Equal("true")
-		})
-		g.It("a map should correctly formatted", func() {
-			transform := &JavascriptTransform{}
+		entities := make([]*server.Entity, 0)
+		entities = append(entities, server.NewEntityFromMap(map[string]any{
+			"id": "1",
+			"props": map[string]any{
+				"a:input": float64(6708238),
+			},
+			"refs": map[string]any{},
+		}))
 
-			lemap := map[string]interface{}{
-				"field1": 1,
-				"field2": "2",
-			}
-
-			ret := transform.ToString(lemap)
-			g.Assert(ret).Equal("map[field1:1 field2:2]")
-
-		})
-		g.It("an entity should be formatted correctly", func() {
-			transform := &JavascriptTransform{}
-
-			e := transform.NewEntity()
-			e.ID = "ns1:1"
-			e.InternalID = 1
-			e.Recorded = 2
-			e.Properties = map[string]interface{}{
-				"field1": "hello",
-			}
-			ret := transform.ToString(e)
-
-			g.Assert(ret).Equal("&{ns1:1 1 2 false map[] map[field1:hello]}")
-		})
+		r, err := transform.transformEntities(&Runner{statsdClient: &statsd.NoOpClient{}}, entities, "")
+		Expect(err).To(BeNil())
+		Expect(len(r)).To(Equal(1))
+		Expect(r[0].Properties["b:output"]).To(Equal(entities[0].Properties["a:input"]))
 	})
-}
+	It("Should produce type compatible numbers in nested entities", func() {
+		js := ` function transform_entities(entities) {
+						for (e of entities) {
+							const n = NewEntity();
+							SetProperty(n, "b", "num", GetProperty(e, "a", "input"));
+							SetProperty(e, "b", "output", n);
+						}
+						return entities;
+					}`
+		f := base64.StdEncoding.EncodeToString([]byte(js))
 
-func TestHttpTransformConfig(t *testing.T) {
-	g := goblin.Goblin(t)
-	g.Describe("Test that httpTransform picks up timeout from config", func() {
-		g.It("Should return correct httpTransform", func() {
-			c := &JobConfiguration{Id: "oes3fjudqn", Title: "my-test-title", Description: "my-description", Source: map[string]interface{}{"Type": "DatasetSource", "Name": "test-dataset"}, Sink: map[string]interface{}{"Type": "DatasetSink", "Name": "test-transformed"}, Transform: map[string]interface{}{"TimeOut": 70.00, "Type": "HttpTransform", "Url": "https://very-external"}}
-			transform := &HttpTransform{TimeOut: 70.00, Url: "https://very-external"}
-			scheduler := Scheduler{}
-			test, err := scheduler.parseTransform(c)
-			g.Assert(err).IsNil("should not error here")
+		transform, err := NewJavascriptTransform(zap.NewNop().Sugar(), f, nil, nil)
+		Expect(err).To(BeNil(), "Expected transform runner to be created without error")
 
-			g.Assert(transform).Equal(test, "Bare minimum transform")
+		entities := make([]*server.Entity, 0)
+		entities = append(entities, server.NewEntityFromMap(map[string]any{
+			"id": "1",
+			"props": map[string]any{
+				"a:input": float64(6708238),
+			},
+			"refs": map[string]any{},
+		}))
 
-		})
+		r, _ := transform.transformEntities(&Runner{statsdClient: &statsd.NoOpClient{}}, entities, "")
+		Expect(len(r)).To(Equal(1))
+		// t.Logf("%+v", r[0])
+		Expect(r[0].Properties["b:output"].(*server.Entity).
+			Properties["b:num"]).To(Equal(entities[0].Properties["a:input"]))
 	})
-}
+	It("Should produce type compatible numbers in value array properties", func() {
+		js := ` function transform_entities(entities) {
+						for (e of entities) {
+							const val = GetProperty(e, "a", "input");
+							SetProperty(e, "b", "output", [val, val]);
+						}
+						return entities;
+					}`
+		f := base64.StdEncoding.EncodeToString([]byte(js))
+
+		transform, err := NewJavascriptTransform(zap.NewNop().Sugar(), f, nil, nil)
+		Expect(err).To(BeNil(), "Expected transform runner to be created without error")
+
+		entities := make([]*server.Entity, 0)
+		entities = append(entities, server.NewEntityFromMap(map[string]any{
+			"id": "1",
+			"props": map[string]any{
+				"a:input": float64(6708238),
+			},
+			"refs": map[string]any{},
+		}))
+
+		r, err := transform.transformEntities(&Runner{statsdClient: &statsd.NoOpClient{}}, entities, "")
+		Expect(err).To(BeNil())
+		Expect(len(r)).To(Equal(1))
+		// t.Logf("%+v", r[0])
+		Expect(r[0].Properties["b:output"]).To(Equal([]interface{}{
+			entities[0].Properties["a:input"],
+			entities[0].Properties["a:input"],
+		}))
+	})
+})
+
+var _ = Describe("Calling ToString from a transform", func() {
+	It("should return null when nil", func() {
+		transform := &JavascriptTransform{}
+		ret := transform.ToString(nil)
+
+		Expect(ret).To(Equal("undefined"))
+	})
+	It("number should be formatted as a number", func() {
+		transform := &JavascriptTransform{}
+		ret := transform.ToString(30)
+		Expect(ret).To(Equal("30"))
+
+		ret = transform.ToString(2.1)
+		Expect(ret).To(Equal("2.1"))
+	})
+	It("bool should be formatted with true or false", func() {
+		transform := &JavascriptTransform{}
+		ret := transform.ToString(true)
+		Expect(ret).To(Equal("true"))
+	})
+	It("a map should correctly formatted", func() {
+		transform := &JavascriptTransform{}
+
+		lemap := map[string]interface{}{
+			"field1": 1,
+			"field2": "2",
+		}
+
+		ret := transform.ToString(lemap)
+		Expect(ret).To(Equal("map[field1:1 field2:2]"))
+	})
+	It("an entity should be formatted correctly", func() {
+		transform := &JavascriptTransform{}
+
+		e := transform.NewEntity()
+		e.ID = "ns1:1"
+		e.InternalID = 1
+		e.Recorded = 2
+		e.Properties = map[string]interface{}{
+			"field1": "hello",
+		}
+		ret := transform.ToString(e)
+
+		Expect(ret).To(Equal("&{ns1:1 1 2 false map[] map[field1:hello]}"))
+	})
+})
+
+var _ = Describe("Test that httpTransform picks up timeout from config", func() {
+	It("Should return correct httpTransform", func() {
+		c := &JobConfiguration{
+			ID:          "oes3fjudqn",
+			Title:       "my-test-title",
+			Description: "my-description",
+			Source:      map[string]interface{}{"Type": "DatasetSource", "Name": "test-dataset"},
+			Sink:        map[string]interface{}{"Type": "DatasetSink", "Name": "test-transformed"},
+			Transform: map[string]interface{}{
+				"TimeOut": 70.00,
+				"Type":    "HttpTransform",
+				"Url":     "https://very-external",
+			},
+		}
+		transform := &HTTPTransform{TimeOut: 70.00, URL: "https://very-external"}
+		scheduler := Scheduler{}
+		test, err := scheduler.parseTransform(c)
+		Expect(err).To(BeNil(), "should not error here")
+
+		Expect(transform).To(Equal(test), "Bare minimum transform")
+	})
+})

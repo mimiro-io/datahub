@@ -15,12 +15,13 @@
 package server
 
 import (
-	"github.com/DataDog/datadog-go/v5/statsd"
-	"go.uber.org/zap"
 	"os"
 	"strconv"
 	"sync"
 	"testing"
+
+	"github.com/DataDog/datadog-go/v5/statsd"
+	"go.uber.org/zap"
 )
 
 func BenchmarkDatasetStoreEntities(b *testing.B) {
@@ -50,7 +51,7 @@ func BenchmarkDatasetStoreEntities(b *testing.B) {
 			b.Fail()
 		}
 		b.StopTimer()
-		persons = persons[:0] // clear out slice
+		// persons = persons[:0] // clear out slice
 	}
 	ds.store.Close()
 	os.RemoveAll(storeLocation)

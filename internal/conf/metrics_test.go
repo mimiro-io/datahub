@@ -15,41 +15,37 @@
 package conf
 
 import (
-	"github.com/mimiro-io/datahub/internal"
 	"reflect"
-	"testing"
 
-	"github.com/franela/goblin"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"go.uber.org/fx"
-
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal"
 )
 
-func TestStatsdClient(t *testing.T) {
-	g := goblin.Goblin(t)
-
+var _ = Describe("Start an instance", Ordered, func() {
 	var lc fx.Lifecycle
-	g.Describe("Start an instance", func() {
-		g.Before(func() {
-			lc = fxtest.NewLifecycle(internal.FxTestLog(t, false))
-		})
-		g.It("should be of noop type when no agent host", func() {
-			env := &Env{
-				AgentHost: "",
-			}
-			client, err := NewMetricsClient(lc, env, zap.NewNop().Sugar())
-			g.Assert(err).IsNil()
-			g.Assert(reflect.ValueOf(client).Type().String()).Eql("*statsd.NoOpClient")
-		})
-
-		g.It("should be statsd client when agent host set", func() {
-			env := &Env{
-				AgentHost: "127.0.0.1:8125",
-			}
-			client, err := NewMetricsClient(lc, env, zap.NewNop().Sugar())
-			g.Assert(err).IsNil()
-			g.Assert(reflect.ValueOf(client).Type().String()).Eql("*statsd.Client")
-		})
+	BeforeAll(func() {
+		lc = fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
 	})
-}
+	It("should be of noop type when no agent host", func() {
+		env := &Env{
+			AgentHost: "",
+		}
+		client, err := NewMetricsClient(lc, env, zap.NewNop().Sugar())
+		Expect(err).To(BeNil())
+		Expect(reflect.ValueOf(client).Type().String()).To(Equal("*statsd.NoOpClient"))
+	})
+
+	It("should be statsd client when agent host set", func() {
+		env := &Env{
+			AgentHost: "127.0.0.1:8125",
+		}
+		client, err := NewMetricsClient(lc, env, zap.NewNop().Sugar())
+		Expect(err).To(BeNil())
+		Expect(reflect.ValueOf(client).Type().String()).To(Equal("*statsd.Client"))
+	})
+})

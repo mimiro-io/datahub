@@ -17,80 +17,76 @@ package jobs
 import (
 	"strconv"
 	"sync"
-	"testing"
 	"time"
 
-	"github.com/franela/goblin"
-
 	"github.com/DataDog/datadog-go/v5/statsd"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 )
 
-func TestRaffle(t *testing.T) {
-	g := goblin.Goblin(t)
-	g.Describe("The raffle", func() {
-		g.It("Should only give out one ticker per job", func() {
-			raffle := NewRaffle(0, 2, zap.NewNop().Sugar(), &statsd.NoOpClient{})
-			job := &job{id: "test1", pipeline: &IncrementalPipeline{}}
+var _ = Describe("The raffle", func() {
+	It("Should only give out one ticker per job", func() {
+		raffle := NewRaffle(0, 2, zap.NewNop().Sugar(), &statsd.NoOpClient{})
+		job := &job{id: "test1", pipeline: &IncrementalPipeline{}}
 
-			ticket := raffle.borrowTicket(job)
-			g.Assert(ticket).IsNotZero("Expected to get ticket")
+		ticket := raffle.borrowTicket(job)
+		Expect(ticket).NotTo(BeZero(), "Expected to get ticket")
 
-			ticket2 := raffle.borrowTicket(job)
-			g.Assert(ticket2).IsZero("Expected ticket to be taken")
-		})
-
-		g.It("Should not exceed ticket limit", func() {
-			raffle := NewRaffle(0, 1, zap.NewNop().Sugar(), &statsd.NoOpClient{})
-			job1 := &job{id: "test1", pipeline: &IncrementalPipeline{}}
-
-			ticket := raffle.borrowTicket(job1)
-			g.Assert(ticket).IsNotZero("Expected to get ticket")
-
-			job2 := &job{id: "test2", pipeline: &IncrementalPipeline{}}
-			ticket2 := raffle.borrowTicket(job2)
-			g.Assert(ticket2).IsZero("Expected limit to be respected")
-		})
-
-		g.It("Should give out ticket again after it was returned", func() {
-			raffle := NewRaffle(0, 1, zap.NewNop().Sugar(), &statsd.NoOpClient{})
-			job1 := &job{id: "test1", pipeline: &IncrementalPipeline{}}
-
-			ticket := raffle.borrowTicket(job1)
-			g.Assert(ticket).IsNotZero("Expected to get ticket")
-			raffle.returnTicket(ticket)
-
-			job2 := &job{id: "test2", pipeline: &IncrementalPipeline{}}
-			ticket2 := raffle.borrowTicket(job2)
-			g.Assert(ticket2).IsNotZero("Expected to get ticket")
-		})
-		g.It("Should not get confused about tickets in concurrent situations", func() {
-			raffle := NewRaffle(0, 3, zap.NewNop().Sugar(), &statsd.NoOpClient{})
-
-			var wg sync.WaitGroup
-			running := 0
-
-			// start 30 jobs
-			for i := 0; i < 30; i++ {
-				if running == 3 {
-					//make sure we only start 3 at a time by using a wait-group
-					wg.Wait()
-					running = 0
-				} else {
-					wg.Add(1)
-					running = running + 1
-					id := strconv.Itoa(i)
-					go func() {
-						job := &job{id: "test" + id, pipeline: &IncrementalPipeline{}}
-						ticket := raffle.borrowTicket(job)
-						g.Assert(ticket).IsNotZero("Expected to get ticket for job " + id)
-						//simulate work
-						time.Sleep(10 * time.Millisecond)
-						raffle.returnTicket(ticket)
-						wg.Done()
-					}()
-				}
-			}
-		})
+		ticket2 := raffle.borrowTicket(job)
+		Expect(ticket2).To(BeZero(), "Expected ticket to be taken")
 	})
-}
+
+	It("Should not exceed ticket limit", func() {
+		raffle := NewRaffle(0, 1, zap.NewNop().Sugar(), &statsd.NoOpClient{})
+		job1 := &job{id: "test1", pipeline: &IncrementalPipeline{}}
+
+		ticket := raffle.borrowTicket(job1)
+		Expect(ticket).NotTo(BeZero(), "Expected to get ticket")
+
+		job2 := &job{id: "test2", pipeline: &IncrementalPipeline{}}
+		ticket2 := raffle.borrowTicket(job2)
+		Expect(ticket2).To(BeZero(), "Expected limit to be respected")
+	})
+
+	It("Should give out ticket again after it was returned", func() {
+		raffle := NewRaffle(0, 1, zap.NewNop().Sugar(), &statsd.NoOpClient{})
+		job1 := &job{id: "test1", pipeline: &IncrementalPipeline{}}
+
+		ticket := raffle.borrowTicket(job1)
+		Expect(ticket).NotTo(BeZero(), "Expected to get ticket")
+		raffle.returnTicket(ticket)
+
+		job2 := &job{id: "test2", pipeline: &IncrementalPipeline{}}
+		ticket2 := raffle.borrowTicket(job2)
+		Expect(ticket2).NotTo(BeZero(), "Expected to get ticket")
+	})
+	It("Should not get confused about tickets in concurrent situations", func() {
+		raffle := NewRaffle(0, 3, zap.NewNop().Sugar(), &statsd.NoOpClient{})
+
+		var wg sync.WaitGroup
+		running := 0
+
+		// start 30 jobs
+		for i := 0; i < 30; i++ {
+			if running == 3 {
+				// make sure we only start 3 at a time by using a wait-group
+				wg.Wait()
+				running = 0
+			} else {
+				wg.Add(1)
+				running = running + 1
+				id := strconv.Itoa(i)
+				go func() {
+					job := &job{id: "test" + id, pipeline: &IncrementalPipeline{}}
+					ticket := raffle.borrowTicket(job)
+					Expect(ticket).NotTo(BeZero(), "Expected to get ticket for job "+id)
+					// simulate work
+					time.Sleep(10 * time.Millisecond)
+					raffle.returnTicket(ticket)
+					wg.Done()
+				}()
+			}
+		}
+	})
+})

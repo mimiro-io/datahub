@@ -15,18 +15,24 @@
 package security
 
 import (
-	"github.com/golang-jwt/jwt"
 	"strings"
+
+	"github.com/golang-jwt/jwt/v4"
 )
 
 type CustomClaims struct {
-	Scope string   `json:"scope"`
-	Gty   string   `json:"gty"`
-	Adm   bool     `json:"adm"`
-	Roles []string `json:"roles"`
-	jwt.StandardClaims
+	Scope    string   `json:"scope"`
+	Scp      []string `json:"scp"`
+	Gty      string   `json:"gty"`
+	Adm      bool     `json:"adm"`
+	Roles    []string `json:"roles"`
+	ClientID string   `json:"client_id"`
+	jwt.RegisteredClaims
 }
 
 func (claims CustomClaims) Scopes() []string {
-	return strings.Split(claims.Scope, ",")
+	if claims.Scope != "" {
+		return strings.Split(claims.Scope, ",")
+	}
+	return claims.Scp
 }

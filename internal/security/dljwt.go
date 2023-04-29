@@ -27,7 +27,7 @@ import (
 
 // JwtBearerProvider contains the auth0 configuration
 type JwtBearerProvider struct {
-	ClientId     string `json:"client_id"`
+	ClientID     string `json:"client_id"`
 	ClientSecret string `json:"client_secret"`
 	Audience     string `json:"audience"`
 	GrantType    string `json:"grant_type"`
@@ -51,7 +51,7 @@ type auth0Response struct {
 // NewDlJwtConfig creates a new JwtBearerProvider struct, populated with the values from Viper.
 func NewDlJwtConfig(logger *zap.SugaredLogger, conf ProviderConfig, pm *ProviderManager) *JwtBearerProvider {
 	config := &JwtBearerProvider{
-		ClientId:     pm.LoadValue(conf.ClientId),
+		ClientID:     pm.LoadValue(conf.ClientID),
 		ClientSecret: pm.LoadValue(conf.ClientSecret),
 		Audience:     pm.LoadValue(conf.Audience),
 		GrantType:    pm.LoadValue(conf.GrantType),
@@ -68,7 +68,6 @@ func (auth0 *JwtBearerProvider) Authorize(req *http.Request) {
 	} else {
 		req.Header.Add("Authorization", bearer)
 	}
-
 }
 
 // Token returns a valid token, or an error caused when getting one
@@ -110,7 +109,7 @@ func (auth0 *JwtBearerProvider) callRemote() (*auth0Response, error) {
 	client := httpclient.NewClient(httpclient.WithHTTPTimeout(timeout))
 
 	requestBody, err := json.Marshal(map[string]string{
-		"client_id":     auth0.ClientId,
+		"client_id":     auth0.ClientID,
 		"client_secret": auth0.ClientSecret,
 		"audience":      auth0.Audience,
 		"grant_type":    auth0.GrantType,

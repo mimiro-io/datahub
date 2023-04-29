@@ -5,8 +5,8 @@ info:
   version: "0.5.0"
 
 servers:
-    - url: http://localhost:8080
-      description: Local development instance server
+  - url: http://localhost:8080
+    description: Local development instance server
 
 tags:
   - name: dataset
@@ -36,19 +36,19 @@ paths:
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: A ServiceInfo object
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceInfo'
+                $ref: "#/components/schemas/ServiceInfo"
   /health:
     get:
       summary: Health
       tags:
         - server
       responses:
-        '200':
+        "200":
           description: Just returns UP
 
   /query:
@@ -64,14 +64,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Query'
+              $ref: "#/components/schemas/Query"
       responses:
-        '200':
+        "200":
           description: Returns an object with entity refs as field names and a list of Entities pr field
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/QueryResponse'
+                $ref: "#/components/schemas/QueryResponse"
 
   /namespaces:
     get:
@@ -82,11 +82,11 @@ paths:
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: Map with all namespaces to their prefixes
-        '401':
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
 
   /jobs:
@@ -98,15 +98,15 @@ paths:
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: List with all configured jobs
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Jobs"
-        '401':
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
     post:
       summary: Add Job
@@ -120,20 +120,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Job'
+              $ref: "#/components/schemas/Job"
       responses:
-        '201':
+        "201":
           description: Created
-        '400':
+        "400":
           description: Bad Request
-        '401':
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-        '500':
+        "500":
           description: Internal server error
 
-  /jobs/{jobid}:
+  "/jobs/{jobid}":
     get:
       summary: Get Job
       description: Get a job with a given jobid
@@ -143,24 +143,23 @@ paths:
           schema:
             type: string
           required: true
-          description:
-            The id of the Job to retrieve
+          description: The id of the Job to retrieve
       tags:
         - jobs
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: The job in question
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Job'
-        '401':
+                $ref: "#/components/schemas/Job"
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-        '404':
+        "404":
           description: Not found
     post:
       summary: Change Job state
@@ -171,24 +170,23 @@ paths:
           schema:
             type: string
           required: true
-          description:
-            The id of the Job to retrieve
+          description: The id of the Job to retrieve
       tags:
         - jobs
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: The job in question
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Job'
-        '401':
+                $ref: "#/components/schemas/Job"
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-        '404':
+        "404":
           description: Not found
     delete:
       summary: Delete Job
@@ -200,22 +198,21 @@ paths:
           schema:
             type: string
           required: true
-          description:
-            The id of the Job to retrieve
+          description: The id of the Job to retrieve
       tags:
         - jobs
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: Ok
-        '401':
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-        '404':
+        "404":
           description: Not found
-  /job/{jobid}/status:
+  "/job/{jobid}/status":
     get:
       summary: Get Job status
       description: Given the job id, returns the job status
@@ -225,20 +222,19 @@ paths:
           schema:
             type: string
           required: true
-          description:
-            The id of the Job to retrieve
+          description: The id of the Job to retrieve
       tags:
         - operations
       security:
         - BearerAuth: []
       responses:
-        '501':
+        "501":
           description: Not imlemented
-        '401':
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-  /job/{jobid}/pause:
+  "/job/{jobid}/pause":
     put:
       summary: Pause job
       description: Given the job id, pauses a job. If the job is running, it will not be stopped.
@@ -248,26 +244,25 @@ paths:
           schema:
             type: string
           required: true
-          description:
-            The id of the Job to pause
+          description: The id of the Job to pause
       tags:
         - operations
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JobResponse'
-        '500':
+                $ref: "#/components/schemas/JobResponse"
+        "500":
           description: Internal server error
-        '401':
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-  /job/{jobid}/resume:
+  "/job/{jobid}/resume":
     put:
       summary: Resume Job
       description: Given the job id, resumes a paused job. The job will run at next schedule.
@@ -277,27 +272,26 @@ paths:
           schema:
             type: string
           required: true
-          description:
-            The id of the Job to pause
+          description: The id of the Job to pause
       tags:
         - operations
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JobResponse'
-        '500':
+                $ref: "#/components/schemas/JobResponse"
+        "500":
           description: Internal server error
-        '401':
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
 
-  /job/{jobid}/kill:
+  "/job/{jobid}/kill":
     put:
       summary: Kill Job
       description: Given the job id, kills a running job. If it is not running, nothing will happen.
@@ -307,25 +301,24 @@ paths:
           schema:
             type: string
           required: true
-          description:
-            The id of the Job to kill
+          description: The id of the Job to kill
       tags:
         - operations
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JobResponse'
-        '401':
+                $ref: "#/components/schemas/JobResponse"
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
 
-  /job/{jobid}/run:
+  "/job/{jobid}/run":
     put:
       summary: Run Job
       description: |
@@ -338,33 +331,31 @@ paths:
           schema:
             type: string
           required: true
-          description:
-            The id of the Job to kill
+          description: The id of the Job to kill
         - in: query
           name: jobType
           schema:
             type: string
             enum: [ incremental, fullsync ]
           required: false
-          description:
-            The jobType for this run. defaults to incremental
+          description: The jobType for this run. defaults to incremental
       tags:
         - operations
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JobResponse'
-        '401':
+                $ref: "#/components/schemas/JobResponse"
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
 
-  /job/{jobid}/reset:
+  "/job/{jobid}/reset":
     put:
       summary: Reset Job
       description: |
@@ -376,29 +367,27 @@ paths:
           schema:
             type: string
           required: true
-          description:
-            The id of the Job to reset
+          description: The id of the Job to reset
         - in: query
           name: since
           schema:
             type: string
           required: false
-          description:
-            The continuation token to reset to.
+          description: The continuation token to reset to.
       tags:
         - operations
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JobResponse'
-        '401':
+                $ref: "#/components/schemas/JobResponse"
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
 
   /datasets:
@@ -410,17 +399,17 @@ paths:
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: Returns a list of Datasets
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Datasets'
-        '401':
+                $ref: "#/components/schemas/Datasets"
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-  /datasets/{dataset}/entities:
+  "/datasets/{dataset}/entities":
     get:
       summary: List Entities
       description: Returns a list of Entities for the given dataset. Used for full sync.
@@ -430,34 +419,32 @@ paths:
           schema:
             type: string
           required: true
-          description:
-            The name of the Dataset to recover
+          description: The name of the Dataset to recover
         - in: query
           name: limit
           schema:
             type: number
             format: int
           required: false
-          description:
-            The limit on how many entities to return.
+          description: The limit on how many entities to return.
       tags:
         - dataset
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: A list of entities
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Entities'
-        '401':
+                $ref: "#/components/schemas/Entities"
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-        '404':
+        "404":
           description: Dataset not found, either because it does not exist, or you have no access
-        '500':
+        "500":
           description: Internal server error
     post:
       summary: Create dataset
@@ -468,8 +455,7 @@ paths:
           schema:
             type: string
           required: true
-          description:
-            The name of the Dataset to recover
+          description: The name of the Dataset to recover
         - in: query
           name: proxy
           schema:
@@ -478,7 +464,7 @@ paths:
           description: if true, the dataset will forwand all user requests to configured proxy dataset. requires request body with proxyDatasetConfig
       requestBody:
         content:
-          'application/json':
+          "application/json":
             schema:
               properties:
                 proxyDatasetConfig:
@@ -500,23 +486,23 @@ paths:
               proxyDatasetConfig:
                 remoteUrl: "http://hostname/datasets/example"
                 authProviderName: "local"
-              publicNamespaces: ["http://example.com", "http://example.mimiro.io/"]
+              publicNamespaces: [ "http://example.com", "http://example.mimiro.io/" ]
       tags:
         - dataset
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: OK
-        '400':
+        "400":
           description: Bad Request
-        '401':
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-        '500':
+        "500":
           description: Internal server error
-  /datasets/{dataset}/changes:
+  "/datasets/{dataset}/changes":
     get:
       summary: List changed Entities
       description: Given a since parameter, returns a list of changed entities since.
@@ -526,38 +512,36 @@ paths:
           schema:
             type: string
           required: true
-          description:
-            The name of the Dataset to return
+          description: The name of the Dataset to return
         - in: query
           name: since
           schema:
             type: integer
             format: int64
           required: true
-          description:
-            A continuation token
+          description: A continuation token
       tags:
         - dataset
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: List of entities since
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Entities'
-        '400':
+                $ref: "#/components/schemas/Entities"
+        "400":
           description: Bad Request. Check your parameters.
-        '401':
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-        '404':
+        "404":
           description: Dataset not found, either because it does not exist, or you have no access
-        '500':
+        "500":
           description: Internal server error
-  /datasets/{dataset}:
+  "/datasets/{dataset}":
     delete:
       summary: Delete Dataset
       description: Deletes the given dataset
@@ -567,22 +551,21 @@ paths:
           schema:
             type: string
           required: true
-          description:
-            The name of the Dataset to delete
+          description: The name of the Dataset to delete
       tags:
         - dataset
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: OK
-        '400':
+        "400":
           description: Bad Request
-        '401':
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-        '500':
+        "500":
           description: Internal server error
   /content:
     get:
@@ -593,17 +576,17 @@ paths:
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: Lists of stored contents
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Contents'
-        '401':
+                $ref: "#/components/schemas/Contents"
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-        '500':
+        "500":
           description: Internal server error
     post:
       summary: Add Content
@@ -617,19 +600,19 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Content'
+              $ref: "#/components/schemas/Content"
       responses:
-        '201':
+        "201":
           description: Created
-        '400':
+        "400":
           description: Bad Request
-        '401':
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-        '500':
+        "500":
           description: Internal server error
-  /content/{contentId}:
+  "/content/{contentId}":
     get:
       summary: Show Content
       description: Given its id, retrieves a single Content
@@ -643,22 +626,21 @@ paths:
           schema:
             type: string
           required: true
-          description:
-            The id of the Content to show
+          description: The id of the Content to show
       responses:
-        '200':
+        "200":
           description: A single content object
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Content'
-        '401':
+                $ref: "#/components/schemas/Content"
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-        '404':
+        "404":
           description: Not found
-        '500':
+        "500":
           description: Internal server error
     put:
       summary: Update Content
@@ -673,24 +655,23 @@ paths:
           schema:
             type: string
           required: true
-          description:
-            The id of the Content to update
+          description: The id of the Content to update
       requestBody:
         description: The Content object to update
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Content'
+              $ref: "#/components/schemas/Content"
       responses:
-        '201':
+        "201":
           description: Created
-        '400':
+        "400":
           description: Bad Request
-        '401':
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-        '500':
+        "500":
           description: Internal server error
 
     delete:
@@ -699,25 +680,24 @@ paths:
       tags:
         - content
       security:
-          - BearerAuth: []
+        - BearerAuth: []
       parameters:
         - in: path
           name: contentId
           schema:
             type: string
           required: true
-          description:
-            The id of the Content to delete
+          description: The id of the Content to delete
       responses:
-        '200':
+        "200":
           description: OK
-        '401':
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-        '404':
+        "404":
           description: Not found
-        '500':
+        "500":
           description: Internal server error
   /provider/logins:
     get:
@@ -728,17 +708,17 @@ paths:
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: A list of login providers
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LoginProviders'
-        '401':
+                $ref: "#/components/schemas/LoginProviders"
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-        '500':
+        "500":
           description: Internal server error
     post:
       summary: Add new provider
@@ -752,19 +732,19 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LoginProvider'
+              $ref: "#/components/schemas/LoginProvider"
       responses:
-        '200':
+        "200":
           description: OK
-        '400':
+        "400":
           description: Bad Request
-        '401':
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-        '500':
+        "500":
           description: Internal server error
-  /provider/login/{providerName}:
+  "/provider/login/{providerName}":
     get:
       summary: Get provider by name
       description: Gets a single login provider by it's name
@@ -778,22 +758,21 @@ paths:
           schema:
             type: string
           required: true
-          description:
-            The name of the Login provider to get
+          description: The name of the Login provider to get
       responses:
-        '200':
+        "200":
           description: A login provider
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LoginProvider'
-        '401':
+                $ref: "#/components/schemas/LoginProvider"
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-        '404':
+        "404":
           description: Not found
-        '500':
+        "500":
           description: Internal server error
     post:
       summary: Update provider
@@ -808,24 +787,23 @@ paths:
           schema:
             type: string
           required: true
-          description:
-            The name of the Login provider to update
+          description: The name of the Login provider to update
       requestBody:
         description: The Content object to update. The name in the body is ignored for the one in the path.
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LoginProvider'
+              $ref: "#/components/schemas/LoginProvider"
       responses:
-        '200':
+        "200":
           description: OK
-        '400':
+        "400":
           description: Bad Request
-        '401':
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-        '500':
+        "500":
           description: Internal server error
     delete:
       summary: Delete provider
@@ -840,20 +818,18 @@ paths:
           schema:
             type: string
           required: true
-          description:
-            The name of the Login provider to delete
+          description: The name of the Login provider to delete
       responses:
-        '200':
+        "200":
           description: OK
-        '400':
+        "400":
           description: Bad Request
-        '401':
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
-        '500':
+        "500":
           description: Internal server error
-
 
 components:
   securitySchemes:
@@ -894,8 +870,7 @@ components:
     LoginProviders:
       type: array
       items:
-        $ref: '#/components/schemas/LoginProvider'
-
+        $ref: "#/components/schemas/LoginProvider"
 
     LoginProvider:
       properties:
@@ -910,33 +885,33 @@ components:
           description: Must be either bearer (jwt) or basic (username+password)
         user:
           type: object
-          $ref: '#/components/schemas/Value'
+          $ref: "#/components/schemas/Value"
           description: If type is "basic" then this is the username and must be present
         password:
           type: object
-          $ref: '#/components/schemas/Value'
+          $ref: "#/components/schemas/Value"
           description: If type is "basic" then this is the password and must be present
         key:
           type: object
-          $ref: '#/components/schemas/Value'
+          $ref: "#/components/schemas/Value"
           description: If type is "bearer" then this is the id of the client
         secret:
           type: object
-          $ref: '#/components/schemas/Value'
+          $ref: "#/components/schemas/Value"
           description: If type is "bearer" then this is the secret of the client
         audience:
           type: object
-          $ref: '#/components/schemas/Value'
+          $ref: "#/components/schemas/Value"
           description: If type is "bearer" then this is the audience the token is requested for.
         grantType:
           type: object
-          $ref: '#/components/schemas/Value'
+          $ref: "#/components/schemas/Value"
           description: |
             If type is "bearer" then this is the type of the token asked for, this is client_credential for
             m2m tokens, app_credential for user application tokens.
         endpoint:
           type: object
-          $ref: '#/components/schemas/Value'
+          $ref: "#/components/schemas/Value"
           description: If type is "bearer" then this is the endpoint to request a token at.
 
     Value:
@@ -959,7 +934,7 @@ components:
     Contents:
       type: array
       items:
-        $ref: '#/components/schemas/Content'
+        $ref: "#/components/schemas/Content"
 
     Content:
       properties:
@@ -970,12 +945,12 @@ components:
           type: object
           description: An object without schema constraints.
       required:
-          - id
-          - data
+        - id
+        - data
     Jobs:
       type: array
       items:
-        $ref: '#/components/schemas/Job'
+        $ref: "#/components/schemas/Job"
     JobResponse:
       properties:
         jobId:
@@ -1019,8 +994,8 @@ components:
           description: An object describing the Transform to be added to the job
           example:
             {
-              "Type" : "HttpTransform || JavascriptTransform",
-              "Code" : "For JS transform: base64 encoded js code."
+              "Type": "HttpTransform || JavascriptTransform",
+              "Code": "For JS transform: base64 encoded js code."
             }
 
     Datasets:
@@ -1035,9 +1010,9 @@ components:
       type: array
       items:
         anyOf:
-            - $ref: '#/components/schemas/Context'
-            - $ref: '#/components/schemas/Entity'
-            - $ref: '#/components/schemas/NextToken'
+          - $ref: "#/components/schemas/Context"
+          - $ref: "#/components/schemas/Entity"
+          - $ref: "#/components/schemas/NextToken"
 
     Context:
       properties:

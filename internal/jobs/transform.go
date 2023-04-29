@@ -26,9 +26,8 @@ import (
 	"time"
 
 	"github.com/DataDog/datadog-go/v5/statsd"
-	"github.com/gofrs/uuid"
-
 	"github.com/dop251/goja"
+	"github.com/gofrs/uuid"
 	"github.com/gojektech/heimdall/v6/httpclient"
 	"go.uber.org/zap"
 
@@ -43,7 +42,7 @@ type Transform interface {
 
 // these are upper cased to prevent the user from accidentally redefining them
 // (i mean, not really, but maybe it will help)
-const helperJavascriptFunctions = `
+const HelperJavascriptFunctions = `
 function SetProperty(entity, prefix, name, value) {
 	if (entity === null || entity === undefined) {
 		return;
@@ -168,11 +167,12 @@ func (s *Scheduler) parseTransform(config *JobConfiguration) (Transform, error) 
 	if transformConfig != nil {
 		transformTypeName := transformConfig["Type"]
 		if transformTypeName != nil {
-			if transformTypeName == "HttpTransform" {
-				transform := &HttpTransform{}
+			switch transformTypeName {
+			case "HttpTransform":
+				transform := &HTTPTransform{}
 				url, ok := transformConfig["Url"]
 				if ok && url != "" {
-					transform.Url = url.(string)
+					transform.URL = url.(string)
 				}
 				tokenProvider, ok := transformConfig["TokenProvider"]
 				if ok {
@@ -185,19 +185,16 @@ func (s *Scheduler) parseTransform(config *JobConfiguration) (Transform, error) 
 					transform.TimeOut = 0
 				}
 				return transform, nil
-			} else if transformTypeName == "JavascriptTransform" {
+			case "JavascriptTransform":
 				code64, ok := transformConfig["Code"]
 				if ok && code64 != "" {
-					transform, err := newJavascriptTransform(s.Logger, code64.(string), s.Store)
+					transform, err := NewJavascriptTransform(s.Logger, code64.(string), s.Store, s.DatasetManager)
 					if err != nil {
 						return nil, err
 					}
 					parallelism, ok := transformConfig["Parallelism"]
 					if ok {
 						transform.Parallelism = int(parallelism.(float64))
-						if err != nil {
-							return nil, err
-						}
 					} else {
 						transform.Parallelism = 1
 					}
@@ -207,12 +204,19 @@ func (s *Scheduler) parseTransform(config *JobConfiguration) (Transform, error) 
 			}
 			return nil, errors.New("unknown transform type: " + transformTypeName.(string))
 		}
-		return nil, errors.New("transform config must contain 'Type'. can be one of: JavascriptTransform, HttpTransform")
+		return nil, errors.New(
+			"transform config must contain 'Type'. can be one of: JavascriptTransform, HttpTransform",
+		)
 	}
 	return nil, nil
 }
 
-func newJavascriptTransform(log *zap.SugaredLogger, code64 string, store *server.Store) (*JavascriptTransform, error) {
+func NewJavascriptTransform(
+	log *zap.SugaredLogger,
+	code64 string,
+	store *server.Store,
+	dsm *server.DsManager,
+) (*JavascriptTransform, error) {
 	transform := &JavascriptTransform{Logger: log.Named("transform")}
 	code, err := base64.StdEncoding.DecodeString(code64)
 	if err != nil {
@@ -221,10 +225,11 @@ func newJavascriptTransform(log *zap.SugaredLogger, code64 string, store *server
 	transform.Code = code
 	transform.Runtime = goja.New()
 	transform.Store = store
+	transform.DatasetManager = dsm
 
 	// add query function to runtime
 	transform.Runtime.Set("Query", transform.Query)
-	transform.Runtime.Set("FindById", transform.ById)
+	transform.Runtime.Set("FindById", transform.ByID)
 	transform.Runtime.Set("GetNamespacePrefix", transform.GetNamespacePrefix)
 	transform.Runtime.Set("AssertNamespacePrefix", transform.AssertNamespacePrefix)
 	transform.Runtime.Set("Log", transform.Log)
@@ -235,6 +240,8 @@ func newJavascriptTransform(log *zap.SugaredLogger, code64 string, store *server
 	transform.Runtime.Set("ExecuteTransaction", transform.ExecuteTransaction)
 	transform.Runtime.Set("AsEntity", transform.AsEntity)
 	transform.Runtime.Set("UUID", transform.UUID)
+	transform.Runtime.Set("WriteQueryResult", transform.WriteQueryResult)
+	transform.Runtime.Set("GetDatasetChanges", transform.DatasetChanges)
 
 	_, err = transform.Runtime.RunString(string(code))
 	if err != nil {
@@ -242,7 +249,7 @@ func newJavascriptTransform(log *zap.SugaredLogger, code64 string, store *server
 	}
 
 	// add helper functions
-	_, err = transform.Runtime.RunString(helperJavascriptFunctions)
+	_, err = transform.Runtime.RunString(HelperJavascriptFunctions)
 	if err != nil {
 		return nil, err
 	}
@@ -250,24 +257,49 @@ func newJavascriptTransform(log *zap.SugaredLogger, code64 string, store *server
 }
 
 type JavascriptTransform struct {
-	Store        *server.Store
-	Code         []byte
-	Runtime      *goja.Runtime
-	Logger       *zap.SugaredLogger
-	statsDClient statsd.ClientInterface
-	statsDTags   []string
-	timings      map[string]time.Time
-	Parallelism  int
+	Store             *server.Store
+	Code              []byte
+	Runtime           *goja.Runtime
+	Logger            *zap.SugaredLogger
+	statsDClient      statsd.ClientInterface
+	statsDTags        []string
+	timings           map[string]time.Time
+	Parallelism       int
+	QueryResultWriter QueryResultWriter
+	DatasetManager    *server.DsManager
+}
+
+func (javascriptTransform *JavascriptTransform) DatasetChanges(
+	datasetName string,
+	since uint64,
+	limit int,
+) (*server.Changes, error) {
+	dataset := javascriptTransform.DatasetManager.GetDataset(datasetName)
+	if dataset == nil {
+		return nil, errors.New("dataset not found: " + datasetName)
+	}
+
+	changes, err := dataset.GetChanges(since, limit, true)
+	return changes, err
+}
+
+func (javascriptTransform *JavascriptTransform) WriteQueryResult(object any) error {
+	return javascriptTransform.QueryResultWriter.WriteObject(object)
 }
 
 func (javascriptTransform *JavascriptTransform) getParallelism() int {
 	return javascriptTransform.Parallelism
 }
 
-// clone the transform for use in parallel processing
+// Clone the transform for use in parallel processing
 func (javascriptTransform *JavascriptTransform) Clone() (*JavascriptTransform, error) {
 	code := base64.StdEncoding.EncodeToString(javascriptTransform.Code)
-	return newJavascriptTransform(javascriptTransform.Logger, code, javascriptTransform.Store)
+	return NewJavascriptTransform(
+		javascriptTransform.Logger,
+		code,
+		javascriptTransform.Store,
+		javascriptTransform.DatasetManager,
+	)
 }
 
 func (javascriptTransform *JavascriptTransform) AsEntity(val interface{}) (res *server.Entity) {
@@ -361,7 +393,12 @@ func (javascriptTransform *JavascriptTransform) AssertNamespacePrefix(urlExpansi
 	return prefix
 }
 
-func (javascriptTransform *JavascriptTransform) Query(startingEntities []string, predicate string, inverse bool, datasets []string) [][]interface{} {
+func (javascriptTransform *JavascriptTransform) Query(
+	startingEntities []string,
+	predicate string,
+	inverse bool,
+	datasets []string,
+) [][]interface{} {
 	ts := time.Now()
 	results, err := javascriptTransform.Store.GetManyRelatedEntities(startingEntities, predicate, inverse, datasets)
 	_ = javascriptTransform.statsDClient.Timing("transform.Query.time",
@@ -372,9 +409,9 @@ func (javascriptTransform *JavascriptTransform) Query(startingEntities []string,
 	return results
 }
 
-func (javascriptTransform *JavascriptTransform) ById(entityId string, datasets []string) *server.Entity {
+func (javascriptTransform *JavascriptTransform) ByID(entityID string, datasets []string) *server.Entity {
 	ts := time.Now()
-	entity, err := javascriptTransform.Store.GetEntity(entityId, datasets)
+	entity, err := javascriptTransform.Store.GetEntity(entityID, datasets)
 	_ = javascriptTransform.statsDClient.Timing("transform.ById.time",
 		time.Since(ts), javascriptTransform.statsDTags, 1)
 	if err != nil {
@@ -404,8 +441,35 @@ func (javascriptTransform *JavascriptTransform) ToString(obj interface{}) string
 	}
 }
 
-func (javascriptTransform *JavascriptTransform) transformEntities(runner *Runner, entities []*server.Entity, jobTag string) ([]*server.Entity, error) {
+type QueryResultWriter interface {
+	WriteObject(object any) error
+}
 
+func (javascriptTransform *JavascriptTransform) ExecuteQuery(resultWriter QueryResultWriter) (er error) {
+	// set the passed in result writer. This is delayed in cases where the query object may exist and is bound
+	// to a result writer nearer the time of execution.
+	javascriptTransform.QueryResultWriter = resultWriter
+
+	var queryFunc func() error
+	err := javascriptTransform.Runtime.ExportTo(javascriptTransform.Runtime.Get("do_query"), &queryFunc)
+	if err != nil {
+		return err
+	}
+
+	// invoke transform, and catch js runtime err
+	err = queryFunc()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (javascriptTransform *JavascriptTransform) transformEntities(
+	runner *Runner,
+	entities []*server.Entity,
+	jobTag string,
+) ([]*server.Entity, error) {
 	var transformFunc func(entities []*server.Entity) (interface{}, error)
 	err := javascriptTransform.Runtime.ExportTo(javascriptTransform.Runtime.Get("transform_entities"), &transformFunc)
 	if err != nil {
@@ -427,18 +491,46 @@ func (javascriptTransform *JavascriptTransform) transformEntities(runner *Runner
 		resultEntities = make([]*server.Entity, 0)
 		for _, e := range v {
 			if entity, ok := e.(*server.Entity); ok {
+				typeFix(entity)
 				resultEntities = append(resultEntities, entity)
 			} else {
 				return nil, fmt.Errorf("transform emitted invalid entity: %v", e)
 			}
 		}
 	case []*server.Entity:
+		for _, entity := range v {
+			typeFix(entity)
+		}
+
 		resultEntities = v
 	default:
 		return nil, errors.New("bad result from transform")
 	}
 
 	return resultEntities, nil
+}
+
+// if a number property is set from javascript, goja's js->golang bridge updates
+// the go entity instance with int64 if the number has no decimals.
+//
+// in json deserialized entities, all numbers are float64.
+//
+// so to make goja modified entities comparable to entities produced by
+// json-deserialization, we need to fix all numbers to float64.
+func typeFix(entity *server.Entity) {
+	for k, v := range entity.Properties {
+		if i, ok := v.(int64); ok {
+			entity.Properties[k] = float64(i)
+		} else if i, ok := v.([]interface{}); ok {
+			for c, val := range i {
+				if i2, ok2 := val.(int64); ok2 {
+					i[c] = float64(i2)
+				}
+			}
+		} else if i, ok := v.(*server.Entity); ok {
+			typeFix(i)
+		}
+	}
 }
 
 func (javascriptTransform *JavascriptTransform) GetConfig() map[string]interface{} {
@@ -448,8 +540,8 @@ func (javascriptTransform *JavascriptTransform) GetConfig() map[string]interface
 	return config
 }
 
-type HttpTransform struct {
-	Url            string
+type HTTPTransform struct {
+	URL            string
 	Authentication string  // "none, basic, token"
 	User           string  // for use in basic auth
 	Password       string  // for use in basic auth
@@ -457,17 +549,20 @@ type HttpTransform struct {
 	TimeOut        float64 // set timeout for http-transform
 }
 
-func (httpTransform *HttpTransform) getParallelism() int {
+func (httpTransform *HTTPTransform) getParallelism() int {
 	return 1
 }
 
-func (httpTransform *HttpTransform) transformEntities(runner *Runner, entities []*server.Entity, jobTag string) ([]*server.Entity, error) {
-
+func (httpTransform *HTTPTransform) transformEntities(
+	runner *Runner,
+	entities []*server.Entity,
+	jobTag string,
+) ([]*server.Entity, error) {
 	timeout := time.Duration(httpTransform.TimeOut) * time.Second
 	client := httpclient.NewClient(httpclient.WithHTTPTimeout(timeout))
 
 	// create headers if needed
-	url := httpTransform.Url
+	url := httpTransform.URL
 
 	// set up our request
 	jsonEntities, err := json.Marshal(entities)
@@ -495,7 +590,7 @@ func (httpTransform *HttpTransform) transformEntities(runner *Runner, entities [
 		return nil, err
 	}
 	if res.StatusCode != 200 {
-		return nil, handleHttpError(res)
+		return nil, handleHTTPError(res)
 	}
 
 	// parse json back into []*Entity
@@ -514,10 +609,10 @@ func (httpTransform *HttpTransform) transformEntities(runner *Runner, entities [
 	return transformedEntities, nil
 }
 
-func (httpTransform *HttpTransform) GetConfig() map[string]interface{} {
+func (httpTransform *HTTPTransform) GetConfig() map[string]interface{} {
 	config := make(map[string]interface{})
 	config["Type"] = "HttpTransform"
-	config["Url"] = httpTransform.Url
+	config["Url"] = httpTransform.URL
 	config["TokenProvider"] = httpTransform.TokenProvider
 	config["Authentication"] = httpTransform.Authentication
 	config["TimeOut"] = httpTransform.TimeOut

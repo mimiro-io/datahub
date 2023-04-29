@@ -15,119 +15,114 @@
 package security
 
 import (
+	"os"
+	"strconv"
+
 	"github.com/DataDog/datadog-go/v5/statsd"
-	"github.com/franela/goblin"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"go.uber.org/fx/fxtest"
+	"go.uber.org/zap"
+
 	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/server"
-	"go.uber.org/fx/fxtest"
-	"go.uber.org/zap"
-	"os"
-	"strconv"
-	"testing"
 )
 
-func TestCrud(t *testing.T) {
-	g := goblin.Goblin(t)
+var _ = Describe("Login Provider Crud operations", func() {
+	var store *server.Store
+	var e *conf.Env
+	var pm *ProviderManager
+	testCnt := 0
 
-	g.Describe("Login Provider Crud operations", func() {
-
-		var store *server.Store
-		var e *conf.Env
-		var pm *ProviderManager
-		testCnt := 0
-
-		g.BeforeEach(func() {
-			testCnt = testCnt + 1
-			e = &conf.Env{
-				Logger:        zap.NewNop().Sugar(),
-				StoreLocation: "./test_login_provider_" + strconv.Itoa(testCnt),
-			}
-			err := os.RemoveAll(e.StoreLocation)
-			g.Assert(err).IsNil("should be allowed to clean test files in " + e.StoreLocation)
-			lc := fxtest.NewLifecycle(internal.FxTestLog(t, false))
-			sc := &statsd.NoOpClient{}
-			store = server.NewStore(lc, e, sc)
-			lc.RequireStart()
-			pm = NewProviderManager(lc, e, store, zap.NewNop().Sugar())
-		})
-		g.AfterEach(func() {
-			_ = store.Close()
-			_ = os.RemoveAll(e.StoreLocation)
-		})
-		g.It("should add a config", func() {
-			p := createConfig("test-jwt")
-			err := pm.AddProvider(p)
-			g.Assert(err).IsNil()
-		})
-		g.It("should be able to get a config by name", func() {
-			p := createConfig("test-jwt-2")
-			err := pm.AddProvider(p)
-			g.Assert(err).IsNil()
-
-			p2, err := pm.FindByName("test-jwt-2")
-			g.Assert(err).IsNil()
-			g.Assert(p2).IsNotNil()
-
-			g.Assert(p2.Name).Equal("test-jwt-2")
-		})
-		g.It("should be able to update a config", func() {
-			p := createConfig("test-jwt-3")
-			err := pm.AddProvider(p)
-			g.Assert(err).IsNil()
-
-			p.Endpoint = &ValueReader{
-				Type:  "text",
-				Value: "http://localhost/hello",
-			}
-			err = pm.AddProvider(p)
-			g.Assert(err).IsNil()
-
-			// load it back
-			p2, err := pm.FindByName("test-jwt-3")
-			g.Assert(err).IsNil()
-			g.Assert(p2).IsNotNil()
-			g.Assert(pm.LoadValue(p2.Endpoint)).Equal("http://localhost/hello")
-
-			_, err = pm.FindByName("test-jwt-4")
-			g.Assert(err).Eql(ErrLoginProviderNotFound)
-
-		})
-		g.It("should be able to delete a config", func() {
-			p := createConfig("test-jwt-5")
-			err := pm.AddProvider(p)
-			g.Assert(err).IsNil()
-
-			p2, err := pm.FindByName("test-jwt-5")
-			g.Assert(err).IsNil()
-			g.Assert(p2).IsNotNil()
-
-			err = pm.DeleteProvider("test-jwt-5")
-			g.Assert(err).IsNil()
-
-			p3, err := pm.FindByName("test-jwt-5")
-			g.Assert(err).Eql(ErrLoginProviderNotFound)
-			g.Assert(p3).IsZero()
-		})
-		g.It("should list all configs", func() {
-			p := createConfig("test-jwt-6")
-			_ = pm.AddProvider(p)
-			p2 := createConfig("test-jwt-7")
-			_ = pm.AddProvider(p2)
-
-			items, err := pm.ListProviders()
-			g.Assert(err).IsNil()
-			g.Assert(len(items)).Equal(2)
-
-		})
+	BeforeEach(func() {
+		testCnt = testCnt + 1
+		e = &conf.Env{
+			Logger:        zap.NewNop().Sugar(),
+			StoreLocation: "./test_login_provider_" + strconv.Itoa(testCnt),
+		}
+		err := os.RemoveAll(e.StoreLocation)
+		Expect(err).To(BeNil(), "should be allowed to clean test files in "+e.StoreLocation)
+		lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
+		sc := &statsd.NoOpClient{}
+		store = server.NewStore(lc, e, sc)
+		lc.RequireStart()
+		pm = NewProviderManager(lc, e, store, zap.NewNop().Sugar())
 	})
-}
+	AfterEach(func() {
+		_ = store.Close()
+		_ = os.RemoveAll(e.StoreLocation)
+	})
+	It("should add a config", func() {
+		p := createConfig("test-jwt")
+		err := pm.AddProvider(p)
+		Expect(err).To(BeNil())
+	})
+	It("should be able to get a config by name", func() {
+		p := createConfig("test-jwt-2")
+		err := pm.AddProvider(p)
+		Expect(err).To(BeNil())
+
+		p2, err := pm.FindByName("test-jwt-2")
+		Expect(err).To(BeNil())
+		Expect(p2).NotTo(BeNil())
+
+		Expect(p2.Name).To(Equal("test-jwt-2"))
+	})
+	It("should be able to update a config", func() {
+		p := createConfig("test-jwt-3")
+		err := pm.AddProvider(p)
+		Expect(err).To(BeNil())
+
+		p.Endpoint = &ValueReader{
+			Type:  "text",
+			Value: "http://localhost/hello",
+		}
+		err = pm.AddProvider(p)
+		Expect(err).To(BeNil())
+
+		// load it back
+		p2, err := pm.FindByName("test-jwt-3")
+		Expect(err).To(BeNil())
+		Expect(p2).NotTo(BeNil())
+		Expect(pm.LoadValue(p2.Endpoint)).To(Equal("http://localhost/hello"))
+
+		_, err = pm.FindByName("test-jwt-4")
+		Expect(err).To(Equal(ErrLoginProviderNotFound))
+	})
+	It("should be able to delete a config", func() {
+		p := createConfig("test-jwt-5")
+		err := pm.AddProvider(p)
+		Expect(err).To(BeNil())
+
+		p2, err := pm.FindByName("test-jwt-5")
+		Expect(err).To(BeNil())
+		Expect(p2).NotTo(BeNil())
+
+		err = pm.DeleteProvider("test-jwt-5")
+		Expect(err).To(BeNil())
+
+		p3, err := pm.FindByName("test-jwt-5")
+		Expect(err).To(Equal(ErrLoginProviderNotFound))
+		Expect(p3).To(BeZero())
+	})
+	It("should list all configs", func() {
+		p := createConfig("test-jwt-6")
+		_ = pm.AddProvider(p)
+		p2 := createConfig("test-jwt-7")
+		_ = pm.AddProvider(p2)
+
+		items, err := pm.ListProviders()
+		Expect(err).To(BeNil())
+		Expect(len(items)).To(Equal(2))
+	})
+})
 
 func createConfig(name string) ProviderConfig {
 	return ProviderConfig{
 		Name: name,
 		Type: "bearer",
-		ClientId: &ValueReader{
+		ClientID: &ValueReader{
 			Type:  "text",
 			Value: "id1",
 		},

@@ -95,7 +95,6 @@ func (p *SsmProperties) Value(key string) (string, bool) {
 		p.config.cache[key] = val
 		return val, true
 	}
-
 }
 
 // Params returns the full cached set of parameters as a map.
@@ -113,7 +112,6 @@ func (p *SsmProperties) loadParam(key string) (string, error) {
 	} else {
 		return *param.Value, nil
 	}
-
 }
 
 func (c *SsmManagerConfig) loadParams() (map[string]interface{}, error) {
@@ -152,7 +150,6 @@ func (c *SsmManagerConfig) getClient() (*awsssm.ParameterStore, error) {
 		store, err := awsssm.NewParameterStore(&aws.Config{
 			Region: aws.String("eu-west-1"),
 		})
-
 		if err != nil {
 			return nil, err
 		}

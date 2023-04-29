@@ -1,9 +1,10 @@
 package namespace
 
 import (
+	"strings"
+
 	"github.com/mimiro-io/datahub/internal/service/store"
 	"github.com/mimiro-io/datahub/internal/service/types"
-	"strings"
 )
 
 type (
@@ -38,12 +39,13 @@ func (m BadgerManager) ExpandPrefix(input types.Prefix) (types.URI, error) {
 	return m.store.LookupNamespaceExpansion(input)
 }
 
-//ExtractNamespaceURI split given URI into namespace and value
-//  returns (
-//    namespaceURI with trailing slash,
-//    value (last path element),
-//    success flag
-//   )
+// ExtractNamespaceURI split given URI into namespace and value
+//
+//	returns (
+//	  namespaceURI with trailing slash,
+//	  value (last path element),
+//	  success flag
+//	 )
 func (m BadgerManager) ExtractNamespaceURI(input string) (types.URI, string, bool) {
 	if strings.HasPrefix(input, "http") {
 		cutPosition := strings.LastIndex(input, "/") + 1

@@ -24,7 +24,11 @@ import (
 // Source interface for pulling data
 type Source interface {
 	GetConfig() map[string]interface{}
-	ReadEntities(since DatasetContinuation, batchSize int, processEntities func([]*server.Entity, DatasetContinuation) error) error
+	ReadEntities(
+		since DatasetContinuation,
+		batchSize int,
+		processEntities func([]*server.Entity, DatasetContinuation) error,
+	) error
 	StartFullSync()
 	EndFullSync()
 }
@@ -42,6 +46,7 @@ type StringDatasetContinuation struct {
 func (c *StringDatasetContinuation) GetToken() string {
 	return c.Token
 }
+
 func (c *StringDatasetContinuation) AsIncrToken() uint64 {
 	if c.Token != "" {
 		i, err := strconv.Atoi(c.Token)
@@ -52,6 +57,7 @@ func (c *StringDatasetContinuation) AsIncrToken() uint64 {
 	}
 	return 0
 }
+
 func (c *StringDatasetContinuation) Encode() (string, error) {
 	return c.GetToken(), nil
 }

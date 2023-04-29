@@ -16,15 +16,16 @@ package web
 
 import (
 	"context"
-	"github.com/mimiro-io/datahub/internal/security"
 	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"github.com/mimiro-io/datahub/internal/conf"
-	"github.com/mimiro-io/datahub/internal/web/middlewares"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/conf"
+	"github.com/mimiro-io/datahub/internal/security"
+	"github.com/mimiro-io/datahub/internal/web/middlewares"
 )
 
 type Middleware struct {
@@ -37,7 +38,14 @@ type Middleware struct {
 	env        *conf.Env
 }
 
-func NewMiddleware(lc fx.Lifecycle, env *conf.Env, handler *WebHandler, e *echo.Echo, auth *AuthorizerConfig, core *security.ServiceCore) *Middleware {
+func NewMiddleware(
+	lc fx.Lifecycle,
+	env *conf.Env,
+	handler *WebHandler,
+	e *echo.Echo,
+	auth *AuthorizerConfig,
+	core *security.ServiceCore,
+) *Middleware {
 	skipper := func(c echo.Context) bool {
 		// don't secure health endpoints
 		if strings.HasPrefix(c.Request().URL.Path, "/health") {
@@ -72,7 +80,7 @@ func NewMiddleware(lc fx.Lifecycle, env *conf.Env, handler *WebHandler, e *echo.
 	}
 
 	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
+		OnStart: func(_ context.Context) error {
 			mw.configure(e)
 			return nil
 		},
@@ -128,13 +136,14 @@ func setupJWT(env *conf.Env, core *security.ServiceCore, skipper func(c echo.Con
 		Skipper:   skipper,
 		Audience:  env.Auth.Audience,
 		Issuer:    env.Auth.Issuer,
-		Wellknown: env.Auth.WellKnown}
+		Wellknown: env.Auth.WellKnown,
+	}
 
 	// if node security is enabled
 	if env.Auth.Middleware == "local" {
 		config.NodePublicKey = core.NodeInfo.KeyPairs[0].PublicKey
-		config.Issuer = "node:" + core.NodeInfo.NodeId
-		config.Audience = "node:" + core.NodeInfo.NodeId
+		config.Issuer = []string{"node:" + core.NodeInfo.NodeID}
+		config.Audience = []string{"node:" + core.NodeInfo.NodeID}
 	}
 
 	return middlewares.JWTHandler(config)

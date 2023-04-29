@@ -16,9 +16,10 @@ package security
 
 import (
 	"context"
+	"strings"
+
 	"go.uber.org/fx"
 	"go.uber.org/zap"
-	"strings"
 )
 
 type TokenProviders struct {
@@ -49,9 +50,14 @@ func (providers *TokenProviders) Add(providerConfig ProviderConfig) error {
 
 // NewTokenProviders provides a map of token providers, keyed on the
 // name of the token provider struct as lower_case.
-func NewTokenProviders(lc fx.Lifecycle, logger *zap.SugaredLogger, providerManager *ProviderManager, serviceCore *ServiceCore) *TokenProviders {
+func NewTokenProviders(
+	lc fx.Lifecycle,
+	logger *zap.SugaredLogger,
+	providerManager *ProviderManager,
+	serviceCore *ServiceCore,
+) *TokenProviders {
 	log := logger.Named("security")
-	var providers = make(map[string]Provider)
+	providers := make(map[string]Provider)
 
 	tp := &TokenProviders{
 		log:         log,
@@ -61,7 +67,7 @@ func NewTokenProviders(lc fx.Lifecycle, logger *zap.SugaredLogger, providerManag
 	}
 
 	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
+		OnStart: func(_ context.Context) error {
 			if providerList, err := providerManager.ListProviders(); err != nil {
 				log.Warn(err)
 			} else {

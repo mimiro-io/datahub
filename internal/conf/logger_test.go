@@ -15,36 +15,32 @@
 package conf
 
 import (
-	"testing"
-
-	"github.com/franela/goblin"
-
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"go.uber.org/zap/zapcore"
 )
 
-func TestLogger(t *testing.T) {
-	g := goblin.Goblin(t)
-	g.Describe("The Logger's Loglevel parser", func() {
-		g.It("Should accept 'debug'", func() {
-			g.Assert(getLogLevel("debug")).Eql(zapcore.DebugLevel)
-		})
-		g.It("Should accept 'info'", func() {
-			g.Assert(getLogLevel("info")).Eql(zapcore.InfoLevel)
-		})
-		g.It("Should accept 'warn'", func() {
-			g.Assert(getLogLevel("warn")).Eql(zapcore.WarnLevel)
-		})
-		g.It("Should accept 'ERRor'", func() {
-			g.Assert(getLogLevel("ERRor")).Eql(zapcore.ErrorLevel)
-		})
-		g.It("Should accept fallback to info", func() {
-			g.Assert(getLogLevel("LLSDFFSD")).Eql(zapcore.InfoLevel)
-		})
+var _ = Describe("The Logger's Loglevel parser", func() {
+	It("Should accept 'debug'", func() {
+		Expect(getLogLevel("debug")).To(Equal(zapcore.DebugLevel))
 	})
-	g.Describe("Getting a logger", func() {
-		g.It("Should get the correct logger", func() {
-			logger := GetLogger("local", zapcore.InfoLevel).Desugar()
-			g.Assert(logger.Core().Enabled(zapcore.InfoLevel)).IsTrue("Go the wrong logger")
-		})
+	It("Should accept 'info'", func() {
+		Expect(getLogLevel("info")).To(Equal(zapcore.InfoLevel))
 	})
-}
+	It("Should accept 'warn'", func() {
+		Expect(getLogLevel("warn")).To(Equal(zapcore.WarnLevel))
+	})
+	It("Should accept 'ERRor'", func() {
+		Expect(getLogLevel("ERRor")).To(Equal(zapcore.ErrorLevel))
+	})
+	It("Should accept fallback to info", func() {
+		Expect(getLogLevel("LLSDFFSD")).To(Equal(zapcore.InfoLevel))
+	})
+})
+
+var _ = Describe("Getting a logger", func() {
+	It("Should get the correct logger", func() {
+		logger := GetLogger("local", zapcore.InfoLevel).Desugar()
+		Expect(logger.Core().Enabled(zapcore.InfoLevel)).To(BeTrue(), "Go the wrong logger")
+	})
+})

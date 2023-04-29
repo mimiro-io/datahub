@@ -23,16 +23,14 @@ import (
 	"go.uber.org/zap"
 )
 
-var (
-	// DefaultRecoverConfig is the default Recover middleware config.
-	DefaultRecoverConfig = middleware.RecoverConfig{
-		Skipper:           middleware.DefaultSkipper,
-		StackSize:         4 << 10, // 4 KB
-		DisableStackAll:   false,
-		DisablePrintStack: false,
-		LogLevel:          0,
-	}
-)
+// DefaultRecoverConfig is the default Recover middleware config.
+var DefaultRecoverConfig = middleware.RecoverConfig{
+	Skipper:           middleware.DefaultSkipper,
+	StackSize:         4 << 10, // 4 KB
+	DisableStackAll:   false,
+	DisablePrintStack: false,
+	LogLevel:          0,
+}
 
 func RecoverWithConfig(config middleware.RecoverConfig, logger *zap.SugaredLogger) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {

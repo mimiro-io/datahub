@@ -19,20 +19,27 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"github.com/mimiro-io/datahub/internal/server"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/server"
 )
 
 type namespaceHandler struct {
 	store *server.Store
 }
 
-func NewNamespaceHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, store *server.Store) {
+func NewNamespaceHandler(
+	lc fx.Lifecycle,
+	e *echo.Echo,
+	logger *zap.SugaredLogger,
+	mw *Middleware,
+	store *server.Store,
+) {
 	handler := namespaceHandler{store: store}
 
 	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
+		OnStart: func(_ context.Context) error {
 			e.GET("/namespaces", handler.getNamespaces, mw.authorizer(logger.Named("web"), datahubRead))
 			return nil
 		},
@@ -43,5 +50,4 @@ func (handler *namespaceHandler) getNamespaces(c echo.Context) error {
 	v := handler.store.GetGlobalContext()
 
 	return c.JSON(http.StatusOK, v.Namespaces)
-
 }

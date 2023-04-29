@@ -15,18 +15,18 @@
 package middlewares
 
 import (
-	"github.com/mimiro-io/datahub/internal/security"
 	"net/http"
 	"strings"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/juliangruber/go-intersect"
 	"github.com/labstack/echo/v4"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/security"
 )
 
 func JwtAuthorizer(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {
-
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			if c.Get("user") == nil { // user never got set, oops
@@ -35,7 +35,8 @@ func JwtAuthorizer(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareF
 			token := c.Get("user").(*jwt.Token)
 
 			claims := token.Claims.(*security.CustomClaims)
-			if claims.Gty == "client-credentials" { // this is a machine or an application token
+			if claims.Gty == "client-credentials" ||
+				claims.Subject == claims.ClientID { // this is a machine or an application token
 				var claimScopes []string
 				if len(claims.Scopes()) > 0 {
 					claimScopes = strings.Split(claims.Scopes()[0], " ")
@@ -56,7 +57,7 @@ func JwtAuthorizer(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareF
 					subject := claims.Subject
 					// it needs the subject in the url
 					uri := c.Request().RequestURI
-					if strings.Index(uri, subject) == -1 { // not present, so forbidden
+					if !strings.Contains(uri, subject) { // not present, so forbidden
 						return echo.NewHTTPError(http.StatusForbidden, "user has no access to path")
 					}
 				}
