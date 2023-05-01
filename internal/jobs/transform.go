@@ -229,6 +229,7 @@ func NewJavascriptTransform(
 
 	// add query function to runtime
 	transform.Runtime.Set("Query", transform.Query)
+	transform.Runtime.Set("PagedQuery", transform.PagedQuery)
 	transform.Runtime.Set("FindById", transform.ByID)
 	transform.Runtime.Set("GetNamespacePrefix", transform.GetNamespacePrefix)
 	transform.Runtime.Set("AssertNamespacePrefix", transform.AssertNamespacePrefix)
@@ -407,6 +408,54 @@ func (javascriptTransform *JavascriptTransform) Query(
 		return nil
 	}
 	return results
+}
+
+func (javascriptTransform *JavascriptTransform) PagedQuery(
+	startingEntities []string,
+	predicate string,
+	inverse bool,
+	datasets []string,
+	pageSize int,
+	forEach func(result []server.RelatedEntityResult) bool,
+) int {
+	cnt := 0
+	var conts []server.RelatedFrom
+	for {
+		ts := time.Now()
+		var results server.RelatedEntitiesQueryResult
+		var err error
+		if conts == nil {
+			results, err = javascriptTransform.Store.GetManyRelatedEntitiesBatch(
+				startingEntities,
+				predicate,
+				inverse,
+				datasets,
+				pageSize,
+			)
+		} else {
+			results, err = javascriptTransform.Store.GetManyRelatedEntitiesAtTime(conts, pageSize)
+		}
+
+		_ = javascriptTransform.statsDClient.Timing(
+			"transform.Query.time", time.Since(ts), javascriptTransform.statsDTags, 1)
+
+		if err != nil {
+			javascriptTransform.Logger.Warnf("error in queryForEach %w", err)
+			return 0
+		}
+		for _, r := range results {
+			cnt = cnt + len(r.Relations)
+			// if callback returns false, it tells us to stop iterating
+			if !forEach(r.Relations) {
+				break
+			}
+		}
+		if len(results.Cont()) <= 0 {
+			break
+		}
+		conts = results.Cont()
+	}
+	return cnt
 }
 
 func (javascriptTransform *JavascriptTransform) ByID(entityID string, datasets []string) *server.Entity {
