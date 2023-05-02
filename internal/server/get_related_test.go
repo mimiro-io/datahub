@@ -196,7 +196,7 @@ var _ = ginkgo.Describe("The GetManyRelatedEntitiesBatch functions", func() {
 		Expect(len(queryResult[0].Relations)).To(Equal(14))
 		Expect(queryResult[0].Relations[0].RelatedEntity.ID).To(Equal(pref + ":person-15"))
 		Expect(queryResult[0].Relations[13].RelatedEntity.ID).To(Equal(pref + ":person-2"))
-		Expect(queryResult[0].Continuation.RelationIndexFromKey).To(BeNil())
+		Expect(queryResult[0].Continuation).To(BeNil())
 	})
 
 	ginkgo.It("Should work with star queries across multiple predicates", func() {

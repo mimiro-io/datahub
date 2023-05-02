@@ -210,7 +210,7 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 				}
 				binary.BigEndian.PutUint64(searchBuffer[2:], rid)
 
-				relatedFrom := server.RelatedFrom{
+				relatedFrom := &server.RelatedFrom{
 					RelationIndexFromKey: searchBuffer,
 					Predicate:            predID,
 					Inverse:              join.Inverse,
@@ -229,7 +229,7 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 					joinLvlChan <- r.EntityID
 				}
 				// 4. if query result contained a continuation token, repeat from 2.
-				if cont.RelationIndexFromKey != nil {
+				if cont != nil {
 					nextRelatedFrom = cont
 					goto repeatQuery
 				}
@@ -260,7 +260,7 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 						for _, r := range prevRelatedEntities {
 							joinLvlChan <- r.EntityID
 						}
-						if cont.RelationIndexFromKey != nil {
+						if cont != nil {
 							prevRelatedFrom = cont
 							goto repeatPrevQuery
 						}

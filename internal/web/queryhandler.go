@@ -277,10 +277,10 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 	}
 }
 
-func encodeCont(relatedFroms []server.RelatedFrom) ([]string, error) {
+func encodeCont(relatedFroms []*server.RelatedFrom) ([]string, error) {
 	continuations := make([]string, 0)
 	for _, rF := range relatedFroms {
-		if rF.RelationIndexFromKey != nil {
+		if rF != nil {
 			j, err := json.Marshal(rF)
 			if err != nil {
 				return nil, err
@@ -293,15 +293,15 @@ func encodeCont(relatedFroms []server.RelatedFrom) ([]string, error) {
 	return continuations, nil
 }
 
-func decodeCont(continuations []string) ([]server.RelatedFrom, error) {
-	relatedFroms := make([]server.RelatedFrom, len(continuations))
+func decodeCont(continuations []string) ([]*server.RelatedFrom, error) {
+	relatedFroms := make([]*server.RelatedFrom, len(continuations))
 	for i, c := range continuations {
 		s, err := base64.StdEncoding.DecodeString(c)
 		if err != nil {
 			return nil, err
 		}
-		var out server.RelatedFrom
-		err = json.Unmarshal(s, &out)
+		var out = &server.RelatedFrom{}
+		err = json.Unmarshal(s, out)
 		if err != nil {
 			return nil, err
 		}

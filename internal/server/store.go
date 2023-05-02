@@ -32,9 +32,10 @@ import (
 
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/dgraph-io/badger/v3"
-	"github.com/mimiro-io/datahub/internal/conf"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal/conf"
 )
 
 type qresult struct {
@@ -691,7 +692,7 @@ type RelatedEntityResult struct {
 	RelatedEntity *Entity
 }
 type RelatedEntitiesResult struct {
-	Continuation RelatedFrom
+	Continuation *RelatedFrom
 	Relations    []RelatedEntityResult
 }
 
@@ -704,8 +705,8 @@ type RelatedFrom struct {
 }
 type RelatedEntitiesQueryResult []RelatedEntitiesResult
 
-func (reqr RelatedEntitiesQueryResult) Cont() []RelatedFrom {
-	res := make([]RelatedFrom, len(reqr))
+func (reqr RelatedEntitiesQueryResult) Cont() []*RelatedFrom {
+	res := make([]*RelatedFrom, len(reqr))
 	for i, c := range reqr {
 		res[i] = c.Continuation
 	}
@@ -765,9 +766,9 @@ func (s *Store) ToRelatedFrom(
 	inverse bool,
 	datasets []string,
 	queryTime int64,
-) ([]RelatedFrom, error) {
+) ([]*RelatedFrom, error) {
 	targetDatasetIds := s.DatasetsToInternalIDs(datasets)
-	from := make([]RelatedFrom, len(startPoints))
+	from := make([]*RelatedFrom, len(startPoints))
 	var resourceCurie string
 	var err error
 	txn := s.database.NewTransaction(false)
@@ -802,7 +803,7 @@ func (s *Store) ToRelatedFrom(
 			binary.BigEndian.PutUint16(searchBuffer, OutgoingRefIndex)
 		}
 		binary.BigEndian.PutUint64(searchBuffer[2:], rid)
-		from[i] = RelatedFrom{
+		from[i] = &RelatedFrom{
 			RelationIndexFromKey: searchBuffer,
 			Predicate:            pid,
 			Inverse:              inverse,
@@ -845,7 +846,7 @@ func (s *Store) GetPredicateID(predicate string, txn *badger.Txn) (uint64, error
 	return pid, err
 }
 
-func (s *Store) GetManyRelatedEntitiesAtTime(from []RelatedFrom, limit int) (RelatedEntitiesQueryResult, error) {
+func (s *Store) GetManyRelatedEntitiesAtTime(from []*RelatedFrom, limit int) (RelatedEntitiesQueryResult, error) {
 	result := make([]RelatedEntitiesResult, 0)
 	unlimited := limit == 0
 
@@ -862,7 +863,7 @@ func (s *Store) GetManyRelatedEntitiesAtTime(from []RelatedFrom, limit int) (Rel
 	return result, nil
 }
 
-func (s *Store) getRelatedEntitiesAtTime(from RelatedFrom, limit int) (RelatedEntitiesResult, error) {
+func (s *Store) getRelatedEntitiesAtTime(from *RelatedFrom, limit int) (RelatedEntitiesResult, error) {
 	relations, cont, err := s.GetRelatedAtTime(from, limit)
 	if err != nil {
 		return RelatedEntitiesResult{}, err
@@ -919,12 +920,13 @@ func (s *Store) getRelated(
 	return res[0].Relations, err
 }
 
-func (s *Store) GetRelatedAtTime(from RelatedFrom, limit int) ([]qresult, RelatedFrom, error) {
+func (s *Store) GetRelatedAtTime(from *RelatedFrom, limit int) ([]qresult, *RelatedFrom, error) {
 	results := make([]qresult, 0)
-	if len(from.RelationIndexFromKey) < 10 {
-		return nil, RelatedFrom{}, fmt.Errorf("invalid query startpoint: %+v", from)
+	if from == nil || len(from.RelationIndexFromKey) < 10 {
+		return nil, nil, fmt.Errorf("invalid query startpoint: %+v", from)
 	}
-	cont := from
+	// make a copy of *RelatedFrom
+	cont := *from
 	cont.RelationIndexFromKey = make([]byte, 40)
 	// lookup pred and id
 	err := s.database.View(func(txn *badger.Txn) error {
@@ -1120,12 +1122,15 @@ func (s *Store) GetRelatedAtTime(from RelatedFrom, limit int) ([]qresult, Relate
 		return nil
 	})
 	if err != nil {
-		return nil, cont, err
+		return nil, nil, err
 	}
 	//if len(results) == 0 {
 	//	cont.RelationIndexFromKey = nil
 	//}
-	return results, cont, nil
+	if cont.RelationIndexFromKey == nil {
+		return results, nil, nil
+	}
+	return results, &cont, nil
 }
 
 func (s *Store) getIDForURI(txn *badger.Txn, uri string) (uint64, bool, error) {

@@ -419,7 +419,7 @@ func (javascriptTransform *JavascriptTransform) PagedQuery(
 	forEach func(result []server.RelatedEntityResult) bool,
 ) int {
 	cnt := 0
-	var conts []server.RelatedFrom
+	var conts []*server.RelatedFrom
 	for {
 		ts := time.Now()
 		var results server.RelatedEntitiesQueryResult
@@ -444,18 +444,23 @@ func (javascriptTransform *JavascriptTransform) PagedQuery(
 			return 0
 		}
 		for _, r := range results {
-			cnt = cnt + len(r.Relations)
-			// if callback returns false, it tells us to stop iterating
-			if !forEach(r.Relations) {
-				break
+			if len(r.Relations) > 0 {
+				// if callback returns false, it tells us to stop iterating
+				cbContinue := forEach(r.Relations)
+				if !cbContinue {
+					return cnt
+				}
+				cnt = cnt + len(r.Relations)
+			} else {
+				return cnt
 			}
+
 		}
 		if len(results.Cont()) <= 0 {
-			break
+			return cnt
 		}
 		conts = results.Cont()
 	}
-	return cnt
 }
 
 func (javascriptTransform *JavascriptTransform) ByID(entityID string, datasets []string) *server.Entity {
