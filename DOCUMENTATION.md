@@ -1081,9 +1081,19 @@ var p2 = FindById("http://data.mimiro.io/people/bob");
 
 #### Query
 
-The Query function is used to lookup related entities. It accepts an array of entity ids (CURIEs or full URIs), a property to traverse, a flag indicating if the traversal is incoming or outgoing, and an array of dataset names to limit the query scope if desired.
+The Query function is used to lookup related entities.
+It accepts an array of entity ids (CURIEs or full URIs), a reference to traverse,
+a flag indicating if the traversal is incoming or outgoing,
+and an array of dataset names to limit the query scope if desired.
 
-The result is a list of lists where each inner list is a result row. The result row contains the entity id, the property used to find to find a relation, and then the related entity. Note: that if an entity has multiple related entities then each appear in its own row.
+The result is a list of lists where each inner list is a result row.
+The result row contains the entity id, the property used to find to find a relation,
+and then the related entity.
+
+_Note: when large query result sets are possible, it is recommended to use
+`PagedQuery` instead of `Query`._
+
+_Note: if an entity has multiple related entities then each appear in its own row._
 
 ```json
 >returned from the Query function:
@@ -1093,6 +1103,7 @@ The result is a list of lists where each inner list is a result row. The result 
     [ "entity-id", "property uri", { "id" : "related entity 2"}]
 ]
 ```
+
 
 ```javascript
 // find all the companies bob works for, outgoing query
@@ -1145,6 +1156,60 @@ Log(people);
     }
 }]]]
 ```
+
+#### PagedQuery
+
+`PagedQuery` is similar to `Query` in that it takes a list of starting URIs, a reference to follow (predicate), an inverse flag and
+a list of datasets to scope the query.
+
+In addition to those parameters, `PagedQuery` also requires a `pageSize` parameter and a callback function.
+
+Under the hood, `PagedQuery` pages through the query result in batches,
+and emits those batches to the callback function.
+This is more memory efficient than loading complete query results in one operation.
+
+```javascript
+// the callback function may be called many times,
+// receiving arrays of query result items
+var cb = function(resultPage) {
+    for (resultItem of resultPage) {
+        Log(resultItem);
+        // if the callback returns false ,PagedQuery will stop calling it.
+        // Return true if you want to process more pages
+        return false;
+    }
+}
+var queryResult = PagedQuery(
+    ["ns0:company"], // list of starting URIs
+    "ns1:worksfor",  // reference to follow, can be "*" to follow all
+    true, // inverse flag
+    ["people", "companies"], // scope query to datasets: people and companies
+    10, // set page size to 10
+    cb
+);
+Log("Number of items found: " + queryResult)
+```
+
+output:
+```json
+{
+    "StartURI":"ns0:company",
+    "PredicateURI":"ns1:worksfor",
+    "RelatedEntity":{
+        "id": "ns0:bob",
+        ...
+    }
+}
+Number of items traversed in database: 10
+```
+
+Note that in the above example, our callback was called only once. That
+is because the callback returned `false` as return value after it processed the
+first item in the result batch. If you want to consume the complete
+query result, then the callback must return `true` for every batch.
+
+The return value of the `PagedQuery` function is the total number of items
+emitted to the callback function.
 
 #### GetProperty
 
