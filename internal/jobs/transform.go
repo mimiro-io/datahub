@@ -410,56 +410,70 @@ func (javascriptTransform *JavascriptTransform) Query(
 	return results
 }
 
+type PagedQueryParams struct {
+	StartURIs     []string
+	Via           string
+	Inverse       bool
+	Datasets      []string
+	Continuations []*server.RelatedFrom
+}
+
 func (javascriptTransform *JavascriptTransform) PagedQuery(
-	startingEntities []string,
-	predicate string,
-	inverse bool,
-	datasets []string,
+	query PagedQueryParams,
 	pageSize int,
 	forEach func(result []server.RelatedEntityResult) bool,
-) int {
-	cnt := 0
+) []*server.RelatedFrom {
+	if forEach == nil {
+		javascriptTransform.Logger.Warnf("error in PagedQuery: callback is nil")
+		return nil
+	}
 	var conts []*server.RelatedFrom
+	var err error
 	for {
-		ts := time.Now()
-		var results server.RelatedEntitiesQueryResult
-		var err error
 		if conts == nil {
-			results, err = javascriptTransform.Store.GetManyRelatedEntitiesBatch(
-				startingEntities,
-				predicate,
-				inverse,
-				datasets,
-				pageSize,
-			)
-		} else {
-			results, err = javascriptTransform.Store.GetManyRelatedEntitiesAtTime(conts, pageSize)
+			if len(query.Continuations) == 0 {
+				conts, err = javascriptTransform.Store.ToRelatedFrom(
+					query.StartURIs,
+					query.Via,
+					query.Inverse,
+					query.Datasets,
+					time.Now().UnixNano(),
+				)
+				if err != nil {
+					javascriptTransform.Logger.Warnf("error in PagedQuery: could not interpret parameters (%+v);  %w", query, err)
+					return nil
+				}
+			} else {
+				conts = query.Continuations
+			}
 		}
 
+		ts := time.Now()
+		results, err := javascriptTransform.Store.GetManyRelatedEntitiesAtTime(conts, pageSize)
 		_ = javascriptTransform.statsDClient.Timing(
 			"transform.Query.time", time.Since(ts), javascriptTransform.statsDTags, 1)
 
 		if err != nil {
 			javascriptTransform.Logger.Warnf("error in queryForEach %w", err)
-			return 0
+			return nil
 		}
-		for _, r := range results {
-			if len(r.Relations) > 0 {
-				// if callback returns false, it tells us to stop iterating
-				cbContinue := forEach(r.Relations)
-				if !cbContinue {
-					return cnt
-				}
-				cnt = cnt + len(r.Relations)
-			} else {
-				return cnt
+		if len(results.Relations) > 0 {
+			// if callback returns false, it tells us to stop iterating
+			cbContinue := forEach(results.Relations)
+			if !cbContinue {
+				//processed := results.Cont[:i+1]
+				//unprocessed := conts[i+1:]
+				//incompleteConts := append(processed, unprocessed...)
+				//return incompleteConts
+				return results.Cont
 			}
-
+		} else {
+			return results.Cont
 		}
-		if len(results.Cont()) <= 0 {
-			return cnt
+		if len(results.Cont) <= 0 {
+			return nil
 		}
-		conts = results.Cont()
+		conts = results.Cont
 	}
 }
 

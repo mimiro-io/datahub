@@ -26,7 +26,6 @@ The data hub cli `mim` is written in Go and compiled into a single binary. Downl
 
 The MIMIRO data hub implements the [Universal Data API specification (UDA)](https://open.mimiro.io/specifications). The MIMIRO data hub extends the API in the UDA specification with APIs for queries, jobs and transformations.
 
-
 ## Accessing and Managing the MIMIRO Data Hub
 
 All access to a data hub is via the [REST API](https://api.mimiro.io/api). This can be accessed either via the `mim` or via code and http requests. `cURL` can also be used to access the API.
@@ -53,12 +52,10 @@ The JSON data format, along with some special keys, is used when serialising an 
 
 ```json
 {
-    "id" : "a uri identifier",
-    "deleted" : "flag indicating if the entity is deleted",
-    "props" : {
-    },
-    "refs" : {
-    }
+    "id": "a uri identifier",
+    "deleted": "flag indicating if the entity is deleted",
+    "props": {},
+    "refs": {}
 }
 ```
 
@@ -66,16 +63,14 @@ The following is an example entity:
 
 ```json
 {
-    "id" : "http://data.mimiro.io/people/homer",
-    "deleted" : "false",
-    "props" : {
-        "http://data.mimiro.io/schema/person/fullname" : "homer simpson"
+    "id": "http://data.mimiro.io/people/homer",
+    "deleted": "false",
+    "props": {
+        "http://data.mimiro.io/schema/person/fullname": "homer simpson"
     },
-    "refs" : {
-        "http://data.mimiro.io/schema/person/worksfor" :
-                            "http://data.mimiro.io/companies/mimiro",
-        "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" :
-                            "http://data.mimiro.io/schema/person"
+    "refs": {
+        "http://data.mimiro.io/schema/person/worksfor": "http://data.mimiro.io/companies/mimiro",
+        "http://www.w3.org/1999/02/22-rdf-syntax-ns#type": "http://data.mimiro.io/schema/person"
     }
 }
 ```
@@ -85,25 +80,25 @@ Note the use of URIs for property names and entity identifiers. Entities are oft
 ```json
 [
     {
-        "id" : "@context",
-        "namespaces" : {
-            "schema" : "http://data.mimiro.io/schema/",
-            "rdf" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-            "person" : "http://data.mimiro.io/schema/person/",
-            "people" : "http://data.mimiro.io/people/",
-            "companies" : "http://data.mimiro.io/companies/"
+        "id": "@context",
+        "namespaces": {
+            "schema": "http://data.mimiro.io/schema/",
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "person": "http://data.mimiro.io/schema/person/",
+            "people": "http://data.mimiro.io/people/",
+            "companies": "http://data.mimiro.io/companies/"
         }
     },
 
     {
-        "id" : "people:homer",
-        "deleted" : "false",
-        "props" : {
-            "person:fullname" : "Homer Simpson"
+        "id": "people:homer",
+        "deleted": "false",
+        "props": {
+            "person:fullname": "Homer Simpson"
         },
-        "refs" : {
-            "person:worksfor" : "companies:mimiro",
-            "rdf:type" : "schema:person"
+        "refs": {
+            "person:worksfor": "companies:mimiro",
+            "rdf:type": "schema:person"
         }
     }
 ]
@@ -144,24 +139,24 @@ The contents of people.json is as follows:
 ```json
 [
     {
-        "id" : "@context",
-        "namespaces" : {
-            "schema" : "http://data.mimiro.io/schema/",
-            "rdf" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-            "person" : "http://data.mimiro.io/schema/person/",
-            "people" : "http://data.mimiro.io/people/",
-            "companies" : "http://data.mimiro.io/companies/"
+        "id": "@context",
+        "namespaces": {
+            "schema": "http://data.mimiro.io/schema/",
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "person": "http://data.mimiro.io/schema/person/",
+            "people": "http://data.mimiro.io/people/",
+            "companies": "http://data.mimiro.io/companies/"
         }
     },
 
     {
-        "id" : "people:homer",
-        "props" : {
-            "person:fullname" : "Homer Simpson"
+        "id": "people:homer",
+        "props": {
+            "person:fullname": "Homer Simpson"
         },
-        "refs" : {
-            "person:worksfor" : "companies:mimiro",
-            "rdf:type" : "schema:person"
+        "refs": {
+            "person:worksfor": "companies:mimiro",
+            "rdf:type": "schema:person"
         }
     }
 ]
@@ -185,7 +180,7 @@ To get the changes from a dataset:
 > mim dataset changes test.people
 ```
 
-By default the format of the returned JSON is 'raw' but by adding ```--pretty```-flag you can have it more human readable.
+By default the format of the returned JSON is 'raw' but by adding `--pretty`-flag you can have it more human readable.
 
 Entities are returned as an array of JSON objects and can also contain a continuation token. A continuation token can be used in subsequent requests.
 
@@ -211,7 +206,7 @@ can be added to the dataset's entity in `core.Dataset`.
 
 In this example, we add two namespaces as `publicNamespaces` to dataset `namespaces.Test`.
 
-``` json
+```json
 > cat update.json
 [
   {
@@ -257,6 +252,7 @@ ns0 | http://data.mimiro.io/core/dataset/
 ns1 | http://data.mimiro.io/core/
 
 ```
+
 ## Proxy Datasets
 
 If data hub is deployed in an infrastructure setting with both internal and external services connected to it, data hub
@@ -276,16 +272,18 @@ be referenced if the remote dataset requires authentication. See (security provi
 SUCCESS  Dataset has been created
 ```
 
-
 ## Query
 
 The query model is very simple, for now. It is possible to fetch a single entity via its URI, and it is possible to traverse from one, or many entities to related entities via incoming or outgoing references.
 
 Examles are given both using the `mim` CLI
+
 ```
 mim query ...
 ```
+
 and using the HTTP API by posting a query payload to
+
 ```
 POST /query
 ```
@@ -294,11 +292,11 @@ POST /query
 
 To lookup a single entity:
 
-* using `mim`, the datahub CLI
+-   using `mim`, the datahub CLI
     ```shell
     > mim query --id="http://data.mimiro.io/people/homer"
     ```
-* using the HTTP API, with the following POST body
+-   using the HTTP API, with the following POST body
     ```json
     {
         "entityId": "http://data.mimiro.io/people/homer"
@@ -309,34 +307,34 @@ To lookup a single entity:
 
 To fetch related entities for a given entity:
 
-* using `mim`, the datahub CLI
+-   using `mim`, the datahub CLI
+
     ```shell
     > mim query --entity="http://data.mimiro.io/people/homer" \
                 --via="http://data.mimiro.io/schema/person/"
     ```
 
-* using the HTTP API, with the following POST body
+-   using the HTTP API, with the following POST body
     ```json
     {
-        "startingEntities": [ "http://data.mimiro.io/people/homer" ],
+        "startingEntities": ["http://data.mimiro.io/people/homer"],
         "predicate": "http://data.mimiro.io/schema/person/"
     }
     ```
 
-
 and to get entities referencing a given entity, e.g. all entities of type person.
 
-* using `mim`, the datahub CLI
+-   using `mim`, the datahub CLI
     ```shell
     > mim query --entity="http://data.mimiro.io/schema/person" \
                 --via="http://www.w3.org/1999/02/22-rdf-syntax-ns#type" \
                 --inverse=true
     ```
-* using the HTTP API, with the following POST body
+-   using the HTTP API, with the following POST body
 
     ```json
     {
-        "startingEntities": [ "http://data.mimiro.io/schema/person" ],
+        "startingEntities": ["http://data.mimiro.io/schema/person"],
         "predicate": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
         "inverse": true
     }
@@ -351,24 +349,25 @@ parameter in `mim query`, please consult `mim query --help` for details.
 {
     "entityId": "http://some.id",
     "startingEntities": ["http://one.id", "http://another.id"],
-    "predicate":  "*",
+    "predicate": "*",
     "inverse": false,
     "datasets": ["people", "workplaces"],
     "details": false,
-    "limit":  100,
+    "limit": 100,
     "continuations": []
 }
 ```
+
 | parameter        | default value                             | description                                                                                                             |
-|------------------|-------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|
+| ---------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | entityId         | empty                                     | if set, all other parameters except for datasets are ignored. Ask to lookup one entity                                  |
 | startingEntities | []                                        | if no entityId and no continuations given, start query from these entities                                              |
-| predicate        | none,required when using startingEntities | use '*' to follow all relations, else only follow this relation                                                         |
+| predicate        | none,required when using startingEntities | use '\*' to follow all relations, else only follow this relation                                                        |
 | inverse          | false                                     | specify query direction, only relevant when using startingEntities                                                      |
-| datasets         | [] | a filter. if other value than empty list, only consider relations belonging to these datasets                           |
-| details          | false | only reledant when using entityId. if true, augment returned entity with information about datasets and change history  |
-| limit            | 100 | limit number of query results. if set explicitly, response may contain contiuation token list                           |
-| continuations    | [] | value found in a previous query result page. can - together with limit - be used to retrieve next page of query results |                                                                                                                    |
+| datasets         | []                                        | a filter. if other value than empty list, only consider relations belonging to these datasets                           |
+| details          | false                                     | only reledant when using entityId. if true, augment returned entity with information about datasets and change history  |
+| limit            | 100                                       | limit number of query results. if set explicitly, response may contain contiuation token list                           |
+| continuations    | []                                        | value found in a previous query result page. can - together with limit - be used to retrieve next page of query results |
 
 ### Incoming or outgoing query
 
@@ -438,19 +437,19 @@ As well as entity lookup and traversal, it is possible to run a javascript query
 
 To execute a javascript query it must be sent to the 'query' endpoint of the data hub. The query is sent as a POST request with the query as the body of the request.
 
-````
+```
 POST /query
-````
+```
 
 The query requets must be formatted as a JSON object with the following properties:
 
-- `query`: the javascript query to executed encoded as base64
+-   `query`: the javascript query to executed encoded as base64
 
 An example is shown below:
 
-``` json
+```json
 {
-  "query": "base64 encoded javascript query"
+    "query": "base64 encoded javascript query"
 }
 ```
 
@@ -460,8 +459,8 @@ The query itself is a single function called ´do_query´.
 
 The query function has access to all the functions that a transform has access to as well as the following functions:
 
-- `GetDatasetChanges(name, since, limit)` - returns a list of changes to the dataset since value. The limit parameter is optional and can be used to limit the number of changes returned. The changes object returned has the following properties, NextToken, Entities, and Context.
-- `WriteQueryResult(any)` - writes the object to the output stream. The object must be a valid json object.
+-   `GetDatasetChanges(name, since, limit)` - returns a list of changes to the dataset since value. The limit parameter is optional and can be used to limit the number of changes returned. The changes object returned has the following properties, NextToken, Entities, and Context.
+-   `WriteQueryResult(any)` - writes the object to the output stream. The object must be a valid json object.
 
 An example query that iterates the changes in a dataset and does some counting before writing the result to the output stream is shown below:
 
@@ -474,7 +473,7 @@ function do_query() {
         count++;
     }
 
-    let result = { "count": count };
+    let result = { count: count };
     WriteQueryResult(result);
 }
 ```
@@ -501,18 +500,20 @@ Job definitions are described using JSON and can be uploaded to the data hub usi
 
 ```json
 {
-    "id" : "a unique job definition id",
-    "triggers": [ {
+    "id": "a unique job definition id",
+    "triggers": [
+        {
             "triggerType": "either 'cron' or 'onchange'",
             "jobType": "either 'incremental' or 'fullsync'",
             "schedule": "a cron expression defining when to execute the defined jobType. Only set when triggerType=cron",
             "monitoredDataset": "name of dataset to monitor, used with triggerType=onchange"
-    } ],
-    "source" : {
-        "Type" : "Name of source type - see below for list"
+        }
+    ],
+    "source": {
+        "Type": "Name of source type - see below for list"
     },
-    "sink" : {
-        "Type" : "Name of sink type - see below for list"
+    "sink": {
+        "Type": "Name of sink type - see below for list"
     },
     "type": "job"
 }
@@ -533,7 +534,7 @@ It can be configured as follows:
     "source": {
         "Type": "HttpDatasetSource",
         "Url": "full url of change endpoint of the datalayer to read from",
-        "TokenProvider" : "optional: name of token provider that allows access"
+        "TokenProvider": "optional: name of token provider that allows access"
     }
 }
 ```
@@ -551,6 +552,7 @@ The dataset source reads entities from a dataset in the data hub.
     }
 }
 ```
+
 The `LatestOnly` flag can be set to limit the number of entities emitted to only the latest version of each entity.
 The default is that all changes of each entity are emitted, so that the whole dataset can be transformed and/or copied without loss of history.
 
@@ -563,24 +565,29 @@ All configured datasets are read sequentially, as if their contents were concate
 {
     "source": {
         "Type": "UnionDatasetSource",
-        "DatasetSources": [{
-            "Type": "DatasetSource",
-            "Name": "name of first dataset to read from",
-            "LatestOnly": "true or false, indicating whether to emit all changes or only the latest change of each entity"
-        },{
-            "Type": "DatasetSource",
-            "Name": "name of next dataset to read from",
-            "LatestOnly": "true or false, indicating whether to emit all changes or only the latest change of each entity"
-        }]
+        "DatasetSources": [
+            {
+                "Type": "DatasetSource",
+                "Name": "name of first dataset to read from",
+                "LatestOnly": "true or false, indicating whether to emit all changes or only the latest change of each entity"
+            },
+            {
+                "Type": "DatasetSource",
+                "Name": "name of next dataset to read from",
+                "LatestOnly": "true or false, indicating whether to emit all changes or only the latest change of each entity"
+            }
+        ]
     }
 }
 ```
+
 `DatasetSources` is a list of `DatasetSource` configurations. Other source types
 are not supported.
 
 Also note that changing the order or adding new `DatasetSource`
 entries to the list makes previously produced continuation tokens invalid. The job
 should be reset in that case.
+
 #### Multi Source
 
 This source has one main dataset which works like a `DatasetSource`. In addition, a list of `dependency` datasets can be configured.
@@ -629,7 +636,7 @@ The following sink types are used to write data either to a dataset or to a remo
     "sink": {
         "Type": "HttpDatasetSink",
         "Url": "full url of the entities endpoint to write to",
-        "TokenProvider" : "name of token provider to allow access"
+        "TokenProvider": "name of token provider to allow access"
     }
 }
 ```
@@ -656,19 +663,21 @@ An example job definition that copies data between two datasets and runs on a cr
 
 ```json
 {
-    "id" : "sync-datasetsource-to-datasetsink",
-    "triggers": [ {
+    "id": "sync-datasetsource-to-datasetsink",
+    "triggers": [
+        {
             "triggerType": "cron",
             "jobType": "incremental",
             "schedule": "@every 2s"
-    } ],
-    "source" : {
-        "Type" : "DatasetSource",
-        "Name" : "Products"
+        }
+    ],
+    "source": {
+        "Type": "DatasetSource",
+        "Name": "Products"
     },
-    "sink" : {
-        "Type" : "DatasetSink",
-        "Name" : "NewProducts"
+    "sink": {
+        "Type": "DatasetSink",
+        "Name": "NewProducts"
     }
 }
 ```
@@ -677,19 +686,21 @@ The following example shows a job definition that reads from a remote datalayer 
 
 ```json
 {
-    "id" : "sync-remote-datasetsource-to-dataset",
-    "triggers": [ {
-        "triggerType": "cron",
-        "jobType": "incremental",
-        "schedule": "@every 2s"
-    } ],
-    "source" : {
-        "Type" : "HttpDatasetSource",
-        "Url" : "http://localhost:7777/datasets/products/changes"
+    "id": "sync-remote-datasetsource-to-dataset",
+    "triggers": [
+        {
+            "triggerType": "cron",
+            "jobType": "incremental",
+            "schedule": "@every 2s"
+        }
+    ],
+    "source": {
+        "Type": "HttpDatasetSource",
+        "Url": "http://localhost:7777/datasets/products/changes"
     },
-    "sink" : {
-        "Type" : "DatasetSink",
-        "Name" : "Products"
+    "sink": {
+        "Type": "DatasetSink",
+        "Name": "Products"
     }
 }
 ```
@@ -698,19 +709,21 @@ The following example shows how to configure a job to send data from a dataset t
 
 ```json
 {
-    "id" : "sync-datasetssource-to-httpdatasetsink",
-    "triggers": [ {
-        "triggerType": "cron",
-        "jobType": "incremental",
-        "schedule": "@every 2s"
-    } ],
-    "source" : {
-        "Type" : "DatasetSource",
-        "Name" : "Products"
+    "id": "sync-datasetssource-to-httpdatasetsink",
+    "triggers": [
+        {
+            "triggerType": "cron",
+            "jobType": "incremental",
+            "schedule": "@every 2s"
+        }
+    ],
+    "source": {
+        "Type": "DatasetSource",
+        "Name": "Products"
     },
-    "sink" : {
-        "Type" : "HttpDatasetSink",
-        "Url" : "http://localhost:7777/datasets/products/entities"
+    "sink": {
+        "Type": "HttpDatasetSink",
+        "Url": "http://localhost:7777/datasets/products/entities"
     }
 }
 ```
@@ -720,20 +733,22 @@ Example for paused job:
 
 ```json
 {
-    "id" : "sync-remote-datasetsource-to-dataset",
-    "triggers": [ {
-        "triggerType": "cron",
-        "jobType": "incremental",
-        "schedule": "@every 2s"
-    } ],
-    "paused" : true,
-    "source" : {
-        "Type" : "DatasetSource",
-        "Name" : "Products"
+    "id": "sync-remote-datasetsource-to-dataset",
+    "triggers": [
+        {
+            "triggerType": "cron",
+            "jobType": "incremental",
+            "schedule": "@every 2s"
+        }
+    ],
+    "paused": true,
+    "source": {
+        "Type": "DatasetSource",
+        "Name": "Products"
     },
-    "sink" : {
-        "Type" : "DatasetSink",
-        "Name" : "NewProducts"
+    "sink": {
+        "Type": "DatasetSink",
+        "Name": "NewProducts"
     }
 }
 ```
@@ -742,19 +757,21 @@ To run a job that sends a full sync (snapshot) to a remote datalayer):
 
 ```json
 {
-    "id" : "sync-dataset-to-remote-dataset-full-sync",
-    "triggers": [ {
-        "triggerType": "cron",
-        "jobType": "fullsync",
-        "schedule": "@every 24h"
-    } ],
-    "source" : {
-        "Type" : "DatasetSource",
-        "Name" : "Products"
+    "id": "sync-dataset-to-remote-dataset-full-sync",
+    "triggers": [
+        {
+            "triggerType": "cron",
+            "jobType": "fullsync",
+            "schedule": "@every 24h"
+        }
+    ],
+    "source": {
+        "Type": "DatasetSource",
+        "Name": "Products"
     },
-    "sink" : {
-        "Type" : "HttpDatasetSink",
-        "Url" : "http://server:8000/datasets/products/entities"
+    "sink": {
+        "Type": "HttpDatasetSink",
+        "Url": "http://server:8000/datasets/products/entities"
     }
 }
 ```
@@ -832,6 +849,7 @@ To get the status of a job:
 ```shell
 mim jobs status simple-job
 ```
+
 #### Getting latest run info from a Job
 
 To get information on latest run of a Job:
@@ -844,9 +862,9 @@ mim jobs history simple-job
 
 The data hub has two main modes of update:
 
-1) Batches of entities are loaded into a single dataset, either via the API or using a job and loading it from another dataset or external data layer. Data updated in this way is guaranteed to have been committed.
+1. Batches of entities are loaded into a single dataset, either via the API or using a job and loading it from another dataset or external data layer. Data updated in this way is guaranteed to have been committed.
 
-2) Using transactions to make a single update to several datasets in a single transaction. Unlike the above sometimes it is necessary to write into several datasets at once in a transactional fashion.
+2. Using transactions to make a single update to several datasets in a single transaction. Unlike the above sometimes it is necessary to write into several datasets at once in a transactional fashion.
 
 Transactions can be executed either via the data hub API, or as part of a javascript transform.
 
@@ -862,24 +880,24 @@ The following example shows a transaction serialised as JSON.
 
 ```json
 {
-  "@context" : {
-    "namespaces" : {
-        "schema" : "http://data.mimiro.io/schema/",
-        "rdf" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-        "person" : "http://data.mimiro.io/schema/person/",
-        "people" : "http://data.mimiro.io/people/",
-        "companies" : "http://data.mimiro.io/companies/"
-    }
-  },
-  "people" : [
+    "@context": {
+        "namespaces": {
+            "schema": "http://data.mimiro.io/schema/",
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "person": "http://data.mimiro.io/schema/person/",
+            "people": "http://data.mimiro.io/people/",
+            "companies": "http://data.mimiro.io/companies/"
+        }
+    },
+    "people": [
         {
-            "id" : "people:homer",
-            "props" : {
-                "person:fullname" : "Homer Simpson"
+            "id": "people:homer",
+            "props": {
+                "person:fullname": "Homer Simpson"
             },
-            "refs" : {
-                "person:worksfor" : "companies:mimiro",
-                "rdf:type" : "schema:person"
+            "refs": {
+                "person:worksfor": "companies:mimiro",
+                "rdf:type": "schema:person"
             }
         }
     ]
@@ -900,28 +918,28 @@ The following example shows how to configure a job to use an HTTP transform:
 
 ```json
 {
-    "title" : "test-http-transform",
-    "id" : "sync-datasetsource-to-datasetsink-with-js",
-    "runOnce" : true,
-    "source" : {
-        "Type" : "DatasetSource",
-        "Name" : "Products"
+    "title": "test-http-transform",
+    "id": "sync-datasetsource-to-datasetsink-with-js",
+    "runOnce": true,
+    "source": {
+        "Type": "DatasetSource",
+        "Name": "Products"
     },
     "triggers": [
-    {
-      "triggerType": "onchange",
-      "jobType": "incremental",
-      "monitoredDataset": "Products"
-    }
-  ],
+        {
+            "triggerType": "onchange",
+            "jobType": "incremental",
+            "monitoredDataset": "Products"
+        }
+    ],
     "transform": {
         "Url": "http://localhost:8080/path-to/transform/",
         "Type": "HttpTransform",
         "TimeOut": 0
-  },
-    "sink" : {
-        "Type" : "DatasetSink",
-        "Name" : "NewProducts"
+    },
+    "sink": {
+        "Type": "DatasetSink",
+        "Name": "NewProducts"
     }
 }
 ```
@@ -935,6 +953,7 @@ Internal transforms are written in Javascript and executed in a sandbox.
 Note: The version of Javascript supported is ES6. Please check for the restrictions regarding this version. The examples in this documentation were written when ES5.1 was the newest version supported, therefore there are no examples with `const` or `let`.
 
 #### There is now support for writing transforms in TypeScript
+
 Link provideded below to tutorial on how to set up your environment to write transforms in TypeScript.
 
 [Open Mimiro TypeScript post](https://open.mimiro.io/software/typescript/)
@@ -947,28 +966,28 @@ Example Job Definition:
 
 ```json
 {
-    "title" : "test-internal-transform",
-    "id" : "sync-datasetsource-to-datasetsink-with-js",
-    "runOnce" : true,
+    "title": "test-internal-transform",
+    "id": "sync-datasetsource-to-datasetsink-with-js",
+    "runOnce": true,
     "triggers": [
-    {
-      "triggerType": "onchange",
-      "jobType": "incremental",
-      "monitoredDataset": "Products"
-    }
+        {
+            "triggerType": "onchange",
+            "jobType": "incremental",
+            "monitoredDataset": "Products"
+        }
     ],
-    "source" : {
-        "Type" : "DatasetSource",
-        "Name" : "Products"
+    "source": {
+        "Type": "DatasetSource",
+        "Name": "Products"
     },
-    "transform" : {
-        "Type" : "JavascriptTransform",
-        "Parallelism" : 10,
-        "Code" : "ZnVuY3Rpb24gdHJhbnNmb3JtX2VudGl0aWVzKGVudGl0aWVzKSB7CiAgIHZhciBzdGFydHMgPSBbXTsKICAgdmFyIHJlcyA9IFF1ZXJ5KHN0YXJ0cywgInRlc3QiLCBmYWxzZSk7CiAgIHJldHVybiBlbnRpdGllczsKfQo="
+    "transform": {
+        "Type": "JavascriptTransform",
+        "Parallelism": 10,
+        "Code": "ZnVuY3Rpb24gdHJhbnNmb3JtX2VudGl0aWVzKGVudGl0aWVzKSB7CiAgIHZhciBzdGFydHMgPSBbXTsKICAgdmFyIHJlcyA9IFF1ZXJ5KHN0YXJ0cywgInRlc3QiLCBmYWxzZSk7CiAgIHJldHVybiBlbnRpdGllczsKfQo="
     },
-    "sink" : {
-        "Type" : "DatasetSink",
-        "Name" : "NewProducts"
+    "sink": {
+        "Type": "DatasetSink",
+        "Name": "NewProducts"
     }
 }
 ```
@@ -977,7 +996,7 @@ The unencoded Javascript must contain a function called `transform_entities` tha
 
 ```javascript
 function transform_entities(entities) {
-   return entities;
+    return entities;
 }
 ```
 
@@ -993,8 +1012,8 @@ Given an entity:
 
 ```javascript
 e = {
-    "id" : "ns0:bob"
-}
+    id: "ns0:bob",
+};
 
 id = GetId(e);
 ```
@@ -1013,10 +1032,10 @@ SetId(e, PrefixField("ns0", 42));
 
 Log("Id is now: " + GetId(e));
 ```
+
 ```text
  INFO  - Id is now: ns0:42
 ```
-
 
 #### GetNamespacePrefix
 
@@ -1027,7 +1046,9 @@ URIs are often represented as CURIEs. CURIEs are formed of a prefix part and loc
 The function is used as follows:
 
 ```javascript
-var personTypePrefix = GetNamespacePrefix("http://data.mimiro.io/schema/people/")
+var personTypePrefix = GetNamespacePrefix(
+    "http://data.mimiro.io/schema/people/"
+);
 ```
 
 #### AssertNamespacePrefix
@@ -1035,7 +1056,9 @@ var personTypePrefix = GetNamespacePrefix("http://data.mimiro.io/schema/people/"
 `AssertNamespacePrefix` is used to create or return a prefix. This should be used in transforms that require a new namespace. It is used as follows:
 
 ```javascript
-var newTypePrefix = AssertNamespacePrefix("http://data.mimiro.io/schema/company/")
+var newTypePrefix = AssertNamespacePrefix(
+    "http://data.mimiro.io/schema/company/"
+);
 ```
 
 #### Timing
@@ -1046,9 +1069,9 @@ function registers a start-timestamp for the given metric name. When the send pa
 since start as timing value to statsd.
 
 ```javascript
-Timing("hello")  //register start for metric "hello"
+Timing("hello"); //register start for metric "hello"
 // ... do something
-Timing("hello", true) // send duration since start for metric "hello"
+Timing("hello", true); // send duration since start for metric "hello"
 ```
 
 #### Log
@@ -1059,8 +1082,10 @@ Any value can be passed to `Log` and it will print it to the console. This shoul
 var someval = "hello";
 Log(someval);
 ```
+
 Without defining the log-level the console log will default to loglevel `INFO`
 Supported log-levels are:
+
 ```javascript
 Log(someval, "INFO");
 Log(someval, "WARNING");
@@ -1082,7 +1107,7 @@ var p2 = FindById("http://data.mimiro.io/people/bob");
 #### Query
 
 The Query function is used to lookup related entities.
-It accepts an array of entity ids (CURIEs or full URIs), a reference to traverse,
+It accepts an array of entity ids (CURIEs or full URIs), a relationship to traverse,
 a flag indicating if the traversal is incoming or outgoing,
 and an array of dataset names to limit the query scope if desired.
 
@@ -1104,15 +1129,15 @@ _Note: if an entity has multiple related entities then each appear in its own ro
 ]
 ```
 
-
 ```javascript
 // find all the companies bob works for, outgoing query
 var queryResult = Query(["ns0:bob"], "ns1:worksfor", false, []);
 
 // assuming there is a company then get that company
 var company = queryResult[0][2];
-Log(company)
+Log(company);
 ```
+
 ```text
  INFO  - [company]
 ```
@@ -1159,64 +1184,120 @@ Log(people);
 
 #### PagedQuery
 
-`PagedQuery` is similar to `Query` in that it takes a list of starting URIs, a reference to follow (predicate), an inverse flag and
-a list of datasets to scope the query.
+`PagedQuery` is similar to `Query` in that it takes a list of starting URIs, a relationship to traverse, an inverse flag and
+a list of datasets to scope the query. These parameters are provided using a parameter object. The format is
+
+```javascript
+{
+    StartURIs: [string], // list of entity IDs as query start point(s) - REQUIRED
+    Via: string,         // relationship to follow. "*" means "all" - REQUIRED
+    Inverse: boolean,    // inverse flag telling the query whether to follow outgoing or incoming relations - OPTIONAL, default false
+    Datasets: [string],   // list of dataset name to limit scope of query - OPTIONAL, default [] (no scope)
+    Continuations: [tokenValue] // continue a previously started query - OPTIONAL, overrides all other attributes when set
+}
+```
 
 In addition to those parameters, `PagedQuery` also requires a `pageSize` parameter and a callback function.
 
 Under the hood, `PagedQuery` pages through the query result in batches,
 and emits those batches to the callback function.
-This is more memory efficient than loading complete query results in one operation.
+This is more memory efficient than loading complete query results in one operation for cases with many query results.
 
 ```javascript
-// the callback function may be called many times,
-// receiving arrays of query result items
-var cb = function(resultPage) {
+// PagedQuery may be call the callback many times,
+// emitting arrays of query result items
+var cb = function (resultPage) {
     for (resultItem of resultPage) {
         Log(resultItem);
         // if the callback returns false ,PagedQuery will stop calling it.
         // Return true if you want to process more pages
         return false;
     }
-}
-var queryResult = PagedQuery(
-    ["ns0:company"], // list of starting URIs
-    "ns1:worksfor",  // reference to follow, can be "*" to follow all
-    true, // inverse flag
-    ["people", "companies"], // scope query to datasets: people and companies
+};
+PagedQuery(
+    {
+        StartURIs: ["ns0:company"], // list of starting URIs
+        Via: "ns1:worksfor", // relationship to follow, can be "*" to follow all
+        Inverse: true, // inverse flag
+        Datasets: ["people", "companies"], // scope query to datasets: people and companies
+    },
     10, // set page size to 10
     cb
 );
-Log("Number of items found: " + queryResult)
 ```
 
 output:
+
 ```json
 {
-    "StartURI":"ns0:company",
-    "PredicateURI":"ns1:worksfor",
-    "RelatedEntity":{
+    "StartURI": "ns0:company",
+    "PredicateURI": "ns1:worksfor",
+    "RelatedEntity": {
         "id": "ns0:bob",
-        ...
+        "props": { "active": true },
+        "refs": {}
     }
 }
-Number of items traversed in database: 10
 ```
 
-Note that in the above example, our callback was called only once. That
-is because the callback returned `false` as return value after it processed the
-first item in the result batch. If you want to consume the complete
-query result, then the callback must return `true` for every batch.
+Note that in the above example, our callback was called only once. This is because the callback returned `false`
+after it processed the first item in the result batch.
 
-The return value of the `PagedQuery` function is the total number of items
-emitted to the callback function.
+If you want to consume the complete query result, then the callback must return `true` for every batch.
+
+#### Imperative page consumption with `PagedQuery`
+
+If the logic in a transform script calls for it, a query result can be consumed using multiple
+calls to `PagedQuery`.
+
+The return value of the `PagedQuery` function is a continuation value, which can be used as input for subsequent
+calls to `PagedQuery`, in order to resume query processing.
+
+When `Continuations` is provided in `PagedQuery`'s object parameter, then it takes precedence over the other attributes in the same object.
+
+In the following example we use query continuations to go through a query result with different batch sizes.
+
+```javascript
+const nsPref = AssertNamespacePrefix("http://example.io/employments/");
+
+let firstInactiveEmployee = null;
+
+// page processing function.
+const processPage = resultPage => resultPage.forEach(resultItem => {
+        let relatedEntity = resultPage.RelatedEntity;
+        if (GetProperty(relatedEntity, nsPref, "active") == false) {
+            firstInactiveEmployee = relatedEntity;
+            return;
+        }
+    })
+
+// first only pull 10 results from database, in many cases we are lucky and quickly find a match here
+const continuation = PagedQuery({StartURIs: [nsPref+":company"]}, 10, resultPage => {
+    processPage(resultPage);
+    return false;
+}}
+
+// if we did not find a match in the first 10, proceed with larger page size
+if (firstInactiveEmployee === null) {
+    PagedQuery({Continuations: continuation}, 10000, resultPage => {
+        processPage(resultPage);
+        if (firstInactiveEmployee !== null) {
+            return false;
+        }
+        return true;
+    }}
+}
+
+```
 
 #### GetProperty
 
 To get the value of a named property on an entity use the GetProperty function.
 
 ```javascript
-var personTypePrefix = GetNamespacePrefix("http://data.mimiro.io/schema/person/");
+var personTypePrefix = GetNamespacePrefix(
+    "http://data.mimiro.io/schema/person/"
+);
 
 personName = GetProperty(person, personTypePrefix, "name");
 ```
@@ -1230,19 +1311,20 @@ var e = NewEntity();
 var value = GetProperty(e, "ns0", "field1", "my default value");
 
 Log(value);
-
 ```
+
 ```text
  INFO  - my default value
 ```
-
 
 #### SetProperty
 
 To set the value of a named property on an entity use the SetProperty function.
 
 ```javascript
-var personTypePrefix = GetNamespacePrefix("http://data.mimiro.io/schema/person/");
+var personTypePrefix = GetNamespacePrefix(
+    "http://data.mimiro.io/schema/person/"
+);
 
 SetProperty(person, personTypePrefix, "name", "bobby");
 ```
@@ -1257,13 +1339,14 @@ missing or null, this function returns undefined.
 Example:
 
 ```javascript
-var e = NewEntity()
+var e = NewEntity();
 
 SetDeleted(e, true);
 var deleted = GetDeleted(e);
 
 Log("Deleted: " + ToString(deleted));
 ```
+
 ```text
  INFO  - Deleted: true
 ```
@@ -1272,6 +1355,7 @@ Log("Deleted: " + ToString(deleted));
 
 `RenameProperty` is used to rename a property and/or prefix.:
 example data:
+
 ```json
 {
     "id": "@context",
@@ -1305,7 +1389,9 @@ function transform_entities(entities) {
     return results;
 }
 ```
+
 The entity will now look like this:
+
 ```json
 {
     "id": "@context",
@@ -1326,17 +1412,24 @@ The entity will now look like this:
 #### ToString
 
 `ToString` is used to convert values to the string representation of the value. This should be used in transforms that require a conversion from i.e integer to string:
+
 ```javascript
 var myStringValue = ToString(myIntegerValue);
 ```
+
 Can also be used as with `GetProperty()`:
+
 ```javascript
-var myStringValue = ToString(GetProperty(originalEntity, originalPrefix,"OriginalIntegerValue"));
+var myStringValue = ToString(
+    GetProperty(originalEntity, originalPrefix, "OriginalIntegerValue")
+);
 ```
 
 #### RemoveProperty
+
 `RemoveProperty` is used to remove a property from the entity.
 example data:
+
 ```json
 {
     "id": "@context",
@@ -1352,6 +1445,7 @@ example data:
     }
 }
 ```
+
 ```javascript
 var hrperson = GetNamespacePrefix("http://data.mimiro.io/HR/person/");
 var results = [];
@@ -1366,7 +1460,9 @@ function transform_entities(entities) {
     return results;
 }
 ```
+
 the entity will now look like this:
+
 ```json
 {
     "id": "@context",
@@ -1396,7 +1492,7 @@ function transform_entities(entities) {
     // iterate over all the entities passed into the function
     for (e of entities) {
         // for each existing entity create a new entity object
-        var newEntity = NewEntity()
+        var newEntity = NewEntity();
         newEntity["ID"] = "some new id";
 
         // add the new entity to the array
@@ -1407,6 +1503,7 @@ function transform_entities(entities) {
     return newEntities;
 }
 ```
+
 #### NewEntityFrom
 
 When creating new entities, we need to track if the entity in the upstream dataset is marked as deleted or not. To simplify the process the function `NewEntityFrom` is needed.
@@ -1414,12 +1511,13 @@ Below is an idiomatic use of the `NewEntityFrom`. We should primarily use `NewEn
 This Function takes 4 parameters:
 
 `NewEntityFrom(originalEntity, addType, copyProps, copyRefs)` where addType, copyProps, copyRefs are boolean.
+
 ```javascript
 function transform_entities(entities) {
     var newEntities = [];
 
     for (e of entities) {
-        var newEntity = NewEntityFrom(e, true, false, false)
+        var newEntity = NewEntityFrom(e, true, false, false);
         //this will generate a new entity with the id and deleted flag from the original entity (e).
 
         // for each existing entity check if the entity is deleted
@@ -1436,15 +1534,16 @@ function transform_entities(entities) {
 ```
 
 this will emit an entity with the deleted flag set and type copied:
+
 ```json
 {
-  "id": "ns1:some_id_1",
-  "recorded": 0,
-  "deleted": true,
-  "refs": {
-    "ns1:type": "ns2:MyEntityType"
-  },
-  "props": {}
+    "id": "ns1:some_id_1",
+    "recorded": 0,
+    "deleted": true,
+    "refs": {
+        "ns1:type": "ns2:MyEntityType"
+    },
+    "props": {}
 }
 ```
 
@@ -1453,6 +1552,7 @@ this will emit an entity with the deleted flag set and type copied:
 `AsEntity(value)` can be use to convert entity-shaped properties (sub-entities) into Entity instances, which in turn enables the use of other transform helper functions.
 
 Example usage:
+
 ```
 function transform_entities(entities) {
     var ns = GetNamespacePrefix(...);
@@ -1467,7 +1567,6 @@ function transform_entities(entities) {
     return entities;
 }
 ```
-
 
 #### NewTransaction
 
@@ -1504,6 +1603,7 @@ The following command runs the transform script `transform1.js` on the dataset `
 ```shell
 mim transform test test.people --file transform1.js
 ```
+
 #### Testing a Transform on a given entity
 
 There is also a possibility to test the transform on a known entity in the datahub by running a query and applying the transformation on the returned entity, the command runs the same transform as above but on the entity `http://data.mimiro.io/people/bob`. The data is fetched from the dataset, the script is executed locally, and the output displayed.
@@ -1543,11 +1643,11 @@ The Datahub is fully configured through ENV variables, but does also support loa
 
 #### General
 
-```SERVER_PORT=8080```
+`SERVER_PORT=8080`
 
 The SERVER_PORT setting defines the server http port to use. Default is 8080. Note that the Datahub in no way supports terminating TLS (aka https) connections, and you must put it behind a proxy for https support.
 
-```STORE_LOCATION=./server```
+`STORE_LOCATION=./server`
 
 This is the location of the Badger database files, and will grow to a large size in an active Datahub.
 There are disk considerations you need to consider around this location, and you should follow the directions on the Badger homepage, especially around the GOMAXPROCS=128 setting for troughput.
@@ -1556,16 +1656,15 @@ The faster your disk setup, the faster you can consume data.
 
 If this is empty, then Datahub will attempt to use your $HOME directory, or if that is not present, it will default to /tmp. That may or may not work on Windows.
 
-
-```LOG_LEVEL=INFO```
+`LOG_LEVEL=INFO`
 
 You can tune the LOG_LEVEL of the Datahub. The supported values are DEBUG and INFO.
 
-```DD_AGENT_HOST=```
+`DD_AGENT_HOST=`
 
 The Datahub supports reporting metrics trough a StatsD server. This is turned off if left empty, and you can turn it on by giving it an ip-address and a port combination.
 
-```MAX_COMPACTION_LEVELS```
+`MAX_COMPACTION_LEVELS`
 
 Can be used to override Badger's default 7 LSM levels. When more that 1.1TB disk space usage are exceeded or expected to be exceeded, 8 compaction levels are needed.
 
@@ -1585,54 +1684,54 @@ Typically, either 1, 2 or 3&4 in combination are employed to secure a data hub i
 
 The following environment variables can be set to configure the data hub security.
 
-```NODE_ID=```
+`NODE_ID=`
 
 NODE_ID is used to give a unique identifier to a running data hub instance. It is needed when regstering this data hub instance as a client to other data hubs. It is the users responsibility to assign unique identifiers.
 
-```ADMIN_USERNAME=```
+`ADMIN_USERNAME=`
 
 To boot strap the administration and secure access via client certificates a root admin user is requried. The credentials for this are passed in at start up as environment variables. Depending on the setup these values can come from secrets managers such as SSM. If these values are not set then there is NO amdin login. e.g. "" is not a value admin user or password.
 
-```ADMIN_PASSWORD=```
+`ADMIN_PASSWORD=`
 
 This is the password value for the admin user. If left unset no admin access is enabled. It is highly recommended to ensure that this password is very secure.
 
-```ADMIN_LOCAL_ONLY=false```
+`ADMIN_LOCAL_ONLY=false`
 
 If set to true admin access is only available from the local machine / container where the datahub is running. (coming soon)
 
-```AUTHORIZATION_MIDDLEWARE=noop```
+`AUTHORIZATION_MIDDLEWARE=noop`
 
 By configuring what AUTHORIZATION_MIDDLEWARE to use, you can configure how you want to log into the Datahub. At this moment, there is 3 supported middlewares:
 
-* noop - this completely turns Authorization and Authentication off. Use for testing only!
-* jwt - this validates JWT tokens. It uses jwt scopes for authorization. See more complete description below.
-* opa - this validates JWT tokens, but uses an OPA server to authorization. See more complete description below.
-* local - indicates that this datahub can issue and validate JWT tokens and uses configured client ACL for authorisation.
+-   noop - this completely turns Authorization and Authentication off. Use for testing only!
+-   jwt - this validates JWT tokens. It uses jwt scopes for authorization. See more complete description below.
+-   opa - this validates JWT tokens, but uses an OPA server to authorization. See more complete description below.
+-   local - indicates that this datahub can issue and validate JWT tokens and uses configured client ACL for authorisation.
 
-```TOKEN_WELL_KNOWN=https://auth.mimiro.io/jwks/.well-known/jwks.json```
+`TOKEN_WELL_KNOWN=https://auth.mimiro.io/jwks/.well-known/jwks.json`
 
 This points to the well-known endpoint for validation of your JWT token. Only tokens with RS256 and remote validation is currently supported. Your oauth2 provider should also give you a well-known endpoint.
 
 If you are using Mimiro for Authentication, then contact Mimiro for the correct settings.
 
-```TOKEN_AUDIENCE=https://api.mimiro.io```
+`TOKEN_AUDIENCE=https://api.mimiro.io`
 
 This is the audience the token is valid for. The audience must be present on your jwt token.
 
 If you are using Mimiro for Authentication, then contact Mimiro for the correct settings.
 
-```TOKEN_ISSUER=https://api.mimiro.io```
+`TOKEN_ISSUER=https://api.mimiro.io`
 
 This is the issuer of your tokens. Issuer must be present in the token to be valid.
 
 If you are using Mimiro for Authentication, then contact Mimiro for the correct settings.
 
-```OPA_ENDPOINT=```
+`OPA_ENDPOINT=`
 
 If you are using OPA service, this must point to where your OPA service endpoint is located.
 
-```SECRETS_MANAGER=noop```
+`SECRETS_MANAGER=noop`
 
 Datahub supports an optional Secrets Manager to read secrets from. If this is present, it will read all walues present in the secret location, and apply those on top of the existing env variables, thereby overwriting the already existing values.
 
@@ -1645,23 +1744,23 @@ The datalayers currently support different security mechanisms through the use o
 
 The default built in provider supports jwt/auth0 through a set of env variables:
 
-```DL_JWT_CLIENT_ID=```
+`DL_JWT_CLIENT_ID=`
 
 This is the client id supported by the token generator service.
 
-```DL_JWT_CLIENT_SECRET=```
+`DL_JWT_CLIENT_SECRET=`
 
 This is the client secret supported by the token generator service.
 
-```DL_JWT_AUDIENCE=```
+`DL_JWT_AUDIENCE=`
 
 This is the intended audience for the token, and needs to be supported by the token generator service.
 
-```DL_JWT_GRANT_TYPE=app_credentials```
+`DL_JWT_GRANT_TYPE=app_credentials`
 
 This is the grant type for the token. Note that this should be a machine token type, however for local testing purposes, other grant types can be used.
 
-```DL_JWT_ENDPOINT=https://auth.example.io/oauth/token```
+`DL_JWT_ENDPOINT=https://auth.example.io/oauth/token`
 
 This is the endpoint that gets called to generate a token. A token is cached for 24hours to prevent saturating this endpoint, so your token must be valid for the same time. Note that client tokens with refresh are not supported.
 
@@ -1669,9 +1768,9 @@ The payload that is generated is compatible with both Auth0 and Mimiro:
 
 ```json
 {
-    "client_id":"ABCD1234",
-    "client_secret":"<super_secret>",
-    "audience":"https://api.example.io",
+    "client_id": "ABCD1234",
+    "client_secret": "<super_secret>",
+    "audience": "https://api.example.io",
     "grant_type": "app_credentials"
 }
 ```
@@ -1717,7 +1816,13 @@ mim client list
 It will show something like:
 
 ```json
-{"cnode23":{"ClientId":"cnode23","PublicKey":"LS0tLS1CRUdJTiBQVUJ .... dHSGNHSDBuSjltVGV1K1J1aXJkWEJxbFAvbXNyTmdzCjBTWXZSbEZvUG1UZk5KZE5nbmNRYkxscHF2U1h4eGdxbi9CT1gxdWhIVFprYUV5WWFtMVBuRzdVM3B5K3h3ancKWU9uc3F2Um5hQnJTOFJuRGU4VHFxR05HOTVjSm5DOEhkSmdNT1Zia09rdEsyYjBPTXlSQ1ozOGg5NG5QUkZBYwpwbzhNcW8xblVUZER0NkRhL3ZvQ1ZLMXU2dHp4UmxIM0RESm9aWll1NFBCMnBGTk94ODZlUG9pdERmTUdZUTlECisyR0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=","Deleted":false}}
+{
+    "cnode23": {
+        "ClientId": "cnode23",
+        "PublicKey": "LS0tLS1CRUdJTiBQVUJ .... dHSGNHSDBuSjltVGV1K1J1aXJkWEJxbFAvbXNyTmdzCjBTWXZSbEZvUG1UZk5KZE5nbmNRYkxscHF2U1h4eGdxbi9CT1gxdWhIVFprYUV5WWFtMVBuRzdVM3B5K3h3ancKWU9uc3F2Um5hQnJTOFJuRGU4VHFxR05HOTVjSm5DOEhkSmdNT1Zia09rdEsyYjBPTXlSQ1ozOGg5NG5QUkZBYwpwbzhNcW8xblVUZER0NkRhL3ZvQ1ZLMXU2dHp4UmxIM0RESm9aWll1NFBCMnBGTk94ODZlUG9pdERmTUdZUTlECisyR0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=",
+        "Deleted": false
+    }
+}
 ```
 
 Then get, edit and update the ACL for the client:
@@ -1729,10 +1834,10 @@ mim acl get <client-id> client23-acl.json
 To grant full access to the client. Add to the ACL file so it looks like:
 
 ```json
-[{"Resource":"/*","Action":"write","Deny":false}]
+[{ "Resource": "/*", "Action": "write", "Deny": false }]
 ```
 
-The resource patterns are either exact matches or '*' matches. This will match any subpart of the URL and isnt restricted to path segments. e.g. ´/datasets/core.*' can be used to secure all datasets starting with 'core.'.
+The resource patterns are either exact matches or '_' matches. This will match any subpart of the URL and isnt restricted to path segments. e.g. ´/datasets/core._' can be used to secure all datasets starting with 'core.'.
 
 Then upload the config.
 
@@ -1744,16 +1849,17 @@ On the client datahub it is necessary to upload a provider config that can be re
 
 This can be done with the following:
 
-
 ```
 mim provider add -f remote-provider.json
 ```
+
 Or
 a POST to /provider/logins
+
 ```json
 {
-    "name":"remote-datahub-name-provider",
-    "type":"nodebearer",
+    "name": "remote-datahub-name-provider",
+    "type": "nodebearer",
     "endpoint": {
         "type": "text",
         "value": "URL-of-datahub/security/token"
@@ -1772,10 +1878,11 @@ There is an endpoint to work with these, please see the api spec file for detail
 Adding a new provider with basic security looks like this:
 
 POST /provider/logins:
+
 ```json
 {
-    "name":"login1",
-    "type":"basic",
+    "name": "login1",
+    "type": "basic",
     "user": {
         "type": "text",
         "value": "server1"
@@ -1799,19 +1906,19 @@ When the provider is used the first time, the values are loaded from their store
 
 Backup of the Datahub is important. This makes sure you can recover from disaster.
 
-```BACKUP_LOCATION=```
+`BACKUP_LOCATION=`
 
 To enable back, a backup location needs to be configured. The Datahub will attempt to create the directories in this location if they are missing.
 
 We do recomment that you put the backup on a separate disk from the STORE_LOCATION for performance reasons. If you are in a Cloud setup, you should probably use something like AWS ELB to make sure your disk survive a shutdown.
 
-```BACKUP_SCHEDULE=```
+`BACKUP_SCHEDULE=`
 
 The backup gets scheduled in the internal Job runner in the Datahub, and the schedule supports the same cron schedules as regular Jobs. You can find the documentation [here](https://pkg.go.dev/github.com/robfig/cron#hdr-CRON_Expression_Format).
 
-If you don't provide a schedule, the default schedule is "*/5 * * * *", aka every 5 minutes.
+If you don't provide a schedule, the default schedule is "_/5 _ \* \* \*", aka every 5 minutes.
 
-```BACKUP_USE_RSYNC=true```
+`BACKUP_USE_RSYNC=true`
 
 If this is true, then the backup will use rsync for it's backup. rsync must be installed, and on the path for this to work.
 If this is false, the Badger DB native backup will be used instead.
@@ -1822,13 +1929,13 @@ Logging is a little bit special, in the fact that we need to set it up earlier t
 
 Therefore, this profile can only be set as an env variable
 
-```export PROFILE=local```
+`export PROFILE=local`
 
 The valid profiles are:
 
-* test -  this turns logging off when running tests
-* local - makes logs be readable in a console, and sets the zap logger for Development
-* other - changes logs to json format, and sets the logger for Production
+-   test - this turns logging off when running tests
+-   local - makes logs be readable in a console, and sets the zap logger for Development
+-   other - changes logs to json format, and sets the logger for Production
 
 The "local" profile is suitable for production use, if you don't need the json formatting.
 
@@ -1853,18 +1960,19 @@ The Datahub assumes you want to secure it using JWT tokens in combination with a
 What a valid token is, depends on your setup, however, we are strict in our interpretation of what that means.
 
 Partial token payload:
+
 ```json
 {
-  "aud": "https://example.mimiro.io",
-  "exp": 1615468468,
-  "iat": 1615382068,
-  "iss": "https://example.mimiro.io",
+    "aud": "https://example.mimiro.io",
+    "exp": 1615468468,
+    "iat": 1615382068,
+    "iss": "https://example.mimiro.io"
 }
 ```
 
 In general we expect the fields "aud", "exp", "iat" and "iss" to be filled out and correct. We also expect the KID header to match an x509 public certificate found in the well-known endpoint.
 
-If you are using JWT for Authentication and Authorization, we  expect a list of "scopes": [], with either "datahub:r" and/or "datahub:w" to be present for read and write operations respectively. For this to be valid, the "gty" field of the token must equal "client-credentials", signaling a machine token.
+If you are using JWT for Authentication and Authorization, we expect a list of "scopes": [], with either "datahub:r" and/or "datahub:w" to be present for read and write operations respectively. For this to be valid, the "gty" field of the token must equal "client-credentials", signaling a machine token.
 
 For any other type of token, we expect the "adm" field to be set to true.
 
@@ -1874,8 +1982,8 @@ For more advanced authorization scenarios, we support [OPA](https://www.openpoli
 
 For OPA to work, you must implement 2 functions on the OPA server:
 
-* /v1/data/datahub/authz/allow
-* /v1/data/datahub/authz/datasets
+-   /v1/data/datahub/authz/allow
+-   /v1/data/datahub/authz/datasets
 
 The allow function must return a json reponse in this format:
 
@@ -1883,8 +1991,8 @@ The allow function must return a json reponse in this format:
 {
     "result": true
 }
-
 ```
+
 Valid result is true for valid, false if not.
 
 In case of true, the second function is called to get a list of valid datasets for this user.

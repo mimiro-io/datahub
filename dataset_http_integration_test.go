@@ -81,7 +81,7 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 		_ = os.Unsetenv("FULLSYNC_LEASE_TIMEOUT")
 	})
 
-	Describe("The dataset root API", func() {
+	Describe("The dataset root API", Ordered, func() {
 		It("Should create a regular dataset", func() {
 			// create new dataset
 			res, err := http.Post(dsURL, "application/json", strings.NewReader(""))
@@ -154,7 +154,7 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 			Expect(len(l)).To(Equal(3), "core.Dataset, bananas, cucumbers are listed")
 		})
 	})
-	Describe("The /entities and /changes API endpoints for regular datasets", func() {
+	Describe("The /entities and /changes API endpoints for regular datasets", Ordered, func() {
 		It("Should accept a single batch of changes", func() {
 			// populate dataset
 			payload := strings.NewReader(bananasFromTo(1, 10, false))
@@ -523,7 +523,7 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 			Expect(entities[1].ID).To(Equal("@continuation"))
 		})
 	})
-	Describe("The /changes and /entities endpoints for proxy datasets", func() {
+	Describe("The /changes and /entities endpoints for proxy datasets", Ordered, func() {
 		It("Should fetch from remote for GET /changes without token", func() {
 			res, err := http.Get(proxyDsURL + "/changes")
 			Expect(err).To(BeNil())
@@ -704,7 +704,7 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 				"basic auth header expected")
 		})
 	})
-	Describe("the /query endpoint", func() {
+	Describe("the /query endpoint", Ordered, func() {
 		It("can find changes", func() {
 			// relying on dataset being populated from previous cases
 			// do query

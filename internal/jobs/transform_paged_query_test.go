@@ -62,7 +62,9 @@ var _ = Describe("PagedQuery in transforms", func() {
 						let res = NewEntity()
 						let pageCnt=0
 						let entityCnt = 0
+						let cnt=0
 						for (e of entities) {
+							cnt++
 							let cb = function(batch) {
 								pageCnt += 1
 								for (item of batch) {
@@ -71,7 +73,13 @@ var _ = Describe("PagedQuery in transforms", func() {
 								}
 								return true
 							}
-							let r = PagedQuery([GetId(e), p+":person-2"], "*", false, [], 7, cb)
+							let r = PagedQuery({
+								StartURIs:[GetId(e), p+":person-2"],
+								Via:"*",
+								Inverse: false,
+								Datasets: []
+							}, 7, cb)
+							SetProperty(res, p, "r-"+cnt, "cont:"+r)
 						}
 						SetProperty(res, p,"pageCnt", pageCnt)
 						SetProperty(res, p, "entityCnt", entityCnt)
@@ -88,10 +96,12 @@ var _ = Describe("PagedQuery in transforms", func() {
 		Expect(err).To(BeNil())
 		Expect(len(r)).To(Equal(1))
 		e := r[0]
-		Expect(len(e.Properties)).To(Equal(25))
 		// first page 7 items, 2nd page 7 items, 3rd page 5 items (rest of first startUri), 4th page 4 items (all of 2nd startUri)
+		Expect(len(e.Properties)).To(Equal(27))
 		Expect(e.GetProperty(pref + ":pageCnt")).To(BeEquivalentTo(4))
 		Expect(e.GetProperty(pref + ":entityCnt")).To(BeEquivalentTo(23))
+		Expect(e.GetProperty(pref + ":r-1")).To(Equal("cont:"))
+		Expect(e.GetProperty(pref + ":r-2")).To(Equal("cont:"))
 	})
 
 	It("Should stop paging in QueryForEach when callback returns false", func() {
@@ -123,7 +133,17 @@ var _ = Describe("PagedQuery in transforms", func() {
 								}
 								return false
 							}
-							let r = PagedQuery([GetId(e), p+":person-2"], "*", false, [], 7, cb)
+							let r = PagedQuery({
+								StartURIs:[GetId(e), p+":person-21"],
+								Via:"*"
+							}, 7, cb);
+							SetProperty(res, p, "r", r)
+							let r2 = PagedQuery({ Continuations: r }, 5, cb);
+							SetProperty(res, p, "r2", r2)
+							let r3 = PagedQuery({ Continuations: r2 }, 9, function(batch){ return false });
+							SetProperty(res, p, "r3", r3)
+							let r4 = PagedQuery({ Continuations: r3 }, 10, cb);
+							SetProperty(res, p, "r4", r4)
 							break // hop out after first entity
 						}
 						SetProperty(res, p,"pageCnt", pageCnt)
@@ -141,15 +161,52 @@ var _ = Describe("PagedQuery in transforms", func() {
 		Expect(err).To(BeNil())
 		Expect(len(r)).To(Equal(1))
 		e := r[0]
-		Expect(len(e.Properties)).To(Equal(9)) // 7 items plus 2 counters
+		// 20 consists of
+		//   - 7 items from first query (r),
+		//   - 5 from continued query (r2)
+		//   - none from r3 (skipping 9 exhausts first startURI (7 were remaining) and skips first 2 hits for 2nd startUri)
+		//   - 2 from last query, 2 remaining relations of 2nd startURI (r4)
+		//   - plus 2 counters: pageCnt and entityCnt
+		//   - plus 4 token states (r,r2,r3,r4)
+		Expect(len(e.Properties)).To(Equal(20))
+		// 7 items first query, 5 from continued query, skipping 8 exhausts first startURI and skips first hit for 2nd startUri, last query adds plus 2 counters, plus 4 token states
 		// first page 7 items
-		Expect(e.GetProperty(pref + ":pageCnt")).To(BeEquivalentTo(1))
-		Expect(e.GetProperty(pref + ":entityCnt")).To(BeEquivalentTo(7))
-		Expect(e.GetProperty(pref + ":i-1-1").(server.RelatedEntityResult).RelatedEntity.ID).To(Equal(pref + ":person-20"))
-		Expect(e.GetProperty(pref+":i-1-1").(server.RelatedEntityResult).RelatedEntity.Recorded).NotTo(BeZero(), "person-20 should be existing entity")
-		Expect(e.GetProperty(pref+":i-1-2").(server.RelatedEntityResult).RelatedEntity.Recorded).To(BeZero(), "other hits are open graph hits, not existing entities")
+		Expect(e.GetProperty(pref+":pageCnt")).To(BeEquivalentTo(3), "3 queries ran cb")
+		Expect(e.GetProperty(pref+":entityCnt")).To(BeEquivalentTo(14), "12 first startURI, 2 from 2nd startURI")
+		Expect(e.GetProperty(pref + ":r")).NotTo(BeZero())
+		Expect(e.GetProperty(pref + ":r2")).NotTo(BeZero())
+		Expect(e.GetProperty(pref + ":r3")).NotTo(BeZero())
+		Expect(e.GetProperty(pref + ":r4")).To(BeZero())
+		Expect(
+			e.GetProperty(pref + ":i-1-1").(server.RelatedEntityResult).RelatedEntity.ID,
+		).To(Equal(pref + ":person-20"))
+		Expect(
+			e.GetProperty(pref+":i-1-1").(server.RelatedEntityResult).RelatedEntity.Recorded,
+		).NotTo(BeZero(), "person-20 should be existing entity")
+		Expect(
+			e.GetProperty(pref+":i-1-2").(server.RelatedEntityResult).RelatedEntity.Recorded,
+		).To(BeZero(), "other hits are open graph hits, not existing entities")
+		Expect(e.GetProperty(pref + ":i-1-3")).NotTo(BeNil())
+		Expect(e.GetProperty(pref + ":i-1-4")).NotTo(BeNil())
+		Expect(e.GetProperty(pref + ":i-1-5")).NotTo(BeNil())
+		Expect(e.GetProperty(pref + ":i-1-6")).NotTo(BeNil())
+		Expect(e.GetProperty(pref + ":i-1-7")).NotTo(BeNil())
+		Expect(e.GetProperty(pref + ":i-1-8")).To(BeNil())
+		Expect(e.GetProperty(pref + ":i-2-8")).NotTo(BeNil())
+		Expect(e.GetProperty(pref + ":i-2-9")).NotTo(BeNil())
+		Expect(e.GetProperty(pref + ":i-2-10")).NotTo(BeNil())
+		Expect(e.GetProperty(pref + ":i-2-11")).NotTo(BeNil())
+		Expect(e.GetProperty(pref + ":i-2-12")).NotTo(BeNil())
+		Expect(
+			e.GetProperty(pref + ":i-2-12").(server.RelatedEntityResult).RelatedEntity.ID,
+		).To(Equal(pref + ":person-9"))
+		Expect(e.GetProperty(pref + ":i-3-13")).NotTo(BeNil())
+		Expect(e.GetProperty(pref + ":i-3-14")).NotTo(BeNil())
+		Expect(
+			e.GetProperty(pref + ":i-3-14").(server.RelatedEntityResult).RelatedEntity.ID,
+		).To(Equal(pref + ":person-22"))
+		Expect(e.GetProperty(pref + ":i-3-15")).To(BeNil())
 	})
-
 })
 
 func persist(dsName string, store *server.Store, dsm *server.DsManager, b []*server.Entity) string {

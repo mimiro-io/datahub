@@ -703,14 +703,9 @@ type RelatedFrom struct {
 	Datasets             []uint32
 	At                   int64
 }
-type RelatedEntitiesQueryResult []RelatedEntitiesResult
-
-func (reqr RelatedEntitiesQueryResult) Cont() []*RelatedFrom {
-	res := make([]*RelatedFrom, len(reqr))
-	for i, c := range reqr {
-		res[i] = c.Continuation
-	}
-	return res
+type RelatedEntitiesQueryResult struct {
+	Cont      []*RelatedFrom
+	Relations []RelatedEntityResult
 }
 
 // Backwards compatibility function
@@ -730,17 +725,13 @@ func (s *Store) GetManyRelatedEntities(
 }
 
 func ToLegacyQueryResult(res RelatedEntitiesQueryResult) [][]any {
-	legacyResult := make([][]any, 0)
-	for _, uriRes := range res {
-		tmpRes := make([][]any, len(uriRes.Relations))
-		for k, r := range uriRes.Relations {
-			item := make([]any, 3)
-			item[0] = r.StartURI
-			item[1] = r.PredicateURI
-			item[2] = r.RelatedEntity
-			tmpRes[k] = item
-		}
-		legacyResult = append(legacyResult, tmpRes...)
+	legacyResult := make([][]any, len(res.Relations))
+	for k, r := range res.Relations {
+		item := make([]any, 3)
+		item[0] = r.StartURI
+		item[1] = r.PredicateURI
+		item[2] = r.RelatedEntity
+		legacyResult[k] = item
 	}
 	return legacyResult
 }
@@ -755,7 +746,7 @@ func (s *Store) GetManyRelatedEntitiesBatch(
 	queryTime := time.Now().UnixNano()
 	from, err := s.ToRelatedFrom(startPoints, predicate, inverse, datasets, queryTime)
 	if err != nil {
-		return nil, err
+		return RelatedEntitiesQueryResult{}, err
 	}
 	return s.GetManyRelatedEntitiesAtTime(from, limit)
 }
@@ -847,19 +838,25 @@ func (s *Store) GetPredicateID(predicate string, txn *badger.Txn) (uint64, error
 }
 
 func (s *Store) GetManyRelatedEntitiesAtTime(from []*RelatedFrom, limit int) (RelatedEntitiesQueryResult, error) {
-	result := make([]RelatedEntitiesResult, 0)
+	result := RelatedEntitiesQueryResult{}
 	unlimited := limit == 0
-
+	var relatedFroms []*RelatedFrom
 	for _, startPoint := range from {
 		if (limit > 0) || unlimited {
 			relatedEntities, err := s.getRelatedEntitiesAtTime(startPoint, limit)
 			if err != nil {
-				return nil, err
+				return RelatedEntitiesQueryResult{}, err
 			}
-			result = append(result, relatedEntities)
+			if relatedEntities.Continuation != nil {
+				relatedFroms = append(relatedFroms, relatedEntities.Continuation)
+			}
+			result.Relations = append(result.Relations, relatedEntities.Relations...)
 			limit = int(math.Max(float64(limit-len(relatedEntities.Relations)), 0))
+		} else {
+			relatedFroms = append(relatedFroms, startPoint)
 		}
 	}
+	result.Cont = relatedFroms
 	return result, nil
 }
 
@@ -917,7 +914,7 @@ func (s *Store) getRelated(
 	datasets []string,
 ) ([]RelatedEntityResult, error) {
 	res, err := s.GetManyRelatedEntitiesBatch([]string{startPoint}, predicate, inverse, datasets, 0)
-	return res[0].Relations, err
+	return res.Relations, err
 }
 
 func (s *Store) GetRelatedAtTime(from *RelatedFrom, limit int) ([]qresult, *RelatedFrom, error) {
@@ -1056,9 +1053,6 @@ func (s *Store) GetRelatedAtTime(from *RelatedFrom, limit int) ([]qresult, *Rela
 			for outgoingIterator.Seek(reverseFrom); outgoingIterator.ValidForPrefix(searchBuffer); outgoingIterator.Next() {
 				item := outgoingIterator.Item()
 				k := item.Key()
-				if limit != 0 && len(results) >= limit {
-					break
-				}
 
 				datasetID := binary.BigEndian.Uint32(k[36:])
 
@@ -1102,8 +1096,11 @@ func (s *Store) GetRelatedAtTime(from *RelatedFrom, limit int) ([]qresult, *Rela
 				// get deleted
 				del := binary.BigEndian.Uint16(k[34:])
 				if del != 1 && hasReachedStartKey {
-					results = append(results, qresult{Time: uint64(et), EntityID: relatedID, PredicateID: predID, DatasetID: datasetID})
+					if limit != 0 && len(results) >= limit {
+						break
+					}
 					copy(cont.RelationIndexFromKey, k)
+					results = append(results, qresult{Time: uint64(et), EntityID: relatedID, PredicateID: predID, DatasetID: datasetID})
 				}
 
 				// set at end of iteration so that we jump over the item the previous page gave as continuation, while still

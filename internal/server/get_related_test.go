@@ -15,7 +15,7 @@ import (
 	"github.com/mimiro-io/datahub/internal/conf"
 )
 
-var _ = ginkgo.Describe("The GetManyRelatedEntitiesBatch functions", func() {
+var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 	testCnt := 0
 	var dsm *DsManager
 	var store *Store
@@ -41,162 +41,204 @@ var _ = ginkgo.Describe("The GetManyRelatedEntitiesBatch functions", func() {
 		_ = os.RemoveAll(storeLocation)
 	})
 
-	ginkgo.It("Should respect limit for single start uri", func() {
-		peopleNamespacePrefix := persist("friends", store, dsm, buildTestBatch(store, []testPerson{
-			{id: 1, friends: []int{0}},
-			{id: 2, friends: []int{1, 4}},
-			{id: 3, deleted: true, friends: []int{2}},
-			{id: 0, friends: []int{1, 2, 3, 4}},
-			{id: 3, friends: []int{2}},
-			{id: 0, deleted: true, friends: []int{1, 2, 3, 4}},
-			{id: 1, friends: []int{3, 2, 4}},
-		}))
-		start := []string{peopleNamespacePrefix + ":person-1"}
-		result, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
-		Expect(err).To(BeNil())
-		Expect(len(result)).To(Equal(1))
-		Expect(len(result[0].Relations)).To(Equal(3), "person-1 points to p2, p3 and (empty) p4")
-		Expect(result[0].Relations[0].RelatedEntity.ID).To(Equal(peopleNamespacePrefix + ":person-3"))
-		Expect(result[0].Relations[1].RelatedEntity.ID).To(Equal(peopleNamespacePrefix + ":person-4"))
-		Expect(result[0].Relations[2].RelatedEntity.ID).To(Equal(peopleNamespacePrefix + ":person-2"))
+	_ = ginkgo.Describe("limiting", func() {
+		ginkgo.It("Should respect limit for single start uri", func() {
+			peopleNamespacePrefix := persist("friends", store, dsm, buildTestBatch(store, []testPerson{
+				{id: 1, friends: []int{0}},
+				{id: 2, friends: []int{1, 4}},
+				{id: 3, deleted: true, friends: []int{2}},
+				{id: 0, friends: []int{1, 2, 3, 4}},
+				{id: 3, friends: []int{2}},
+				{id: 0, deleted: true, friends: []int{1, 2, 3, 4}},
+				{id: 1, friends: []int{3, 2, 4}},
+			}))
+			start := []string{peopleNamespacePrefix + ":person-1"}
+			result, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			Expect(err).To(BeNil())
+			Expect(result.Cont).To(BeZero())
+			Expect(len(result.Relations)).To(Equal(3), "person-1 points to p2, p3 and (empty) p4")
+			Expect(result.Relations[0].RelatedEntity.ID).To(Equal(peopleNamespacePrefix + ":person-3"))
+			Expect(result.Relations[0].RelatedEntity.Recorded).NotTo(BeZero(), "make sure person-3 is an real entity")
+			Expect(result.Relations[1].RelatedEntity.ID).To(Equal(peopleNamespacePrefix + ":person-4"))
+			Expect(result.Relations[1].RelatedEntity.Recorded).To(BeZero(), "make sure person-4 is an open ref")
+			Expect(result.Relations[2].RelatedEntity.ID).To(Equal(peopleNamespacePrefix + ":person-2"))
+			Expect(result.Relations[2].RelatedEntity.Recorded).NotTo(BeZero(), "make sure person-2 is an real entity")
 
-		seenCnt := 0
-		for _, r := range result[0].Relations {
-			if r.RelatedEntity.ID == peopleNamespacePrefix+":person-2" ||
-				r.RelatedEntity.ID == peopleNamespacePrefix+":person-3" {
-				seenCnt++
-				Expect(r.RelatedEntity.Recorded > 0).To(BeTrue(), "make sure person-2 is an actual entity")
-			}
-			if r.RelatedEntity.ID == peopleNamespacePrefix+":person-4" {
-				seenCnt++
-				Expect(r.RelatedEntity.Recorded).To(Equal(uint64(0)), "make sure person-4 is an open ref")
-			}
-		}
-		Expect(seenCnt).To(Equal(3))
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 1)
+			Expect(err).To(BeNil())
+			Expect(len(result.Cont)).To(Equal(1))
+			Expect(len(result.Relations)).To(Equal(1))
 
-		result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 1)
-		Expect(err).To(BeNil())
-		Expect(len(result)).To(Equal(1))
-		Expect(len(result[0].Relations)).To(Equal(1))
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 2)
+			Expect(err).To(BeNil())
+			Expect(len(result.Cont)).To(Equal(1))
+			Expect(len(result.Relations)).To(Equal(2))
 
-		result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 2)
-		Expect(err).To(BeNil())
-		Expect(len(result)).To(Equal(1))
-		Expect(len(result[0].Relations)).To(Equal(2))
-	})
-	ginkgo.It("Should respect limit for many start uris", func() {
-		peopleNamespacePrefix := persist("friends", store, dsm, buildTestBatch(store, []testPerson{
-			{id: 1, friends: []int{0}},
-			{id: 2, friends: []int{1, 4}},
-			{id: 3, deleted: true, friends: []int{2}},
-			{id: 0, friends: []int{1, 2, 3, 4}},
-			{id: 3, friends: []int{2}},
-			{id: 0, deleted: true, friends: []int{1, 2, 3, 4}},
-			{id: 1, friends: []int{3, 2, 4}},
-		}))
-		// get everything
-		start := []string{peopleNamespacePrefix + ":person-1", peopleNamespacePrefix + ":person-2"}
-		result, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
-		Expect(err).To(BeNil())
-		Expect(len(result)).To(Equal(2))
-		Expect(len(result[0].Relations)).To(Equal(3))
-		Expect(len(result[1].Relations)).To(Equal(2))
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 3)
+			Expect(err).To(BeNil())
+			Expect(len(result.Cont)).To(Equal(0))
+			Expect(len(result.Relations)).To(Equal(3))
 
-		// limit 1, should return first hit of first startUri
-		result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 1)
-		Expect(err).To(BeNil())
-		Expect(len(result)).To(Equal(1))
-		Expect(len(result[0].Relations)).To(Equal(1))
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 4)
+			Expect(err).To(BeNil())
+			Expect(len(result.Cont)).To(Equal(0))
+			Expect(len(result.Relations)).To(Equal(3))
+		})
+		ginkgo.It("Should respect limit for many start uris", func() {
+			peopleNamespacePrefix := persist("friends", store, dsm, buildTestBatch(store, []testPerson{
+				{id: 1, friends: []int{0}},
+				{id: 2, friends: []int{1, 4}},
+				{id: 3, deleted: true, friends: []int{2}},
+				{id: 0, friends: []int{1, 2, 3, 4}},
+				{id: 3, friends: []int{2}},
+				{id: 0, deleted: true, friends: []int{1, 2, 3, 4}},
+				{id: 1, friends: []int{3, 2, 4}},
+			}))
+			// get everything
+			start := []string{peopleNamespacePrefix + ":person-1", peopleNamespacePrefix + ":person-2"}
+			result, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			Expect(err).To(BeNil())
+			Expect(len(result.Cont)).To(BeZero())
+			// 3 relations from person-1 and 2 relations from person-2
+			Expect(len(result.Relations)).To(Equal(5))
 
-		// limit 4, room for all 3 relations of first startUri plus 1 from other startUri
-		result, err = store.GetManyRelatedEntitiesBatch(
-			start,
-			"*",
-			false,
-			nil,
-			4,
-		)
-		Expect(err).To(BeNil())
-		Expect(len(result)).To(Equal(2))
-		Expect(len(result[0].Relations)).To(Equal(3))
-		Expect(len(result[1].Relations)).To(Equal(1))
-	})
-	ginkgo.It("Should respect limit in inverse queries", func() {
-		peopleNamespacePrefix := persist("friends", store, dsm, buildTestBatch(store, []testPerson{
-			{id: 1, friends: []int{0}},
-			{id: 2, friends: []int{1, 4}},
-			{id: 3, deleted: true, friends: []int{2}},
-			{id: 0, friends: []int{1, 2, 3, 4}},
-			{id: 3, friends: []int{2}},
-			{id: 0, deleted: true, friends: []int{1, 2, 3, 4}},
-			{id: 1, friends: []int{3, 2, 4}},
-		}))
-		// get everything
-		start := []string{peopleNamespacePrefix + ":person-1", peopleNamespacePrefix + ":person-2"}
-		result, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
-		Expect(err).To(BeNil())
-		Expect(len(result)).To(Equal(2))
-		Expect(len(result[0].Relations)).To(Equal(1))
-		Expect(len(result[1].Relations)).To(Equal(2))
-		// limit 1, should return first hit of first startUri
-		result, err = store.GetManyRelatedEntitiesBatch(
-			start,
-			"*",
-			true,
-			nil,
-			1,
-		)
-		Expect(err).To(BeNil())
-		Expect(len(result)).To(Equal(1))
-		Expect(len(result[0].Relations)).To(Equal(1))
+			// limit 1, should return first hit of first startUri
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 1)
+			Expect(err).To(BeNil())
+			// continuations for both startUris expected
+			Expect(len(result.Cont)).To(Equal(2))
+			Expect(len(result.Relations)).To(Equal(1))
 
-		// limit 2, room for all 1 relations of first startUri plus 1 from other startUri
-		result, err = store.GetManyRelatedEntitiesBatch(
-			start,
-			"*",
-			true,
-			nil,
-			2,
-		)
-		Expect(err).To(BeNil())
-		Expect(len(result)).To(Equal(2))
-		Expect(len(result[0].Relations)).To(Equal(1))
-		Expect(len(result[1].Relations)).To(Equal(1))
+			// limit 3, room for all 3 relations of first startUri
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 3)
+			Expect(err).To(BeNil())
+			Expect(len(result.Relations)).To(Equal(3))
+			// only continuation for person-2 remains, since first startUri is exhausted
+			Expect(len(result.Cont)).To(Equal(1))
+
+			// limit 4, room for all 3 relations of first startUri plus 1 from other startUri
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 4)
+			Expect(err).To(BeNil())
+			Expect(len(result.Relations)).To(Equal(4))
+			// only continuation for person-2 remains, since first startUri is exhausted
+			Expect(len(result.Cont)).To(Equal(1))
+
+			// limit 5, room for all 3 relations of first startUri plus all 2 from other startUri
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 5)
+			Expect(err).To(BeNil())
+			Expect(len(result.Relations)).To(Equal(5))
+			// only continuation for person-2 remains, since first startUri is exhausted
+			Expect(len(result.Cont)).To(Equal(0))
+
+			// limit 6, room for all 3 relations of first startUri plus all 2 from other startUri
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 6)
+			Expect(err).To(BeNil())
+			Expect(len(result.Relations)).To(Equal(5))
+			// only continuation for person-2 remains, since first startUri is exhausted
+			Expect(len(result.Cont)).To(Equal(0))
+		})
+		ginkgo.It("Should respect limit in inverse queries", func() {
+			peopleNamespacePrefix := persist("friends", store, dsm, buildTestBatch(store, []testPerson{
+				{id: 1, friends: []int{0}},
+				{id: 2, friends: []int{1, 4}},
+				{id: 3, deleted: true, friends: []int{2}},
+				{id: 0, friends: []int{1, 2, 3, 4}},
+				{id: 3, friends: []int{2}},
+				{id: 0, deleted: true, friends: []int{1, 2, 3, 4}},
+				{id: 1, friends: []int{3, 2, 4}},
+			}))
+			// get everything, p2 points to p1; and p1+p3 point to p2
+			start := []string{peopleNamespacePrefix + ":person-1", peopleNamespacePrefix + ":person-2"}
+			result, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			Expect(err).To(BeNil())
+			Expect(result.Cont).To(BeZero())
+			Expect(len(result.Relations)).To(Equal(3))
+			// limit 1, should return first hit of first startUri
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 1)
+			Expect(err).To(BeNil())
+			// person-1 is exhausted, only expect one cont token
+			Expect(len(result.Cont)).To(Equal(1))
+			Expect(len(result.Relations)).To(Equal(1))
+
+			// limit 2, room for all 1 relations of first startUri plus 1 from other startUri
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 2)
+			Expect(err).To(BeNil())
+			// one token for rest of person-2 expected
+			Expect(len(result.Cont)).To(Equal(1))
+			Expect(len(result.Relations)).To(Equal(2))
+		})
 	})
 	ginkgo.It("Should return a working continuation token", func() {
 		pref := persist("friends", store, dsm, buildTestBatch(store, []testPerson{
-			{id: 1, friends: []int{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}},
+			{id: 1, friends: []int{2, 3, 4, 5, 6, 7, 8, 9, 10}},
+			{id: 2, friends: []int{11, 12, 13, 14, 15, 16, 17, 18, 19, 20}},
 		}))
-		start := []string{pref + ":person-1"}
+		start := []string{pref + ":person-1", pref + ":person-2"}
 		queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
 		Expect(err).To(BeNil())
-		Expect(len(queryResult)).To(Equal(1))
-		Expect(len(queryResult[0].Relations)).To(Equal(19))
+		Expect(len(queryResult.Cont)).To(Equal(0))
+		Expect(len(queryResult.Relations)).To(Equal(19))
 
 		queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 2)
 		Expect(err).To(BeNil())
-		Expect(len(queryResult)).To(Equal(1))
-		Expect(len(queryResult[0].Relations)).To(Equal(2))
-		Expect(queryResult[0].Relations[0].RelatedEntity.ID).To(Equal(pref + ":person-20"))
-		Expect(queryResult[0].Relations[1].RelatedEntity.ID).To(Equal(pref + ":person-19"))
-		Expect(queryResult[0].Continuation.RelationIndexFromKey).NotTo(BeNil())
-		startFromCont := queryResult.Cont()
+		Expect(len(queryResult.Cont)).To(Equal(2))
+		Expect(len(queryResult.Relations)).To(Equal(2))
+		Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal(pref + ":person-10"))
+		Expect(queryResult.Relations[1].RelatedEntity.ID).To(Equal(pref + ":person-9"))
+		Expect(queryResult.Cont[0].RelationIndexFromKey).NotTo(BeNil())
+		startFromCont := queryResult.Cont
 		queryResult, err = store.GetManyRelatedEntitiesAtTime(startFromCont, 3)
 		Expect(err).To(BeNil())
-		Expect(len(queryResult)).To(Equal(1))
-		Expect(len(queryResult[0].Relations)).To(Equal(3))
-		Expect(queryResult[0].Relations[0].RelatedEntity.ID).To(Equal(pref + ":person-18"))
-		Expect(queryResult[0].Relations[1].RelatedEntity.ID).To(Equal(pref + ":person-17"))
-		Expect(queryResult[0].Relations[2].RelatedEntity.ID).To(Equal(pref + ":person-16"))
-		Expect(queryResult[0].Continuation.RelationIndexFromKey).NotTo(BeNil())
-		startFromCont = queryResult.Cont()
-		queryResult, err = store.GetManyRelatedEntitiesAtTime(startFromCont, 25)
+		Expect(len(queryResult.Cont)).To(Equal(2))
+		Expect(len(queryResult.Relations)).To(Equal(3))
+		Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal(pref + ":person-8"))
+		Expect(queryResult.Relations[1].RelatedEntity.ID).To(Equal(pref + ":person-7"))
+		Expect(queryResult.Relations[2].RelatedEntity.ID).To(Equal(pref + ":person-6"))
+		Expect(queryResult.Cont[0].RelationIndexFromKey).NotTo(BeNil())
+		Expect(queryResult.Cont[1].RelationIndexFromKey).NotTo(BeNil())
+		startFromCont = queryResult.Cont
+
+		// get get next 3, leaving exactly 1 result remaining for 1st startURI
+		queryResult, err = store.GetManyRelatedEntitiesAtTime(startFromCont, 3)
 		Expect(err).To(BeNil())
-		Expect(len(queryResult)).To(Equal(1))
-		Expect(len(queryResult[0].Relations)).To(Equal(14))
-		Expect(queryResult[0].Relations[0].RelatedEntity.ID).To(Equal(pref + ":person-15"))
-		Expect(queryResult[0].Relations[13].RelatedEntity.ID).To(Equal(pref + ":person-2"))
-		Expect(queryResult[0].Continuation).To(BeNil())
+		Expect(len(queryResult.Cont)).To(Equal(2))
+		Expect(len(queryResult.Relations)).To(Equal(3))
+		Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal(pref + ":person-5"))
+		Expect(queryResult.Relations[2].RelatedEntity.ID).To(Equal(pref + ":person-3"))
+		queryResult, err = store.GetManyRelatedEntitiesAtTime(queryResult.Cont, 0)
+		Expect(err).To(BeNil())
+		Expect(queryResult.Cont).To(BeNil())
+		Expect(len(queryResult.Relations)).To(Equal(11))
+		Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal(pref + ":person-2"))
+		Expect(queryResult.Relations[10].RelatedEntity.ID).To(Equal(pref + ":person-11"))
+
+		// get all of remaining items from 1st startURI
+		queryResult, err = store.GetManyRelatedEntitiesAtTime(startFromCont, 4)
+		Expect(err).To(BeNil())
+		Expect(len(queryResult.Cont)).To(Equal(1), "1st exhausted query, one remaining")
+		Expect(len(queryResult.Relations)).To(Equal(4))
+		Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal(pref + ":person-5"))
+		Expect(queryResult.Relations[3].RelatedEntity.ID).To(Equal(pref + ":person-2"))
+		queryResult, err = store.GetManyRelatedEntitiesAtTime(queryResult.Cont, 0)
+		Expect(err).To(BeNil())
+		Expect(queryResult.Cont).To(BeNil())
+		Expect(len(queryResult.Relations)).To(Equal(10))
+		Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal(pref + ":person-20"))
+		Expect(queryResult.Relations[9].RelatedEntity.ID).To(Equal(pref + ":person-11"))
+
+		// get all of remaining items from 1st startURI plus 1st item from 2nd startURI
+		queryResult, err = store.GetManyRelatedEntitiesAtTime(startFromCont, 5)
+		Expect(err).To(BeNil())
+		Expect(len(queryResult.Cont)).To(Equal(1), "1st exhausted query, one remaining")
+		Expect(len(queryResult.Relations)).To(Equal(5))
+		Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal(pref + ":person-5"))
+		Expect(queryResult.Relations[4].RelatedEntity.ID).To(Equal(pref + ":person-20"))
+		queryResult, err = store.GetManyRelatedEntitiesAtTime(queryResult.Cont, 0)
+		Expect(err).To(BeNil())
+		Expect(queryResult.Cont).To(BeNil())
+		Expect(len(queryResult.Relations)).To(Equal(9))
+		Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal(pref + ":person-19"))
+		Expect(queryResult.Relations[8].RelatedEntity.ID).To(Equal(pref + ":person-11"))
 	})
 
 	ginkgo.It("Should work with star queries across multiple predicates", func() {
@@ -213,15 +255,15 @@ var _ = ginkgo.Describe("The GetManyRelatedEntitiesBatch functions", func() {
 		start := []string{pref + ":person-1"}
 		queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
 		Expect(err).To(BeNil())
-		Expect(queryResult[0].Relations).To(HaveLen(4))
-		Expect(queryResult[0].Relations[0].PredicateURI).To(Equal("ns3:Family"))
-		Expect(queryResult[0].Relations[0].RelatedEntity.ID).To(Equal("ns3:person-5"))
-		Expect(queryResult[0].Relations[1].PredicateURI).To(Equal("ns3:Friend"))
-		Expect(queryResult[0].Relations[1].RelatedEntity.ID).To(Equal("ns3:person-4"))
-		Expect(queryResult[0].Relations[2].PredicateURI).To(Equal("ns3:Friend"))
-		Expect(queryResult[0].Relations[2].RelatedEntity.ID).To(Equal("ns3:person-3"))
-		Expect(queryResult[0].Relations[3].PredicateURI).To(Equal("ns3:Friend"))
-		Expect(queryResult[0].Relations[3].RelatedEntity.ID).To(Equal("ns3:person-2"))
+		Expect(queryResult.Relations).To(HaveLen(4))
+		Expect(queryResult.Relations[0].PredicateURI).To(Equal("ns3:Family"))
+		Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-5"))
+		Expect(queryResult.Relations[1].PredicateURI).To(Equal("ns3:Friend"))
+		Expect(queryResult.Relations[1].RelatedEntity.ID).To(Equal("ns3:person-4"))
+		Expect(queryResult.Relations[2].PredicateURI).To(Equal("ns3:Friend"))
+		Expect(queryResult.Relations[2].RelatedEntity.ID).To(Equal("ns3:person-3"))
+		Expect(queryResult.Relations[3].PredicateURI).To(Equal("ns3:Friend"))
+		Expect(queryResult.Relations[3].RelatedEntity.ID).To(Equal("ns3:person-2"))
 	})
 })
 
