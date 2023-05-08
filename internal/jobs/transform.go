@@ -440,7 +440,11 @@ func (javascriptTransform *JavascriptTransform) PagedQuery(
 					time.Now().UnixNano(),
 				)
 				if err != nil {
-					javascriptTransform.Logger.Warnf("error in PagedQuery: could not interpret parameters (%+v);  %w", query, err)
+					javascriptTransform.Logger.Warnf(
+						"error in PagedQuery: could not interpret parameters (%+v);  %w",
+						query,
+						err,
+					)
 					return nil
 				}
 			} else {
@@ -461,10 +465,10 @@ func (javascriptTransform *JavascriptTransform) PagedQuery(
 			// if callback returns false, it tells us to stop iterating
 			cbContinue := forEach(results.Relations)
 			if !cbContinue {
-				//processed := results.Cont[:i+1]
-				//unprocessed := conts[i+1:]
-				//incompleteConts := append(processed, unprocessed...)
-				//return incompleteConts
+				// processed := results.Cont[:i+1]
+				// unprocessed := conts[i+1:]
+				// incompleteConts := append(processed, unprocessed...)
+				// return incompleteConts
 				return results.Cont
 			}
 		} else {
@@ -523,6 +527,8 @@ func (javascriptTransform *JavascriptTransform) ExecuteQuery(resultWriter QueryR
 	if err != nil {
 		return err
 	}
+
+	javascriptTransform.statsDClient = &statsd.NoOpClient{}
 
 	// invoke transform, and catch js runtime err
 	err = queryFunc()
