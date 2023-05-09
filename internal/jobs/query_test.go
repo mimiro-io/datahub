@@ -199,4 +199,47 @@ var _ = Describe("QueryExecution", func() {
 				},
 			}))
 	})
+	It("Should allow usage of transforms js API", func() {
+		ds, _ := dsm.CreateDataset("people", nil)
+
+		pref, _ := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/people/")
+		entities := make([]*server.Entity, 1)
+		entity := server.NewEntity(pref+":homer", 0)
+		entity.Properties["name"] = "homer"
+		entity.Properties["age"] = 42
+		entities[0] = entity
+		err := ds.StoreEntities(entities)
+		Expect(err).To(BeNil(), "entities are stored")
+		// transform js
+		js := `
+			function do_query() {
+				let homer = FindById("ns3:homer")
+				WriteQueryResult({"age": homer.Properties["age"]});
+			}
+			`
+
+		queryEncoded := base64.StdEncoding.EncodeToString([]byte(js))
+
+		// create query transform
+		transform, err := NewJavascriptTransform(zap.NewNop().Sugar(), queryEncoded, store, dsm)
+		if err != nil {
+			Fail(err.Error())
+		}
+
+		// create test result writer
+		resultWriter := NewTestQueryResultWriter()
+
+		// run query
+		err = transform.ExecuteQuery(resultWriter)
+		if err != nil {
+			Fail(err.Error())
+		}
+
+		// check result
+		Expect(len(resultWriter.Results)).To(Equal(1))
+		Expect(resultWriter.Results[0]).
+			To(Equal(map[string]interface{}{
+				"age": int64(42),
+			}))
+	})
 })
