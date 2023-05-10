@@ -24,14 +24,14 @@ import (
 	"net/url"
 )
 
-// TokenProvider contains the auth0 configuration
-type TokenProvider struct {
+// ClientCredentialsProvider contains the auth0 configuration
+type ClientCredentialsProvider struct {
 	logger      *zap.SugaredLogger
 	tokenSource oauth2.TokenSource
 }
 
-// NewTokenProvider creates a new TokenProvider struct, populated with the values from Viper.
-func NewTokenProvider(logger *zap.SugaredLogger, conf ProviderConfig, pm *ProviderManager) *TokenProvider {
+// NewClientCredentialsProvider creates a new ClientCredentialsProvider struct, populated with the values from Viper.
+func NewClientCredentialsProvider(logger *zap.SugaredLogger, conf ProviderConfig, pm *ProviderManager) *ClientCredentialsProvider {
 	params := url.Values{"audience": []string{pm.LoadValue(conf.Audience)}}
 	cc := clientcredentials.Config{
 		ClientID:       pm.LoadValue(conf.ClientID),
@@ -41,7 +41,7 @@ func NewTokenProvider(logger *zap.SugaredLogger, conf ProviderConfig, pm *Provid
 	}
 	tokenSource := cc.TokenSource(context.Background())
 
-	config := &TokenProvider{
+	config := &ClientCredentialsProvider{
 		logger:      logger.Named("jwt"),
 		tokenSource: oauth2.ReuseTokenSource(nil, tokenSource),
 	}
@@ -49,7 +49,7 @@ func NewTokenProvider(logger *zap.SugaredLogger, conf ProviderConfig, pm *Provid
 	return config
 }
 
-func (tp *TokenProvider) Authorize(req *http.Request) {
+func (tp *ClientCredentialsProvider) Authorize(req *http.Request) {
 	if token, err := tp.token(); err != nil {
 		tp.logger.Warnf("Error getting token: %s", err)
 	} else {
@@ -63,7 +63,7 @@ func (tp *TokenProvider) Authorize(req *http.Request) {
 // Successive calls to this will return cached values, where the cache
 // validity equals the token validity. The token expiry has a grace
 // period of 10 seconds to avoid race conditions.
-func (tp *TokenProvider) token() (*oauth2.Token, error) {
+func (tp *ClientCredentialsProvider) token() (*oauth2.Token, error) {
 	if tp.tokenSource == nil {
 		return nil, nil
 	}

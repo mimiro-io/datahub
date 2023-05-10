@@ -54,7 +54,7 @@ var _ = Describe("DL Jwt configuration", func() {
 			},
 		}
 
-		config := NewTokenProvider(zap.NewNop().Sugar(), provider, &ProviderManager{})
+		config := NewClientCredentialsProvider(zap.NewNop().Sugar(), provider, &ProviderManager{})
 		Expect(config).ToNot(BeNil())
 	})
 
@@ -66,7 +66,7 @@ var _ = Describe("DL Jwt configuration", func() {
 			ClientSecret: "456",
 			TokenURL:     srv.URL + "/oauth2/token",
 		}
-		config := TokenProvider{
+		config := ClientCredentialsProvider{
 			tokenSource: cc.TokenSource(context.Background()),
 			logger:      zap.NewNop().Sugar(),
 		}
