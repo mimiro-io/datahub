@@ -86,7 +86,7 @@ func NewTokenProviders(
 func (providers *TokenProviders) toProvider(provider ProviderConfig) Provider {
 	providers.log.Infof("Adding login provider '%s'", provider.Name)
 	if strings.ToLower(provider.Type) == "bearer" {
-		return NewDlJwtConfig(providers.log, provider, providers.pm)
+		return NewTokenProvider(providers.log, provider, providers.pm)
 	} else if strings.ToLower(provider.Type) == "nodebearer" {
 		return NewNodeJwtBearerProvider(providers.log, providers.ServiceCore, provider)
 	} else {
