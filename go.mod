@@ -2,10 +2,10 @@ module github.com/mimiro-io/datahub
 
 go 1.20
 
+replace github.com/dop251/goja => github.com/mimiro-io/goja v1.0.0
+
 require (
 	github.com/DataDog/datadog-go/v5 v5.3.0
-	github.com/PaddleHQ/go-aws-ssm v0.8.0
-	github.com/aws/aws-sdk-go v1.44.228
 	github.com/bamzi/jobrunner v1.0.0
 	github.com/dgraph-io/badger/v3 v3.2103.5
 	github.com/dop251/goja v1.0.0
@@ -23,11 +23,6 @@ require (
 	go.uber.org/zap v1.24.0
 	golang.org/x/sync v0.1.0
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-)
-
-replace github.com/dop251/goja => github.com/mimiro-io/goja v1.0.0
-
-require (
 	github.com/lestrrat-go/jwx/v2 v2.0.9
 	github.com/onsi/ginkgo/v2 v2.9.4
 	github.com/onsi/gomega v1.27.6

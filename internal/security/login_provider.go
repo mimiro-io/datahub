@@ -26,7 +26,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/conf"
-	"github.com/mimiro-io/datahub/internal/conf/secrets"
 	"github.com/mimiro-io/datahub/internal/server"
 )
 
@@ -40,7 +39,6 @@ type ProviderManager struct {
 	env   *conf.Env
 	store *server.Store
 	log   *zap.SugaredLogger
-	sm    secrets.SecretStore
 }
 
 func NewProviderManager(lc fx.Lifecycle, env *conf.Env, store *server.Store, log *zap.SugaredLogger) *ProviderManager {
@@ -101,10 +99,6 @@ func (pm *ProviderManager) LoadValue(vp *ValueReader) string {
 		if v == "" {
 			return viper.GetString(vp.Value)
 		} else {
-			return v
-		}
-	case "ssm":
-		if v, ok := pm.sm.Value(vp.Value); ok {
 			return v
 		}
 	}
