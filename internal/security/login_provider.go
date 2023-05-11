@@ -78,10 +78,6 @@ func (pm *ProviderManager) addComp() error {
 				Type:  "env",
 				Value: "DL_JWT_AUDIENCE",
 			},
-			GrantType: &ValueReader{
-				Type:  "env",
-				Value: "DL_JWT_GRANT_TYPE",
-			},
 			Endpoint: &ValueReader{
 				Type:  "env",
 				Value: "DL_JWT_ENDPOINT",
@@ -157,7 +153,6 @@ type ProviderConfig struct {
 	ClientID     *ValueReader `json:"key,omitempty"`
 	ClientSecret *ValueReader `json:"secret,omitempty"`
 	Audience     *ValueReader `json:"audience,omitempty"`
-	GrantType    *ValueReader `json:"grantType,omitempty"`
 	Endpoint     *ValueReader `json:"endpoint,omitempty"`
 }
 

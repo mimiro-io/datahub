@@ -134,10 +134,6 @@ func createConfig(name string) ProviderConfig {
 			Type:  "text",
 			Value: "mimiro",
 		},
-		GrantType: &ValueReader{
-			Type:  "text",
-			Value: "test_grant",
-		},
 		Endpoint: &ValueReader{
 			Type:  "text",
 			Value: "http://localhost",

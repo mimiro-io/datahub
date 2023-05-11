@@ -17,7 +17,7 @@ package security
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -25,6 +25,11 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 	"go.uber.org/zap"
 )
+
+type cache struct {
+	until time.Time
+	token string
+}
 
 // NodeJwtBearerProvider contains the auth0 configuration
 type NodeJwtBearerProvider struct {
@@ -92,7 +97,7 @@ func (nodeTokenProvider *NodeJwtBearerProvider) callRemoteNodeEndpoint() (*jwt.T
 	}
 
 	if res.StatusCode >= 300 {
-		body, _ := ioutil.ReadAll(res.Body)
+		body, _ := io.ReadAll(res.Body)
 		return nil, fmt.Errorf("token request to %v returned status %v: %v", requestURL, res.Status, string(body))
 	}
 
