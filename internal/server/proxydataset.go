@@ -127,7 +127,7 @@ func (d *ProxyDataset) StreamEntitiesRaw(
 }
 
 func (d *ProxyDataset) StreamEntities(from string, limit int, f func(*Entity) error, preStream func() error) (string, error) {
-	uri, err := url.Parse(d.RemoteEntitiesUrl)
+	uri, err := url.Parse(d.RemoteEntitiesURL)
 	if err != nil {
 		return "", err
 	}
@@ -194,7 +194,7 @@ func (d *ProxyDataset) StreamChangesRaw(
 	latestOnly bool,
 	reverse bool,
 	f func(jsonData []byte) error,
-	preStream func(),
+	preStream func() error,
 ) (string, error) {
 	uri, err := url.Parse(d.RemoteChangesURL)
 	if err != nil {
@@ -263,8 +263,8 @@ func (d *ProxyDataset) StreamChangesRaw(
 // a `preStream` function can be provided if StreamChanges is used in a web handler. It allows
 // to leave the http response uncommitted until `f` is called, so that an http error handler
 // still can modify status code while the response is uncommitted
-func (d *ProxyDataset) StreamChanges(since string, limit int, latestOnly bool, reverse bool, f func(*Entity) error, preStream func()) (string, error) {
-	uri, err := url.Parse(d.RemoteChangesUrl)
+func (d *ProxyDataset) StreamChanges(since string, limit int, latestOnly bool, reverse bool, f func(*Entity) error, preStream func() error) (string, error) {
+	uri, err := url.Parse(d.RemoteChangesURL)
 	if err != nil {
 		return "", err
 	}

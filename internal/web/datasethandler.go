@@ -20,16 +20,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/golang-jwt/jwt/v4"
+	"github.com/labstack/echo/v4"
+	"go.uber.org/fx"
+	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
-
-	"github.com/golang-jwt/jwt/v4"
-	"github.com/labstack/echo/v4"
-	"go.uber.org/fx"
-	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/security"
 	"github.com/mimiro-io/datahub/internal/server"
@@ -294,6 +293,9 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 		// write context
 		if asJsonLd {
 			ctx := dataset.GetContext()
+			ctx.Namespaces["core"] = "http://data,.mimiro.io/core/uda/"
+			ctx.Namespaces["rdf"] = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+
 			jsonContext, _ := json.Marshal(convertContextToJSONLD(ctx))
 			_, err = c.Response().Write(jsonContext)
 			if err != nil {
@@ -319,7 +321,8 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 		if asJsonLd {
 			continuationToken, err = proxyDataset.StreamEntities(f, l, func(entity *server.Entity) error {
 				_, _ = c.Response().Write([]byte(","))
-				_, _ = c.Response().Write(toJSONLD(entity))
+				jsonLdBytes, _ := json.Marshal(toJSONLD(entity))
+				_, _ = c.Response().Write(jsonLdBytes)
 				return nil
 			}, preStream)
 		} else {
@@ -335,7 +338,11 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 		}
 		if continuationToken != "" {
 			// write the continuation token and end the array of entities
-			_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + continuationToken + "\"}]"))
+			if asJsonLd {
+				_, _ = c.Response().Write([]byte(", " + makeJsonLdContinuationToken(continuationToken) + "]"))
+			} else {
+				_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + continuationToken + "\"}]"))
+			}
 		} else {
 			// write only array closing bracket
 			_, _ = c.Response().Write([]byte("]"))
@@ -351,24 +358,107 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 		if err != nil {
 			return err
 		}
-		continuationToken, err = dataset.MapEntitiesRaw(f, l, func(jsonData []byte) error {
-			_, err2 := c.Response().Write([]byte(","))
-			if err2 != nil {
+
+		if asJsonLd {
+			continuationToken, err = dataset.MapEntities(f, l, func(entity *server.Entity) error {
+				_, err2 := c.Response().Write([]byte(","))
+				if err2 != nil {
+					return err2
+				}
+				jsonLdBytes, _ := json.Marshal(toJSONLD(entity))
+				_, err2 = c.Response().Write(jsonLdBytes)
 				return err2
+			})
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 			}
-			_, err2 = c.Response().Write(jsonData)
-			return err2
-		})
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		} else {
+			continuationToken, err = dataset.MapEntitiesRaw(f, l, func(jsonData []byte) error {
+				_, err2 := c.Response().Write([]byte(","))
+				if err2 != nil {
+					return err2
+				}
+				_, err2 = c.Response().Write(jsonData)
+				return err2
+			})
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
 		}
+
 		// write the continuation token and end the array of entities
-		_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + continuationToken + "\"}]"))
+		if asJsonLd {
+			_, _ = c.Response().Write([]byte(", " + makeJsonLdContinuationToken(continuationToken) + "]"))
+		} else {
+			_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + continuationToken + "\"}]"))
+		}
 	}
 
 	c.Response().Flush()
 
 	return nil
+}
+
+func toJsonLdFromMap(entityMap map[string]interface{}) map[string]interface{} {
+	jsonLd := make(map[string]interface{})
+
+	// add id
+	if entityMap["id"] != nil {
+		jsonLd["@id"] = entityMap["id"]
+	}
+
+	if entityMap["props"] != nil {
+		for key, value := range entityMap["props"].(map[string]interface{}) {
+			// check the type of value
+			switch v := value.(type) {
+			case []interface{}:
+				// array of entities
+				jsonLd[key] = toJsonLdFromArray(v)
+			case map[string]interface{}:
+				// entity as json
+				jsonLd[key] = toJsonLdFromMap(v)
+			default:
+				// assume we can just put out the value
+				jsonLd[key] = v
+			}
+		}
+	}
+
+	// if references
+	if entityMap["refs"] != nil {
+		for key, value := range entityMap["refs"].(map[string]interface{}) {
+			// check the type of value
+			switch v := value.(type) {
+			case []string:
+				refs := make([]JsonLdRef, len(v))
+				for _, ref := range v {
+					refs = append(refs, JsonLdRef{ID: ref})
+				}
+				jsonLd[key] = refs
+			case string:
+				jsonLd[key] = JsonLdRef{ID: v}
+			}
+		}
+	}
+
+	return jsonLd
+}
+
+func toJsonLdFromArray(entityArray []interface{}) []interface{} {
+	jsonLd := make([]interface{}, len(entityArray))
+
+	for i, value := range entityArray {
+		switch value.(type) {
+		case []interface{}:
+			jsonLd[i] = toJsonLdFromArray(value.([]interface{}))
+		case map[string]interface{}:
+			jsonLd[i] = toJsonLdFromMap(value.(map[string]interface{}))
+		default:
+			jsonLd[i] = value
+		}
+	}
+
+	return jsonLd
 }
 
 // Convert Entity JSON-LD representation
@@ -382,33 +472,38 @@ func toJSONLD(entity *server.Entity) map[string]interface{} {
 	for key, value := range entity.Properties {
 		// check the type of value
 		switch v := value.(type) {
-		case int:
-			jsonLd[key] = v
-		case []int:
-			jsonLd[key] = v
-		case float64:
-			jsonLd[key] = v
-		case []float64:
-			jsonLd[key] = v
-		case bool:
-			jsonLd[key] = v
-		case []bool:
-			jsonLd[key] = v
-		case string:
-			jsonLd[key] = v
-		case []string:
-			jsonLd[key] = v
-		case []map[string]interface{}:
-			jsonLd[key] = v
+		case []interface{}:
+			// array of values
+			jsonLd[key] = toJsonLdFromArray(v)
 		case map[string]interface{}:
-
+			// entity as json
+			jsonLd[key] = toJsonLdFromMap(v)
+		default:
+			// assume we can just put out the value
+			jsonLd[key] = v
 		}
-		//
 	}
 
 	// get the refs
+	for key, value := range entity.References {
+		// check the type of value
+		switch v := value.(type) {
+		case []string:
+			refs := make([]JsonLdRef, len(v))
+			for _, ref := range v {
+				refs = append(refs, JsonLdRef{ID: ref})
+			}
+			jsonLd[key] = refs
+		case string:
+			jsonLd[key] = JsonLdRef{ID: v}
+		}
+	}
 
 	return jsonLd
+}
+
+type JsonLdRef struct {
+	ID string `json:"@id"`
 }
 
 func (handler *datasetHandler) lookupAuth(authProviderName string) func(req *http.Request) {
@@ -428,6 +523,11 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 	since := c.QueryParam("since")
 	reverse := c.QueryParam("reverse") == "true"
 	latestOnly := c.QueryParam("latestOnly") == "true"
+	asJsonLd := false
+	acceptHeader := c.Request().Header.Get("Accept")
+	if strings.Contains(acceptHeader, "application/ld+json") {
+		asJsonLd = true
+	}
 
 	var l int
 	if limit != "" {
@@ -444,30 +544,69 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 		return c.NoContent(http.StatusNotFound)
 	}
 
-	preStream := func() {
+	preStream := func() error {
 		c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		c.Response().WriteHeader(http.StatusOK)
 
 		_, _ = c.Response().Write([]byte("["))
 
 		// write context
-		jsonContext, _ := json.Marshal(dataset.GetContext())
-		_, _ = c.Response().Write(jsonContext)
-	}
-	if dataset.IsProxy() {
-		continuationToken, err := dataset.AsProxy(
-			handler.lookupAuth(dataset.ProxyConfig.AuthProviderName),
-		).StreamChangesRaw(since, l, latestOnly, reverse, func(jsonData []byte) error {
-			_, _ = c.Response().Write([]byte(","))
-			_, _ = c.Response().Write(jsonData)
-			return nil
-		}, preStream)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		if asJsonLd {
+			ctx := dataset.GetContext()
+			ctx.Namespaces["core"] = "http://data,.mimiro.io/core/uda/"
+			ctx.Namespaces["rdf"] = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+
+			jsonContext, err := json.Marshal(convertContextToJSONLD(ctx))
+			_, err = c.Response().Write(jsonContext)
+			if err != nil {
+				return err
+			}
+		} else {
+			jsonContext, _ := json.Marshal(dataset.GetContext())
+			_, err := c.Response().Write(jsonContext)
+			if err != nil {
+				return err
+			}
 		}
+
+		return nil
+	}
+
+	if dataset.IsProxy() {
+
+		proxyDataset := dataset.AsProxy(
+			handler.lookupAuth(dataset.ProxyConfig.AuthProviderName))
+
+		// check if we are streaming json-ld
+		continuationToken := ""
+		var err error
+		if asJsonLd {
+			continuationToken, err = proxyDataset.StreamChanges(since, l, latestOnly, reverse, func(entity *server.Entity) error {
+				_, _ = c.Response().Write([]byte(","))
+				jsonData, _ := json.Marshal(toJSONLD(entity))
+				_, _ = c.Response().Write(jsonData)
+				return nil
+			}, preStream)
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
+		} else {
+			continuationToken, err = proxyDataset.StreamChangesRaw(since, l, latestOnly, reverse, func(jsonData []byte) error {
+				_, _ = c.Response().Write([]byte(","))
+				_, _ = c.Response().Write(jsonData)
+				return nil
+			}, preStream)
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
+		}
+
 		if continuationToken != "" {
-			// write the continuation token and end the array of entities
-			_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + continuationToken + "\"}]"))
+			if asJsonLd {
+				_, _ = c.Response().Write([]byte(", " + makeJsonLdContinuationToken(continuationToken) + "]"))
+			} else {
+				_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + continuationToken + "\"}]"))
+			}
 		} else {
 			// write only array closing bracket
 			_, _ = c.Response().Write([]byte("]"))
@@ -510,21 +649,45 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 				_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + encodeSince(continuationToken) + "\"}]"))
 			}
 		} else {
-			continuationToken, err := dataset.ProcessChangesRaw(uint64(sinceNum), l, latestOnly, func(jsonData []byte) error {
-				_, _ = c.Response().Write([]byte(","))
-				_, _ = c.Response().Write(jsonData)
-				return nil
-			})
-			if err != nil {
-				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			if asJsonLd {
+				continuationToken, err := dataset.ProcessChanges(uint64(sinceNum), l, latestOnly, func(entity *server.Entity) {
+					_, _ = c.Response().Write([]byte(","))
+					jsonData, _ := json.Marshal(toJSONLD(entity))
+					_, _ = c.Response().Write(jsonData)
+				})
+				if err != nil {
+					return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+				}
+
+				// encode continuation token as
+
+				_, _ = c.Response().Write([]byte(", " + makeJsonLdContinuationToken(encodeSince(types.DatasetOffset(continuationToken))) + "]"))
+
+			} else {
+				continuationToken, err := dataset.ProcessChangesRaw(uint64(sinceNum), l, latestOnly, func(jsonData []byte) error {
+					_, _ = c.Response().Write([]byte(","))
+					_, _ = c.Response().Write(jsonData)
+					return nil
+				})
+				if err != nil {
+					return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+				}
+				_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + encodeSince(types.DatasetOffset(continuationToken)) + "\"}]"))
 			}
-			_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + encodeSince(types.DatasetOffset(continuationToken)) + "\"}]"))
 		}
 	}
 	// write the continuation token and end the array of entities
 	c.Response().Flush()
 
 	return nil
+}
+
+func makeJsonLdContinuationToken(token string) string {
+	contToken := make(map[string]interface{})
+	contToken["rdf:type"] = map[string]string{"@id": "core:continuation"}
+	contToken["core:token"] = token
+	jsonData, _ := json.Marshal(contToken)
+	return string(jsonData)
 }
 
 // storeEntitiesHandler
