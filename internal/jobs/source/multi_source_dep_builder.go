@@ -3,6 +3,7 @@ package source
 import (
 	"errors"
 	"fmt"
+	"strconv"
 )
 
 type DependencyRegistry interface {
@@ -125,13 +126,18 @@ func (multiSource *MultiSource) DedupAndTrackImplicitDependencies() {
 	}
 
 	// Dedup dependencies
-	depMap := map[string]Dependency{}
+	depMap := map[string]bool{}
 	dedupedDependencies := []Dependency{}
 	for _, dep := range multiSource.Dependencies {
-		if _, ok := depMap[dep.Dataset]; !ok {
+		joinsKey := ""
+		for _, join := range dep.Joins {
+			joinsKey += join.Dataset + "|" + join.Predicate + "|" + strconv.FormatBool(join.Inverse)
+		}
+		depKey := dep.Dataset + ">" + joinsKey
+		if _, ok := depMap[depKey]; !ok {
 			dedupedDependencies = append(dedupedDependencies, dep)
 		}
-		depMap[dep.Dataset] = dep
+		depMap[depKey] = true
 	}
 	multiSource.Dependencies = dedupedDependencies
 }

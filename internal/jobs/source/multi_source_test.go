@@ -512,7 +512,7 @@ var _ = Describe("dependency tracking", func() {
 		Expect(err).To(BeNil())
 		testSource.EndFullSync()
 
-		// modify Mainstreet address and verify that nothing changed (address is not a dependency, just a join)
+		// modify Mainstreet address and verify that address is implicitly tracked
 		err = addresses.StoreEntities([]*server.Entity{
 			server.NewEntityFromMap(map[string]interface{}{
 				"id":    addressPrefix + ":Mainstreet",
@@ -534,7 +534,7 @@ var _ = Describe("dependency tracking", func() {
 			},
 		)
 		Expect(err).To(BeNil())
-		Expect(len(recordedEntities)).To(Equal(0))
+		Expect(len(recordedEntities)).To(Equal(1))
 
 		// now, modify Oslo city and verify that bob is found via Mainstreet address
 		err = cities.StoreEntities([]*server.Entity{
