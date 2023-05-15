@@ -18,10 +18,11 @@ package source
 import (
 	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/server"
 )
@@ -31,33 +32,37 @@ import (
 
 	MultiSource only operates on changes, but accepts calls to FullsyncStart to avoid processing dependencies during initial load
 */
-type Join struct {
-	Dataset   string
-	Predicate string
-	Inverse   bool
-}
+type (
+	Join struct {
+		Dataset   string
+		Predicate string
+		Inverse   bool
+	}
 
-type Dependency struct {
-	Dataset string // name of the dependent dataset
-	Joins   []Join
-}
+	Dependency struct {
+		Dataset string // name of the dependent dataset
+		Joins   []Join
+	}
+	MultiSource struct {
+		DatasetName      string
+		Dependencies     []Dependency // the Dependency queries
+		Store            *server.Store
+		DatasetManager   *server.DsManager
+		isFullSync       bool
+		waterMarks       map[string]uint64
+		changesCache     map[string]changeURIData
+		LatestOnly       bool
+		Logger           *zap.SugaredLogger
+		AddTransformDeps func(string, DependencyRegistry) error
+		depRegistries    []DependencyRegistry
+	}
 
-type MultiSource struct {
-	DatasetName    string
-	Dependencies   []Dependency // the Dependency queries
-	Store          *server.Store
-	DatasetManager *server.DsManager
-	isFullSync     bool
-	waterMarks     map[string]uint64
-	changesCache   map[string]changeURIData
-	LatestOnly     bool
-}
-
-type MultiDatasetContinuation struct {
-	MainToken        string
-	DependencyTokens map[string]*StringDatasetContinuation
-	activeDS         string
-}
+	MultiDatasetContinuation struct {
+		MainToken        string
+		DependencyTokens map[string]*StringDatasetContinuation
+		activeDS         string
+	}
+)
 
 func (c *MultiDatasetContinuation) Encode() (string, error) {
 	result, err := json.Marshal(c)
@@ -404,46 +409,6 @@ func (multiSource *MultiSource) incrementalRead(since DatasetContinuation, batch
 	if err != nil {
 		return err
 	}
-	return nil
-}
-
-// ParseDependencies populates MultiSource dependencies based on given json config
-func (multiSource *MultiSource) ParseDependencies(dependenciesConfig interface{}) error {
-	dataset := multiSource.DatasetManager.GetDataset(multiSource.DatasetName)
-	if dataset != nil && dataset.IsProxy() {
-		return fmt.Errorf("main dataset multiSource must not be a proxy dataset: %v", multiSource.DatasetName)
-	}
-	if depsList, ok := dependenciesConfig.([]interface{}); ok {
-		for _, dep := range depsList {
-			if m, ok := dep.(map[string]interface{}); ok {
-				newDep := Dependency{}
-				newDep.Dataset = m["dataset"].(string)
-				depDataset := multiSource.DatasetManager.GetDataset(newDep.Dataset)
-				if depDataset != nil && depDataset.IsProxy() {
-					return fmt.Errorf(
-						"dependency dataset %v in multiSource %v must not be a proxy dataset",
-						newDep.Dataset,
-						multiSource.DatasetName,
-					)
-				}
-
-				for _, j := range m["joins"].([]interface{}) {
-					newJoin := Join{}
-					m := j.(map[string]interface{})
-					newJoin.Dataset = m["dataset"].(string)
-					newJoin.Predicate = m["predicate"].(string)
-					newJoin.Inverse = m["inverse"].(bool)
-					newDep.Joins = append(newDep.Joins, newJoin)
-				}
-				multiSource.Dependencies = append(multiSource.Dependencies, newDep)
-			} else {
-				return fmt.Errorf("dependency %+v must be json object structure, but is %t ", dep, dep)
-			}
-		}
-	} else {
-		return errors.New("dependenciesConfig must be array array")
-	}
-
 	return nil
 }
 

@@ -1,0 +1,321 @@
+package source_test
+
+import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"os"
+
+	"github.com/DataDog/datadog-go/v5/statsd"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"go.uber.org/fx/fxtest"
+	"go.uber.org/zap"
+
+	"github.com/mimiro-io/datahub/internal"
+	"github.com/mimiro-io/datahub/internal/conf"
+	"github.com/mimiro-io/datahub/internal/jobs"
+	"github.com/mimiro-io/datahub/internal/jobs/source"
+	"github.com/mimiro-io/datahub/internal/server"
+)
+
+var _ = Describe("parseDependencies", func() {
+	testCnt := 0
+	var dsm *server.DsManager
+	var store *server.Store
+	var scheduler *jobs.Scheduler
+	var storeLocation string
+	BeforeEach(func() {
+		testCnt += 1
+		storeLocation = fmt.Sprintf("./test_multi_source_dep_builder_%v", testCnt)
+		err := os.RemoveAll(storeLocation)
+		Expect(err).To(BeNil(), "should be allowed to clean testfiles in "+storeLocation)
+
+		e := &conf.Env{
+			Logger:        zap.NewNop().Sugar(),
+			StoreLocation: storeLocation,
+			RunnerConfig:  &conf.RunnerConfig{},
+		}
+		lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
+
+		store = server.NewStore(lc, e, &statsd.NoOpClient{})
+		dsm = server.NewDsManager(lc, e, store, server.NoOpBus())
+
+		devNull, _ := os.Open("/dev/null")
+		oldStd := os.Stdout
+		os.Stdout = devNull
+		runner := jobs.NewRunner(e, store, nil, nil, &statsd.NoOpClient{})
+		scheduler = jobs.NewScheduler(lc, e, store, dsm, runner)
+		err = lc.Start(context.Background())
+		os.Stdout = oldStd
+		if err != nil {
+			fmt.Println(err.Error())
+			Fail(err.Error())
+		}
+	})
+	AfterEach(func() {
+		_ = store.Close()
+		_ = os.RemoveAll(storeLocation)
+	})
+	It("should translate json to config", func() {
+		s := source.MultiSource{DatasetName: "person", Store: store, DatasetManager: dsm}
+		srcJSON := `{
+				"Type" : "MultiSource",
+				"Name" : "person",
+				"Dependencies": [
+					{
+						"dataset": "product",
+						"joins": [
+							{
+								"dataset": "order",
+								"predicate": "product-ordered",
+								"inverse": true
+							},
+							{
+								"dataset": "person",
+								"predicate": "ordering-customer",
+								"inverse": false
+							}
+						]
+					},
+					{
+						"dataset": "order",
+						"joins": [
+							{
+								"dataset": "person",
+								"predicate": "ordering-customer",
+								"inverse": false
+							}
+						]
+					}
+				]
+			}`
+
+		srcConfig := map[string]interface{}{}
+		err := json.Unmarshal([]byte(srcJSON), &srcConfig)
+		Expect(err).To(BeNil())
+		err = s.ParseDependencies(srcConfig["Dependencies"], nil)
+		Expect(err).To(BeNil())
+
+		Expect(s.Dependencies).NotTo(BeZero())
+		Expect(len(s.Dependencies)).To(Equal(2))
+
+		dep := s.Dependencies[0]
+		Expect(dep.Dataset).To(Equal("product"))
+		Expect(dep.Joins).NotTo(BeZero())
+		Expect(len(dep.Joins)).To(Equal(2))
+		j := dep.Joins[0]
+		Expect(j.Dataset).To(Equal("order"))
+		Expect(j.Predicate).To(Equal("product-ordered"))
+		Expect(j.Inverse).To(BeTrue())
+		j = dep.Joins[1]
+		Expect(j.Dataset).To(Equal("person"))
+		Expect(j.Predicate).To(Equal("ordering-customer"))
+		Expect(j.Inverse).To(BeFalse())
+
+		dep = s.Dependencies[1]
+		Expect(dep.Dataset).To(Equal("order"))
+		Expect(dep.Joins).NotTo(BeZero())
+		Expect(len(dep.Joins)).To(Equal(1))
+		j = dep.Joins[0]
+		Expect(j.Dataset).To(Equal("person"))
+		Expect(j.Predicate).To(Equal("ordering-customer"))
+		Expect(j.Inverse).To(BeFalse())
+	})
+	It("Should fail if main dataset is proxy dataset", func() {
+		// create main dataset as proxy dataset
+		_, err := dsm.CreateDataset("people", &server.CreateDatasetConfig{
+			ProxyDatasetConfig: &server.ProxyDatasetConfig{
+				RemoteURL: "http://localhost:7777/datasets/people",
+			},
+		})
+		Expect(err).To(BeNil())
+
+		// now instantiate (simulating job start)
+		testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
+		srcJSON := `{ "Type" : "MultiSource", "Name" : "people", "Dependencies": [
+                          {
+							"dataset": "address",
+							"joins": [
+							  { "dataset": "office", "predicate": "http://office/location", "inverse": true },
+							  { "dataset": "people", "predicate": "http://office/contact", "inverse": false },
+							  { "dataset": "team", "predicate": "http://team/lead", "inverse": true },
+							  { "dataset": "people", "predicate": "http://team/member", "inverse": false }
+							]
+                          }
+                        ] }`
+
+		srcConfig := map[string]interface{}{}
+		_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
+		err = testSource.ParseDependencies(srcConfig["Dependencies"], nil)
+		// t.Log(err)
+		Expect(err).NotTo(BeNil())
+	})
+	It("Should fail if a dependency is a proxy dataset", func() {
+		// create dependency dataset as proxy dataset
+		_, err := dsm.CreateDataset("address", &server.CreateDatasetConfig{
+			ProxyDatasetConfig: &server.ProxyDatasetConfig{
+				RemoteURL: "http://localhost:7777/datasets/address",
+			},
+		})
+		Expect(err).To(BeNil())
+
+		// now instantiate (simulating job start)
+		testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
+		srcJSON := `{ "Type" : "MultiSource", "Name" : "people", "Dependencies": [
+                          {
+							"dataset": "address",
+							"joins": [
+							  { "dataset": "office", "predicate": "http://office/location", "inverse": true },
+							  { "dataset": "people", "predicate": "http://office/contact", "inverse": false },
+							  { "dataset": "team", "predicate": "http://team/lead", "inverse": true },
+							  { "dataset": "people", "predicate": "http://team/member", "inverse": false }
+							]
+                          }
+                        ] }`
+
+		srcConfig := map[string]interface{}{}
+		_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
+		err = testSource.ParseDependencies(srcConfig["Dependencies"], nil)
+		// t.Log(err)
+		Expect(err).NotTo(BeNil())
+	})
+	Describe("with transform registrations", func() {
+		var s source.MultiSource
+		// BeforeEach is run before every Entry
+		BeforeEach(func() {
+			s = source.MultiSource{DatasetName: "person", Store: store, DatasetManager: dsm}
+			s.AddTransformDeps = scheduler.MultiSourceCodeRegistration
+		})
+		DescribeTable(
+			"",
+
+			// This function is the evaluation function, called for every Entry in the table
+			func(dependencies string, transformInput []string,
+				expectedOutput []source.Dependency, expectedErr error,
+			) {
+				// wrap registration statements with javascrip function and transform boilerplate
+				transform := mkTransform(transformInput...)
+
+				// unmarshal Dependencies json
+				var deps any
+				json.Unmarshal([]byte(dependencies), &deps)
+
+				// do parsing
+				err := s.ParseDependencies(deps, transform)
+				if expectedErr == nil {
+					Expect(err).To(BeNil())
+					Expect(s.Dependencies).To(BeEquivalentTo(expectedOutput))
+				} else {
+					Expect(err).To(Equal(expectedErr))
+					Expect(s.Dependencies).To(BeNil())
+				}
+			},
+			func(dependencies any, transform any, expectedOutput []source.Dependency, expectedErr error) string {
+				return fmt.Sprintf(
+					"should turn json dependencies (%v)\nand track_queries (%v)\ninto: %+v (error: %v)",
+					dependencies,
+					transform,
+					expectedOutput,
+					expectedErr,
+				)
+			},
+
+			Entry(
+				nil,
+				nil,                   // no json config
+				nil,                   // no track_queries
+				[]source.Dependency{}, // expect emtpy deps
+				nil,                   // no error
+			),
+			Entry(
+				nil,
+				`[{"dataset": "address", "joins":[{"dataset": "person", "predicate": "home", "inverse": true}]}]`, // simple json config
+				nil, // no track_queries
+				mkDepResult(exp{"address", []j{{"person", "home", true}}}), // expect single dep
+				nil, // no error
+			),
+			Entry(
+				nil,
+				nil,                                 // no json config
+				[]string{`.hop("address", "home")`}, // single hop in track_queries
+				mkDepResult(exp{"address", []j{{"person", "home", true}}}), // expect single dep
+				nil, // no error
+			),
+			Entry(
+				nil,
+				`[{"dataset": "address", "joins":[{"dataset": "person", "predicate": "home", "inverse": true}]}]`, // simple json config
+				[]string{`.iHop("car", "owner")`}, // single hop in track_queries
+				mkDepResult(
+					exp{"address", []j{{"person", "home", true}}},
+					exp{"car", []j{{"person", "owner", false}}},
+				), // expect single dep
+				nil, // no error
+			),
+			Entry(
+				nil,
+				// generate one dependency with 2 joins in json
+				`[{"dataset": "product",
+				   "joins": [{"dataset": "order", "predicate": "ordered", "inverse": true},
+				             {"dataset": "person", "predicate": "ordering", "inverse": false}]}]`,
+				// add same dep in track_queries as well
+				[]string{`.iHop("order", "ordering").hop("product", "ordered")`},
+				mkDepResult(
+					// expect deduplicated product dependency
+					exp{"product", []j{{"order", "ordered", true}, {"person", "ordering", false}}},
+					// and implicit dependency on order (intermediate hop)
+					exp{"order", []j{{"person", "ordering", false}}},
+				),
+				nil,
+			),
+		)
+	})
+})
+
+type exp struct {
+	ds    string
+	joins []j
+}
+type j struct {
+	ds        string
+	predicate string
+	inverse   bool
+}
+
+func mkDepResult(es ...exp) []source.Dependency {
+	result := []source.Dependency{}
+	for _, e := range es {
+
+		js := []source.Join{}
+		for _, j := range e.joins {
+			js = append(js, source.Join{
+				Dataset:   j.ds,
+				Predicate: j.predicate,
+				Inverse:   j.inverse,
+			})
+		}
+
+		result = append(result, source.Dependency{
+			Dataset: e.ds,
+			Joins:   js,
+		},
+		)
+	}
+
+	return result
+}
+
+func mkTransform(regs ...string) map[string]any {
+	t := map[string]any{}
+	t["Type"] = "JavascriptTransform"
+	js := ` function track_queries(reg) {`
+	js += " Log(reg);"
+	for _, reg := range regs {
+		js += "reg" + reg
+	}
+	js += "}"
+	jscriptEnc := base64.StdEncoding.EncodeToString([]byte(js))
+	t["Code"] = jscriptEnc
+	return t
+}
