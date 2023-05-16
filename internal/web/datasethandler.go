@@ -282,7 +282,12 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 	}
 
 	preStream := func() error {
-		c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		if asJsonLd {
+			c.Response().Header().Set(echo.HeaderContentType, "application/ld+json")
+		} else {
+			c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		}
+
 		c.Response().WriteHeader(http.StatusOK)
 
 		_, err = c.Response().Write([]byte("["))
@@ -545,7 +550,11 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 	}
 
 	preStream := func() error {
-		c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		if asJsonLd {
+			c.Response().Header().Set(echo.HeaderContentType, "application/ld+json")
+		} else {
+			c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		}
 		c.Response().WriteHeader(http.StatusOK)
 
 		_, _ = c.Response().Write([]byte("["))
