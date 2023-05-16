@@ -222,6 +222,7 @@ var _ = Describe("parseDependencies", func() {
 				)
 			},
 
+			// nothing
 			Entry(
 				nil,
 				nil,                   // no json config
@@ -229,6 +230,8 @@ var _ = Describe("parseDependencies", func() {
 				[]source.Dependency{}, // expect emtpy deps
 				nil,                   // no error
 			),
+
+			// json config only
 			Entry(
 				nil,
 				`[{"dataset": "address", "joins":[{"dataset": "person", "predicate": "home", "inverse": true}]}]`, // simple json config
@@ -236,6 +239,8 @@ var _ = Describe("parseDependencies", func() {
 				mkDepResult(exp{"address", []j{{"person", "home", true}}}), // expect single dep
 				nil, // no error
 			),
+
+			// track_queries only
 			Entry(
 				nil,
 				nil,                                 // no json config
@@ -243,6 +248,8 @@ var _ = Describe("parseDependencies", func() {
 				mkDepResult(exp{"address", []j{{"person", "home", true}}}), // expect single dep
 				nil, // no error
 			),
+
+			// combine json config and track_queries
 			Entry(
 				nil,
 				`[{"dataset": "address", "joins":[{"dataset": "person", "predicate": "home", "inverse": true}]}]`, // simple json config
@@ -253,6 +260,8 @@ var _ = Describe("parseDependencies", func() {
 				), // expect single dep
 				nil, // no error
 			),
+
+			// duplicate dependencies
 			Entry(
 				nil,
 				// generate one dependency with 2 joins in json
@@ -268,6 +277,32 @@ var _ = Describe("parseDependencies", func() {
 					exp{"order", []j{{"person", "ordering", false}}},
 				),
 				nil,
+			),
+
+			// complex track_queries
+			Entry(
+				nil,
+				nil, // no json config
+				[]string{
+					`.hop("address", "home")`, // query from person to home address
+					`.hop("address", "work")`, // to work address
+					// find cars owned by person, then addresses where they are parked, then persons living there
+					`.iHop("car", "owner").hop("address", "parked_at").iHop("person", "home")`,
+				}, // single hop in track_queries
+				mkDepResult(
+					exp{"address", []j{{"person", "home", true}}},
+					exp{"address", []j{{"person", "work", true}}},
+					exp{"person", []j{
+						// dependency tracking is reverse of query chain
+						{"address", "home", false}, // we start with persons and follow to their home addresses
+						{"car", "parked_at", true}, // then we follow the cars parked at those addresses
+						{"person", "owner", false}, // and finally we follow the owners of those cars, back to persons
+					}},
+					// rest are implicit dependencies from above chain
+					exp{"address", []j{{"car", "parked_at", true}, {"person", "owner", false}}},
+					exp{"car", []j{{"person", "owner", false}}},
+				), // expect single dep
+				nil, // no error
 			),
 		)
 	})
@@ -310,9 +345,9 @@ func mkTransform(regs ...string) map[string]any {
 	t := map[string]any{}
 	t["Type"] = "JavascriptTransform"
 	js := ` function track_queries(reg) {`
-	js += " Log(reg);"
+	js += " Log(reg);\n"
 	for _, reg := range regs {
-		js += "reg" + reg
+		js += "reg" + reg + "\n"
 	}
 	js += "}"
 	jscriptEnc := base64.StdEncoding.EncodeToString([]byte(js))
