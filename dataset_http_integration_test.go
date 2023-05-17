@@ -154,6 +154,38 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 			Expect(len(l)).To(Equal(3), "core.Dataset, bananas, cucumbers are listed")
 		})
 	})
+	Describe("The /entities and /changes API support JSON-LD", Ordered, func() {
+		It("Should expose changes as JSON-LD", func() {
+			// populate dataset
+			payload := strings.NewReader(bananasFromTo(1, 10, false))
+			res, err := http.Post(dsURL+"/entities", "application/json", payload)
+
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+
+			// read it back
+			client := &http.Client{}
+			req, err := http.NewRequest("GET", dsURL+"/changes", nil)
+			req.Header.Add("Accept", "application/ld+json")
+			res, err = client.Do(req)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+
+			bodyBytes, err := io.ReadAll(res.Body)
+			Expect(err).To(BeNil())
+
+			var jsonLd []interface{}
+			err = json.Unmarshal(bodyBytes, &jsonLd)
+			Expect(err).To(BeNil())
+
+			// check that the JSON-LD context is present
+			Expect(jsonLd[0].(map[string]interface{})["@context"]).NotTo(BeZero())
+
+			Expect(jsonLd[11].(map[string]interface{})["rdf:type"]).NotTo(BeZero())
+		})
+	})
 	Describe("The /entities and /changes API endpoints for regular datasets", Ordered, func() {
 		It("Should accept a single batch of changes", func() {
 			// populate dataset
