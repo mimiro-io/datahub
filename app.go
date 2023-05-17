@@ -21,7 +21,6 @@ import (
 	"go.uber.org/fx"
 
 	"github.com/mimiro-io/datahub/internal/conf"
-	"github.com/mimiro-io/datahub/internal/conf/secrets"
 	"github.com/mimiro-io/datahub/internal/content"
 	"github.com/mimiro-io/datahub/internal/jobs"
 	"github.com/mimiro-io/datahub/internal/security"
@@ -36,7 +35,6 @@ func wire() *fx.App {
 		),
 		fx.Provide(
 			conf.NewEnv,
-			secrets.NewManager,
 			conf.NewMetricsClient,
 			conf.NewLogger,
 			server.NewBus,
