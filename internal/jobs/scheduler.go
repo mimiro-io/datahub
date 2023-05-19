@@ -24,7 +24,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/bamzi/jobrunner"
+	"github.com/dop251/goja"
 	"github.com/robfig/cron/v3"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -597,9 +599,10 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 			case "MultiSource":
 				src := &source.MultiSource{}
 				src.Store = s.Store
+				src.AddTransformDeps = s.MultiSourceCodeRegistration
 				src.DatasetManager = s.DatasetManager
 				src.DatasetName = (sourceConfig["Name"]).(string)
-				err := src.ParseDependencies(sourceConfig["Dependencies"])
+				err := src.ParseDependencies(sourceConfig["Dependencies"], jobConfig.Transform)
 				if err != nil {
 					return nil, err
 				}
@@ -668,4 +671,26 @@ func (s *Scheduler) resolveJobTitle(jobID string) string {
 		return ""
 	}
 	return jobConfig.Title
+}
+
+func (s *Scheduler) MultiSourceCodeRegistration(code64 string, reg source.DependencyRegistry) error {
+	log := s.Runner.logger.Named("MultiSource")
+	engine, err := NewJavascriptTransform(log, code64, s.Store, s.DatasetManager)
+	if err != nil {
+		return err
+	}
+	// convert Go methods to lowercase in js
+	engine.Runtime.SetFieldNameMapper(goja.UncapFieldNameMapper())
+	engine.statsDClient = &statsd.NoOpClient{}
+	var register func(reg source.DependencyRegistry) error
+	err = engine.Runtime.ExportTo(engine.Runtime.Get("track_queries"), &register)
+	if err != nil {
+		return err
+	}
+
+	err = register(reg)
+	if err != nil {
+		return err
+	}
+	return nil
 }

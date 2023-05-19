@@ -190,7 +190,7 @@ var _ = Describe("dependency tracking", func() {
 		srcConfig := map[string]interface{}{}
 		err := json.Unmarshal([]byte(srcJSON), &srcConfig)
 		Expect(err).To(BeNil())
-		err = testSource.ParseDependencies(srcConfig["Dependencies"])
+		err = testSource.ParseDependencies(srcConfig["Dependencies"], nil)
 		Expect(err).To(BeNil())
 
 		var recordedEntities []server.Entity
@@ -250,7 +250,7 @@ var _ = Describe("dependency tracking", func() {
 		srcConfig := map[string]interface{}{}
 		err := json.Unmarshal([]byte(srcJSON), &srcConfig)
 		Expect(err).To(BeNil())
-		err = testSource.ParseDependencies(srcConfig["Dependencies"])
+		err = testSource.ParseDependencies(srcConfig["Dependencies"], nil)
 		Expect(err).To(BeNil())
 
 		// fullsync
@@ -322,7 +322,7 @@ var _ = Describe("dependency tracking", func() {
 		srcConfig := map[string]interface{}{}
 		err := json.Unmarshal([]byte(srcJSON), &srcConfig)
 		Expect(err).To(BeNil())
-		err = testSource.ParseDependencies(srcConfig["Dependencies"])
+		err = testSource.ParseDependencies(srcConfig["Dependencies"], nil)
 		Expect(err).To(BeNil())
 
 		// initial incremental run.
@@ -388,7 +388,7 @@ var _ = Describe("dependency tracking", func() {
 
 		srcConfig := map[string]interface{}{}
 		_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
-		_ = testSource.ParseDependencies(srcConfig["Dependencies"])
+		_ = testSource.ParseDependencies(srcConfig["Dependencies"], nil)
 
 		// fullsync
 		var recordedEntities []server.Entity
@@ -490,7 +490,7 @@ var _ = Describe("dependency tracking", func() {
 		srcConfig := map[string]interface{}{}
 		err := json.Unmarshal([]byte(srcJSON), &srcConfig)
 		Expect(err).To(BeNil())
-		err = testSource.ParseDependencies(srcConfig["Dependencies"])
+		err = testSource.ParseDependencies(srcConfig["Dependencies"], nil)
 		Expect(err).To(BeNil())
 
 		// fullsync
@@ -512,7 +512,7 @@ var _ = Describe("dependency tracking", func() {
 		Expect(err).To(BeNil())
 		testSource.EndFullSync()
 
-		// modify Mainstreet address and verify that nothing changed (address is not a dependency, just a join)
+		// modify Mainstreet address and verify that address is implicitly tracked
 		err = addresses.StoreEntities([]*server.Entity{
 			server.NewEntityFromMap(map[string]interface{}{
 				"id":    addressPrefix + ":Mainstreet",
@@ -534,7 +534,7 @@ var _ = Describe("dependency tracking", func() {
 			},
 		)
 		Expect(err).To(BeNil())
-		Expect(len(recordedEntities)).To(Equal(0))
+		Expect(len(recordedEntities)).To(Equal(1))
 
 		// now, modify Oslo city and verify that bob is found via Mainstreet address
 		err = cities.StoreEntities([]*server.Entity{
@@ -592,7 +592,7 @@ var _ = Describe("dependency tracking", func() {
 
 		srcConfig := map[string]interface{}{}
 		_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
-		_ = testSource.ParseDependencies(srcConfig["Dependencies"])
+		_ = testSource.ParseDependencies(srcConfig["Dependencies"], nil)
 
 		// fullsync
 		var recordedEntities []server.Entity
@@ -659,7 +659,7 @@ var _ = Describe("dependency tracking", func() {
 
 		srcConfig := map[string]interface{}{}
 		_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
-		_ = testSource.ParseDependencies(srcConfig["Dependencies"])
+		_ = testSource.ParseDependencies(srcConfig["Dependencies"], nil)
 
 		// fullsync
 		var recordedEntities []server.Entity
@@ -718,7 +718,7 @@ var _ = Describe("dependency tracking", func() {
 
 		srcConfig := map[string]interface{}{}
 		_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
-		_ = testSource.ParseDependencies(srcConfig["Dependencies"])
+		_ = testSource.ParseDependencies(srcConfig["Dependencies"], nil)
 
 		// fullsync
 		var recordedEntities []server.Entity
@@ -790,7 +790,7 @@ var _ = Describe("dependency tracking", func() {
 
 		srcConfig := map[string]interface{}{}
 		_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
-		_ = testSource.ParseDependencies(srcConfig["Dependencies"])
+		_ = testSource.ParseDependencies(srcConfig["Dependencies"], nil)
 
 		// fullsync
 		var recordedEntities []server.Entity
@@ -894,7 +894,7 @@ var _ = Describe("dependency tracking", func() {
 
 		srcConfig := map[string]interface{}{}
 		_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
-		_ = testSource.ParseDependencies(srcConfig["Dependencies"])
+		_ = testSource.ParseDependencies(srcConfig["Dependencies"], nil)
 
 		// fullsync
 		var recordedEntities []server.Entity
@@ -996,7 +996,7 @@ var _ = Describe("dependency tracking", func() {
 
 		srcConfig := map[string]interface{}{}
 		_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
-		_ = testSource.ParseDependencies(srcConfig["Dependencies"])
+		_ = testSource.ParseDependencies(srcConfig["Dependencies"], nil)
 
 		// fullsync
 		var recordedEntities []server.Entity
@@ -1149,7 +1149,7 @@ var _ = Describe("dependency tracking", func() {
 
 		srcConfig := map[string]interface{}{}
 		_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
-		_ = testSource.ParseDependencies(srcConfig["Dependencies"])
+		_ = testSource.ParseDependencies(srcConfig["Dependencies"], nil)
 
 		// fullsync
 		var recordedEntities []server.Entity
@@ -1232,7 +1232,7 @@ var _ = Describe("dependency tracking", func() {
 
 		srcConfig := map[string]interface{}{}
 		_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
-		_ = testSource.ParseDependencies(srcConfig["Dependencies"])
+		_ = testSource.ParseDependencies(srcConfig["Dependencies"], nil)
 
 		// fullsync
 		var recordedEntities []server.Entity
@@ -1283,132 +1283,6 @@ var _ = Describe("dependency tracking", func() {
 		Expect(recordedEntities[0].ID).To(Equal(peoplePrefix + ":Bob"))
 		Expect(recordedEntities[0].Properties["name"]).
 			To(Equal("Bob"), "Bob exists in two datasets. making sure we dont get a merged result")
-	})
-
-	Describe("parseDependencies", func() {
-		It("should translate json to config", func() {
-			s := source.MultiSource{DatasetName: "person", Store: store, DatasetManager: dsm}
-			srcJSON := `{
-				"Type" : "MultiSource",
-				"Name" : "person",
-				"Dependencies": [
-					{
-						"dataset": "product",
-						"joins": [
-							{
-								"dataset": "order",
-								"predicate": "product-ordered",
-								"inverse": true
-							},
-							{
-								"dataset": "person",
-								"predicate": "ordering-customer",
-								"inverse": false
-							}
-						]
-					},
-					{
-						"dataset": "order",
-						"joins": [
-							{
-								"dataset": "person",
-								"predicate": "ordering-customer",
-								"inverse": false
-							}
-						]
-					}
-				]
-			}`
-
-			srcConfig := map[string]interface{}{}
-			err := json.Unmarshal([]byte(srcJSON), &srcConfig)
-			Expect(err).To(BeNil())
-			err = s.ParseDependencies(srcConfig["Dependencies"])
-			Expect(err).To(BeNil())
-
-			Expect(s.Dependencies).NotTo(BeZero())
-			Expect(len(s.Dependencies)).To(Equal(2))
-
-			dep := s.Dependencies[0]
-			Expect(dep.Dataset).To(Equal("product"))
-			Expect(dep.Joins).NotTo(BeZero())
-			Expect(len(dep.Joins)).To(Equal(2))
-			j := dep.Joins[0]
-			Expect(j.Dataset).To(Equal("order"))
-			Expect(j.Predicate).To(Equal("product-ordered"))
-			Expect(j.Inverse).To(BeTrue())
-			j = dep.Joins[1]
-			Expect(j.Dataset).To(Equal("person"))
-			Expect(j.Predicate).To(Equal("ordering-customer"))
-			Expect(j.Inverse).To(BeFalse())
-
-			dep = s.Dependencies[1]
-			Expect(dep.Dataset).To(Equal("order"))
-			Expect(dep.Joins).NotTo(BeZero())
-			Expect(len(dep.Joins)).To(Equal(1))
-			j = dep.Joins[0]
-			Expect(j.Dataset).To(Equal("person"))
-			Expect(j.Predicate).To(Equal("ordering-customer"))
-			Expect(j.Inverse).To(BeFalse())
-		})
-		It("Should fail if main dataset is proxy dataset", func() {
-			// create main dataset as proxy dataset
-			_, err := dsm.CreateDataset("people", &server.CreateDatasetConfig{
-				ProxyDatasetConfig: &server.ProxyDatasetConfig{
-					RemoteURL: "http://localhost:7777/datasets/people",
-				},
-			})
-			Expect(err).To(BeNil())
-
-			// now instantiate (simulating job start)
-			testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
-			srcJSON := `{ "Type" : "MultiSource", "Name" : "people", "Dependencies": [
-                          {
-							"dataset": "address",
-							"joins": [
-							  { "dataset": "office", "predicate": "http://office/location", "inverse": true },
-							  { "dataset": "people", "predicate": "http://office/contact", "inverse": false },
-							  { "dataset": "team", "predicate": "http://team/lead", "inverse": true },
-							  { "dataset": "people", "predicate": "http://team/member", "inverse": false }
-							]
-                          }
-                        ] }`
-
-			srcConfig := map[string]interface{}{}
-			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
-			err = testSource.ParseDependencies(srcConfig["Dependencies"])
-			// t.Log(err)
-			Expect(err).NotTo(BeNil())
-		})
-		It("Should fail if a dependency is a proxy dataset", func() {
-			// create dependency dataset as proxy dataset
-			_, err := dsm.CreateDataset("address", &server.CreateDatasetConfig{
-				ProxyDatasetConfig: &server.ProxyDatasetConfig{
-					RemoteURL: "http://localhost:7777/datasets/address",
-				},
-			})
-			Expect(err).To(BeNil())
-
-			// now instantiate (simulating job start)
-			testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
-			srcJSON := `{ "Type" : "MultiSource", "Name" : "people", "Dependencies": [
-                          {
-							"dataset": "address",
-							"joins": [
-							  { "dataset": "office", "predicate": "http://office/location", "inverse": true },
-							  { "dataset": "people", "predicate": "http://office/contact", "inverse": false },
-							  { "dataset": "team", "predicate": "http://team/lead", "inverse": true },
-							  { "dataset": "people", "predicate": "http://team/member", "inverse": false }
-							]
-                          }
-                        ] }`
-
-			srcConfig := map[string]interface{}{}
-			_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
-			err = testSource.ParseDependencies(srcConfig["Dependencies"])
-			// t.Log(err)
-			Expect(err).NotTo(BeNil())
-		})
 	})
 })
 

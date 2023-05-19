@@ -20,15 +20,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/golang-jwt/jwt/v4"
-	"github.com/labstack/echo/v4"
-	"go.uber.org/fx"
-	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/golang-jwt/jwt/v4"
+	"github.com/labstack/echo/v4"
+	"go.uber.org/fx"
+	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/security"
 	"github.com/mimiro-io/datahub/internal/server"
@@ -238,8 +239,15 @@ func (handler *datasetHandler) deleteAllDatasets(c echo.Context) error {
 
 // convert context to JSON-LD context
 func convertContextToJSONLD(context *server.Context) map[string]interface{} {
+	namespaces := make(map[string]string, len(context.Namespaces)+2)
+	for k, v := range context.Namespaces {
+		namespaces[k] = v
+	}
+	namespaces["core"] = "http://data.mimiro.io/core/uda/"
+	namespaces["rdf"] = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+
 	jsonLdContext := make(map[string]interface{})
-	jsonLdContext["@context"] = context.Namespaces
+	jsonLdContext["@context"] = namespaces
 	return jsonLdContext
 }
 
@@ -298,8 +306,6 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 		// write context
 		if asJsonLd {
 			ctx := dataset.GetContext()
-			ctx.Namespaces["core"] = "http://data,.mimiro.io/core/uda/"
-			ctx.Namespaces["rdf"] = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 
 			jsonContext, _ := json.Marshal(convertContextToJSONLD(ctx))
 			_, err = c.Response().Write(jsonContext)
@@ -562,8 +568,6 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 		// write context
 		if asJsonLd {
 			ctx := dataset.GetContext()
-			ctx.Namespaces["core"] = "http://data,.mimiro.io/core/uda/"
-			ctx.Namespaces["rdf"] = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 
 			jsonContext, err := json.Marshal(convertContextToJSONLD(ctx))
 			_, err = c.Response().Write(jsonContext)
@@ -590,12 +594,19 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 		continuationToken := ""
 		var err error
 		if asJsonLd {
-			continuationToken, err = proxyDataset.StreamChanges(since, l, latestOnly, reverse, func(entity *server.Entity) error {
-				_, _ = c.Response().Write([]byte(","))
-				jsonData, _ := json.Marshal(toJSONLD(entity))
-				_, _ = c.Response().Write(jsonData)
-				return nil
-			}, preStream)
+			continuationToken, err = proxyDataset.StreamChanges(
+				since,
+				l,
+				latestOnly,
+				reverse,
+				func(entity *server.Entity) error {
+					_, _ = c.Response().Write([]byte(","))
+					jsonData, _ := json.Marshal(toJSONLD(entity))
+					_, _ = c.Response().Write(jsonData)
+					return nil
+				},
+				preStream,
+			)
 			if err != nil {
 				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 			}

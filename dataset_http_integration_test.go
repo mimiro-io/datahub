@@ -38,7 +38,7 @@ import (
 	"github.com/mimiro-io/datahub/internal/server"
 )
 
-var _ = Describe("The dataset endpoint", Ordered, func() {
+var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
 	var app *fx.App
 	var mockLayer *MockLayer
 
@@ -557,6 +557,8 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 	})
 	Describe("The /changes and /entities endpoints for proxy datasets", Ordered, func() {
 		It("Should fetch from remote for GET /changes without token", func() {
+			// TODO: why do we need to GET twice? the first GET does not get the comlete list of namespaces
+			http.Get(proxyDsURL + "/changes")
 			res, err := http.Get(proxyDsURL + "/changes")
 			Expect(err).To(BeNil())
 			Expect(res).NotTo(BeZero())
@@ -571,6 +573,13 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 			var m []map[string]interface{}
 			_ = json.Unmarshal(b, &m)
 			Expect(m[11]["token"]).To(Equal("nextplease"))
+			Expect(m[0]["namespaces"]).To(Equal(map[string]interface{}{
+				"ns0": "http://data.mimiro.io/core/dataset/",
+				"ns1": "http://data.mimiro.io/core/",
+				"ns2": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+				"ns3": "http://example.com",
+				"ns4": "http://example.mimiro.io/",
+			}))
 		})
 		It("Should fetch from remote for GET /changes with token and limit", func() {
 			res, err := http.Get(proxyDsURL + "/changes?since=theweekend&limit=3")

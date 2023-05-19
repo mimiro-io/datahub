@@ -625,6 +625,100 @@ MultiSource can in incremental jobs emit entities that have not been changed the
 }
 ```
 
+Note that the order of joins in a MultiSource's Dependency configuration is the inverse of the applied query order in transform code.
+
+Example: A source dataset in a job is "person", and the job aims to enrich all person entities using the following queries in a transform.
+
+The first query finds a company that the person has a "worksfor" relation to. The second Query finds a location for the workplace.
+The location is then added to the person entity.
+
+```javascript
+const ns = GetNamespacePrefix("http://example.com/");
+const companies = Query(GetId(e), PrefixField(ns, "worksfor"), false);
+if (companies.length !== 0) {
+    const firstCompany = companies[0][2];
+    const workPlaces = Query(
+        GetId(firstCompany),
+        PrefixField(ns, "address"),
+        false
+    );
+    if (workPlaces.length !== 0) {
+        const firstWorkLocation = workPlaces[0][2];
+        SetProperty(e, ns, "workLocation", GetProperty(firstWorkLocation));
+    }
+}
+```
+
+This is the typical use case for MultiSource: whenever locations or companies change, this job needs to reprocess all persons
+connected to those companies and locations.
+
+MultiSource emits all person entities affected by changes in locations or companies, if we add the following dependency configuration:
+
+```json
+{
+    "source": {
+        "Type": "MultiSource",
+        "Name": "person",
+        "LatestOnly": "true"
+        "Dependencies": [{ "dataset": "location", "joins": [
+            { "dataset": "company", "predicate": "http://example.com/address", "inverse": true },
+            { "dataset": "person", "predicate": "http://example.com/worksfor", "inverse": true }
+        ]}]
+    }
+}
+```
+
+When triggered, MultiSource will find all changed locations first, all compaties pointing to those locations second, and finally
+all persons working for the found companies. These person are emitted from the Source and can now be reprocessed in the jobs transform.
+
+##### MultiSouce dependency registration in javascript.
+
+It is also possible to configure MultiSource dependencies using a special function in a job transform script:
+`function track_queries(start)`
+
+If present in a job's transform script, MultiSource will execute this function, providing a single parameter
+representing the main dataset as starting point for dependency registrations.
+
+The starting object offers the methods `hop(datasetName, relationshipName)` and `iHop(datasetName, relationshipName)`
+for adding dependencies to MultiSource, where `hop` adds datasets connected via outgoing relations,
+and `iHop` adds inverse relations. The relation direction in track_queries is the same as in the applied queries in `transform_entities`.
+
+The above example configuration can be replaced using javascript registations.
+
+```javascript
+function track_queries(start) {
+    start
+        .hop("company", "http://example.com/worksfor")
+        .hop("location", "http://example.com/address");
+}
+```
+
+The json configuration of MultiSource does not need a `Dependencies` part if `track_queries` is used, the
+rest of the source configuration remains the same.
+
+##### Many Dependencies
+
+To track changes in many dependent datasets, many configuration objects can be added to the `Dependencies` array when using
+json config.
+
+When using `track_queries`, many dependencies can be added as separate function call chains on the starting object. An example,
+where the `start` parameter again represents a "person" dataset:
+
+```javascript
+function track_queries(start) {
+    // first dependency, from person to home location
+    start.hop("location", "http://example.com/home");
+
+    // 2nd dependency, via all orders that inversely point to a person, to ordered products
+    start
+        .iHop("order", "http://show.web/customer")
+        .hop("product", "http://shop.web/orderItem");
+}
+```
+
+Note that the above example uses `iHop` to denote an inverse dependency. Inverse queries can find a lot of entities
+pointing back to the previous hop, so it is recommended to use [PagedQueries](#pagedquery) in transform code.
+
 ### Sink Types
 
 The following sink types are used to write data either to a dataset or to a remote datalayer endpoint.
