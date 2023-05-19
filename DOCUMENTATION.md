@@ -696,6 +696,29 @@ function track_queries(start) {
 The json configuration of MultiSource does not need a `Dependencies` part if `track_queries` is used, the
 rest of the source configuration remains the same.
 
+##### Many Dependencies
+
+To track changes in many dependent datasets, many configuration objects can be added to the `Dependencies` array when using
+json config.
+
+When using `track_queries`, many dependencies can be added as separate function call chains on the starting object. An example,
+where the `start` parameter again represents a "person" dataset:
+
+```javascript
+function track_queries(start) {
+    // first dependency, from person to home location
+    start.hop("location", "http://example.com/home");
+
+    // 2nd dependency, via all orders that inversely point to a person, to ordered products
+    start
+        .iHop("order", "http://show.web/customer")
+        .hop("product", "http://shop.web/orderItem");
+}
+```
+
+Note that the above example uses `iHop` to denote an inverse dependency. Inverse queries can find a lot of entities
+pointing back to the previous hop, so it is recommended to use [PagedQueries](#pagedquery) in transform code.
+
 ### Sink Types
 
 The following sink types are used to write data either to a dataset or to a remote datalayer endpoint.
