@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -34,6 +35,7 @@ type DsManager struct {
 	store  *Store
 	logger *zap.SugaredLogger
 	eb     EventBus
+	lock   sync.Mutex
 }
 
 type DatasetName struct {
@@ -107,8 +109,8 @@ type UpdateDatasetConfig struct {
 }
 
 func (dsm *DsManager) CreateDataset(name string, createDatasetConfig *CreateDatasetConfig) (*Dataset, error) {
-	// fixme: race condition needs a lock
-
+	dsm.lock.Lock()
+	defer dsm.lock.Unlock()
 	exists := dsm.IsDataset(name)
 	if exists {
 		return dsm.GetDataset(name), nil
@@ -158,6 +160,8 @@ func (dsm *DsManager) CreateDataset(name string, createDatasetConfig *CreateData
 }
 
 func (dsm *DsManager) UpdateDataset(name string, config *UpdateDatasetConfig) (*Dataset, error) {
+	dsm.lock.Lock()
+	defer dsm.lock.Unlock()
 	if name == datasetCore {
 		return nil, errors.New("cannot update " + datasetCore)
 	}
@@ -229,6 +233,8 @@ func (dsm *DsManager) UpdateDataset(name string, config *UpdateDatasetConfig) (*
 
 // DeleteDataset deletes dataset if it exists
 func (dsm *DsManager) DeleteDataset(name string) error {
+	dsm.lock.Lock()
+	defer dsm.lock.Unlock()
 	if name == datasetCore {
 		return errors.New("cannot delete " + datasetCore)
 	}
