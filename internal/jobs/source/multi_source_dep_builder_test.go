@@ -358,12 +358,15 @@ func mkDepResult(es ...exp) []source.Dependency {
 func mkTransform(regs ...string) map[string]any {
 	t := map[string]any{}
 	t["Type"] = "JavascriptTransform"
-	js := ` function track_queries(reg) {`
-	js += " Log(reg);\n"
-	for _, reg := range regs {
-		js += "reg" + reg + "\n"
+	js := ""
+	if len(regs) > 0 {
+		js += ` function track_queries(reg) {`
+		js += " Log(reg);\n"
+		for _, reg := range regs {
+			js += "reg" + reg + "\n"
+		}
+		js += "}"
 	}
-	js += "}"
 	jscriptEnc := base64.StdEncoding.EncodeToString([]byte(js))
 	t["Code"] = jscriptEnc
 	return t

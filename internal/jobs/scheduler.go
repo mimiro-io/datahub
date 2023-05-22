@@ -683,7 +683,11 @@ func (s *Scheduler) MultiSourceCodeRegistration(code64 string, reg source.Depend
 	engine.Runtime.SetFieldNameMapper(goja.UncapFieldNameMapper())
 	engine.statsDClient = &statsd.NoOpClient{}
 	var register func(reg source.DependencyRegistry) error
-	err = engine.Runtime.ExportTo(engine.Runtime.Get("track_queries"), &register)
+	f := engine.Runtime.Get("track_queries")
+	if f == nil {
+		return nil
+	}
+	err = engine.Runtime.ExportTo(f, &register)
 	if err != nil {
 		return err
 	}
