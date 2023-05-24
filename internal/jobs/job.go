@@ -41,6 +41,7 @@ type jobResult struct {
 	Start     time.Time `json:"start"`
 	End       time.Time `json:"end"`
 	LastError string    `json:"lastError"`
+	Processed int       `json:"processed"`
 }
 
 // Run is implementing the jobrunner.Run() interface. It will automatically be called when
@@ -110,7 +111,7 @@ func (job *job) Run() {
 		"job.jobTitle", job.title,
 		"job.state", "Running",
 		"job.jobType", jobType)
-	err := job.pipeline.sync(job, ticket.runState.ctx)
+	processed, err := job.pipeline.sync(job, ticket.runState.ctx)
 	timed := time.Since(ticket.runState.started)
 	if err != nil {
 		if err.Error() == "got job interrupt" { // if a job gets killed, this will trigger
@@ -134,7 +135,8 @@ func (job *job) Run() {
 	}
 
 	job.runner.logger.Infow(
-		fmt.Sprintf("Finished %s with id '%s' (%s) - duration was %s", msg, job.title, job.id, timed),
+		fmt.Sprintf("Finished %s with id '%s' (%s) - duration was %s. processed %v entities",
+			msg, job.title, job.id, timed, processed),
 		"job.jobId", job.id,
 		"job.jobTitle", job.title,
 		"job.state", "Finished",
@@ -147,6 +149,7 @@ func (job *job) Run() {
 		Title:     job.title,
 		Start:     ticket.runState.started,
 		End:       time.Now(),
+		Processed: processed,
 		LastError: "",
 	}
 	if err != nil {
