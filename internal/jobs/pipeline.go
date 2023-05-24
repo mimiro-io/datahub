@@ -33,7 +33,7 @@ type Pipeline interface {
 	// but it also takes a cancellable context. This context is created in the ticket, and is kept with the running runState.
 	// If the job is cancelled, the ctx.Done gets triggered, and the part of the code that is listening for that will return
 	// an error to stop the pipeline.
-	sync(job *job, ctx context.Context) error
+	sync(job *job, ctx context.Context) (int, error)
 	spec() PipelineSpec
 	isFullSync() bool
 }
@@ -50,13 +50,13 @@ type (
 
 func (pipeline *FullSyncPipeline) spec() PipelineSpec { return pipeline.PipelineSpec }
 func (pipeline *FullSyncPipeline) isFullSync() bool   { return true }
-func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
+func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) (int, error) {
 	runner := job.runner
 
 	syncJobState := &SyncJobState{}
 	err := runner.store.GetObject(server.JobDataIndex, job.id, syncJobState)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	syncJobState.ID = job.id // add the id to the sync state
 
@@ -74,10 +74,10 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 	}
 	err = pipeline.sink.startFullSync(runner)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	syncJobState.ContinuationToken = ""
-
+	entCnt := 0
 	tags := []string{"application:datahub", "job:" + job.title}
 	for keepReading {
 
@@ -131,26 +131,27 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 		readTS := time.Now()
 		token, err2 := jobSource.DecodeToken(pipeline.source.GetConfig()["Type"], syncJobState.ContinuationToken)
 		if err2 != nil {
-			return err2
+			return entCnt, err2
 		}
 
 		err = pipeline.source.ReadEntities(token, pipeline.batchSize,
 			func(entities []*server.Entity, c jobSource.DatasetContinuation) error {
 				_ = runner.statsdClient.Timing("pipeline.source.batch", time.Since(readTS), tags, 1)
+				entCnt += len(entities)
 				result := processEntities(entities, c)
 				readTS = time.Now()
 				return result
 			})
 
 		if err != nil {
-			return err
+			return entCnt, err
 		}
 	}
 
 	pipeline.source.EndFullSync()
 	err = pipeline.sink.endFullSync(runner)
 	if err != nil {
-		return err
+		return entCnt, err
 	}
 
 	//Do not store syncState when the target is an http sink.
@@ -161,11 +162,11 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) error {
 	if pipeline.sink.GetConfig()["Type"] != "HttpDatasetSink" || pipeline.source.GetConfig()["Type"] == "MultiSource" {
 		err = runner.store.StoreObject(server.JobDataIndex, job.id, syncJobState)
 		if err != nil {
-			return err
+			return entCnt, err
 		}
 	}
 
-	return nil
+	return entCnt, nil
 }
 
 type presult struct {
@@ -175,13 +176,13 @@ type presult struct {
 
 func (pipeline *IncrementalPipeline) spec() PipelineSpec { return pipeline.PipelineSpec }
 func (pipeline *IncrementalPipeline) isFullSync() bool   { return false }
-func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
+func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) (int, error) {
 	runner := job.runner
 
 	syncJobState := &SyncJobState{}
 	err := runner.store.GetObject(server.JobDataIndex, job.id, syncJobState)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	syncJobState.ID = job.id // add the id to the sync state
@@ -189,6 +190,7 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 	keepReading := true
 
 	tags := []string{"application:datahub", "job:" + job.title}
+	entCnt := 0
 	for keepReading {
 
 		processEntities := func(entities []*server.Entity, continuationToken jobSource.DatasetContinuation) error {
@@ -303,21 +305,22 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) error {
 		readTS := time.Now()
 		since, err := jobSource.DecodeToken(pipeline.source.GetConfig()["Type"], syncJobState.ContinuationToken)
 		if err != nil {
-			return err
+			return entCnt, err
 		}
 		err = pipeline.source.ReadEntities(since,
 			pipeline.batchSize,
 			func(entities []*server.Entity, c jobSource.DatasetContinuation) error {
 				_ = runner.statsdClient.Timing("pipeline.source.batch", time.Since(readTS), tags, 1)
+				entCnt += len(entities)
 				result := processEntities(entities, c)
 				readTS = time.Now()
 				return result
 			})
 
 		if err != nil {
-			return err
+			return entCnt, err
 		}
 	}
 
-	return nil
+	return entCnt, nil
 }
