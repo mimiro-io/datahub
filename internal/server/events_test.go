@@ -62,7 +62,7 @@ var _ = Describe("The Eventbus", func() {
 		e := &conf.Env{
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: storeLocation,
-			Port:          "5555",
+			Port:          "25555",
 			Auth:          &conf.AuthConfig{Middleware: "noop"},
 			RunnerConfig:  &conf.RunnerConfig{PoolIncremental: 10, PoolFull: 5},
 		}
@@ -135,7 +135,7 @@ var _ = Describe("The Eventbus", func() {
 				{ "id" : "homer" }
             ]`)
 
-		_, err := http.Post("http://localhost:5555/datasets/people/entities", "application/json", reader)
+		_, err := http.Post("http://localhost:25555/datasets/people/entities", "application/json", reader)
 		Expect(err).To(BeNil())
 		wg.Wait()
 		Expect(eventReceived).To(BeTrue())
