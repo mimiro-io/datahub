@@ -1211,7 +1211,7 @@ var _ = Describe("dependency tracking", func() {
 		// people <- employment
 		_, peoplePrefix := createTestDataset("people", []string{"Bob", "Alice"}, nil, dsm, store)
 		copyDs, _ := dsm.CreateDataset("peopleTwo", nil)
-		copyDs.StoreEntities([]*server.Entity{
+		_ = copyDs.StoreEntities([]*server.Entity{
 			server.NewEntityFromMap(map[string]interface{}{
 				"id":    peoplePrefix + ":Bob",
 				"props": map[string]interface{}{"name": "Bob"},
@@ -1283,6 +1283,59 @@ var _ = Describe("dependency tracking", func() {
 		Expect(recordedEntities[0].ID).To(Equal(peoplePrefix + ":Bob"))
 		Expect(recordedEntities[0].Properties["name"]).
 			To(Equal("Bob"), "Bob exists in two datasets. making sure we dont get a merged result")
+	})
+	It("Should also work with incremental from scratch", func() {
+		// people <- employment
+		_, peoplePrefix := createTestDataset("people", []string{"Bob", "Alice"}, nil, dsm, store)
+
+		createTestDataset("employment",
+			[]string{"MediumCorp", "LittleSweatshop", "YardSale"}, map[string]map[string]interface{}{
+				"MediumCorp": {peoplePrefix + ":employment": peoplePrefix + ":Bob"},
+				"YardSale":   {peoplePrefix + ":employment": peoplePrefix + ":Alice"},
+			}, dsm, store)
+
+		testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
+		srcJSON := `{ "Type" : "MultiSource", "Name" : "people", "Dependencies": [ {
+							"dataset": "employment",
+							"joins": [ { "dataset": "people", "predicate": "http://people/employment", "inverse": false } ]
+						}] }`
+
+		srcConfig := map[string]interface{}{}
+		_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
+		_ = testSource.ParseDependencies(srcConfig["Dependencies"], nil)
+
+		var recordedEntities []server.Entity
+		token := &source.MultiDatasetContinuation{}
+		var lastToken source.DatasetContinuation
+
+		// at this point, there is no continuation token present for the incremental logic.
+		// we go through batches of 1 to emulate a long-running pipeline read loop
+		for {
+			var stop bool
+			err := testSource.ReadEntities(
+				token,
+				1,
+				func(entities []*server.Entity, token source.DatasetContinuation) error {
+					if token.GetToken() != "" {
+						lastToken = token
+					}
+					for _, e := range entities {
+						recordedEntities = append(recordedEntities, *e)
+					}
+					if len(entities) == 0 {
+						stop = true
+					}
+
+					return nil
+				},
+			)
+			Expect(err).To(BeNil())
+			if stop {
+				break
+			}
+		}
+		Expect(recordedEntities).To(HaveLen(4), "Bob and Alice twice each. once from main ds, once via dep")
+		Expect(lastToken).NotTo(BeNil())
 	})
 })
 
