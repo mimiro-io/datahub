@@ -173,9 +173,14 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 	}
 	d.activeDS = dep.Dataset
 
+	if d.DependencyTokens == nil {
+		d.DependencyTokens = make(map[string]*StringDatasetContinuation)
+	}
+
 	depSince := d.DependencyTokens[d.activeDS]
 	if depSince == nil {
 		depSince = &StringDatasetContinuation{}
+		d.DependencyTokens[d.activeDS] = depSince
 	}
 
 	// When working through a dependency dataset, we first find all changes since the last run in that dependency
@@ -341,10 +346,6 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 				}
 			}
 		}
-	}
-
-	if d.DependencyTokens == nil {
-		d.DependencyTokens = make(map[string]*StringDatasetContinuation)
 	}
 
 	d.DependencyTokens[dep.Dataset] = &StringDatasetContinuation{Token: strconv.Itoa(int(continuation))}
