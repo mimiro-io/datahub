@@ -26,13 +26,14 @@ import (
 )
 
 type job struct {
-	id       string
-	title    string
-	pipeline Pipeline
-	schedule string
-	topic    string
-	isEvent  bool
-	runner   *Runner
+	id            string
+	title         string
+	pipeline      Pipeline
+	schedule      string
+	topic         string
+	isEvent       bool
+	runner        *Runner
+	errorHandlers []*ErrorHandler
 }
 
 type jobResult struct {
@@ -80,8 +81,9 @@ func (job *job) Run() {
 			job.title, job.id, job.runner.raffle.ticketsIncr), "job.jobId", job.id, "job.jobTitle", job.title)
 		return
 	}
+	var pipelineErr error
+	defer job.handleJobError(&pipelineErr)
 	defer job.runner.raffle.returnTicket(ticket)
-
 	msg := "job"
 	if job.isEvent {
 		msg = "event"
@@ -112,6 +114,7 @@ func (job *job) Run() {
 		"job.state", "Running",
 		"job.jobType", jobType)
 	processed, err := job.pipeline.sync(job, ticket.runState.ctx)
+	pipelineErr = err
 	timed := time.Since(ticket.runState.started)
 	if err != nil {
 		if err.Error() == "got job interrupt" { // if a job gets killed, this will trigger

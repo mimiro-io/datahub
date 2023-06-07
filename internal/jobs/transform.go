@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -668,8 +668,8 @@ func (httpTransform *HTTPTransform) transformEntities(
 	}
 
 	// parse json back into []*Entity
-	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
+	defer func() { _ = res.Body.Close() }()
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}

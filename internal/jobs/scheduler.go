@@ -60,10 +60,11 @@ var (
 )
 
 type JobTrigger struct {
-	TriggerType      string `json:"triggerType"`
-	JobType          string `json:"jobType"`
-	Schedule         string `json:"schedule"`
-	MonitoredDataset string `json:"monitoredDataset"`
+	TriggerType      string          `json:"triggerType"`
+	JobType          string          `json:"jobType"`
+	Schedule         string          `json:"schedule"`
+	MonitoredDataset string          `json:"monitoredDataset"`
+	ErrorHandlers    []*ErrorHandler `json:"onError"`
 }
 
 // JobConfiguration is the external interfacing object to configure a job. It is also the one that gets persisted
@@ -189,20 +190,22 @@ func (s *Scheduler) toTriggeredJobs(jobConfig *JobConfiguration) ([]*job, error)
 		switch t.TriggerType {
 		case TriggerTypeOnChange:
 			result = append(result, &job{
-				id:       jobConfig.ID,
-				title:    jobConfig.Title,
-				pipeline: pipeline,
-				topic:    t.MonitoredDataset,
-				isEvent:  true,
-				runner:   s.Runner,
+				id:            jobConfig.ID,
+				title:         jobConfig.Title,
+				pipeline:      pipeline,
+				topic:         t.MonitoredDataset,
+				isEvent:       true,
+				runner:        s.Runner,
+				errorHandlers: t.ErrorHandlers,
 			})
 		case TriggerTypeCron:
 			result = append(result, &job{
-				id:       jobConfig.ID,
-				title:    jobConfig.Title,
-				pipeline: pipeline,
-				schedule: t.Schedule,
-				runner:   s.Runner,
+				id:            jobConfig.ID,
+				title:         jobConfig.Title,
+				pipeline:      pipeline,
+				schedule:      t.Schedule,
+				runner:        s.Runner,
+				errorHandlers: t.ErrorHandlers,
 			})
 		default:
 			return nil, fmt.Errorf("could not map trigger configuration to job: %v", t)
@@ -264,7 +267,7 @@ func (s *Scheduler) GetScheduleEntries() ScheduleEntries {
 		}
 	}
 
-	se := []ScheduleEntry{}
+	var se []ScheduleEntry
 	for _, e := range jobrunner.Entries() {
 		jobID := lookup[int(e.ID)]
 		jobTitle := s.resolveJobTitle(jobID)
@@ -392,11 +395,11 @@ func (s *Scheduler) ResetJob(jobid string, since string) error {
 // The temp job is added with the RunOnce flag set to true
 func (s *Scheduler) RunJob(jobid string, jobType string) (string, error) {
 	jobConfig, err := s.LoadJob(jobid)
-	s.Logger.Infof("Running job with id '%s' (%s)", jobid, jobConfig.Title)
-
 	if jobConfig == nil || jobConfig.ID == "" { // not found
 		return "", errors.New("could not load job with id " + jobid)
 	}
+
+	s.Logger.Infof("Running job with id '%s' (%s)", jobid, jobConfig.Title)
 
 	if err != nil {
 		return "", err
@@ -500,6 +503,11 @@ func (s *Scheduler) verify(jobConfiguration *JobConfiguration) error {
 			return errors.New(
 				"trigger type " + trigger.TriggerType + " requires a valid 'Schedule' expression. But: " + err.Error(),
 			)
+		}
+
+		err = verifyErrorHandlers(trigger)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
