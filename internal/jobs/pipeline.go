@@ -34,7 +34,7 @@ type Pipeline interface {
 	// If the job is cancelled, the ctx.Done gets triggered, and the part of the code that is listening for that will return
 	// an error to stop the pipeline.
 	sync(job *job, ctx context.Context) (int, error)
-	spec() PipelineSpec
+	spec() *PipelineSpec
 	isFullSync() bool
 }
 type PipelineSpec struct {
@@ -48,8 +48,8 @@ type (
 	IncrementalPipeline struct{ PipelineSpec }
 )
 
-func (pipeline *FullSyncPipeline) spec() PipelineSpec { return pipeline.PipelineSpec }
-func (pipeline *FullSyncPipeline) isFullSync() bool   { return true }
+func (pipeline *FullSyncPipeline) spec() *PipelineSpec { return &pipeline.PipelineSpec }
+func (pipeline *FullSyncPipeline) isFullSync() bool    { return true }
 func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) (int, error) {
 	runner := job.runner
 
@@ -174,8 +174,8 @@ type presult struct {
 	err      error
 }
 
-func (pipeline *IncrementalPipeline) spec() PipelineSpec { return pipeline.PipelineSpec }
-func (pipeline *IncrementalPipeline) isFullSync() bool   { return false }
+func (pipeline *IncrementalPipeline) spec() *PipelineSpec { return &pipeline.PipelineSpec }
+func (pipeline *IncrementalPipeline) isFullSync() bool    { return false }
 func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) (int, error) {
 	runner := job.runner
 

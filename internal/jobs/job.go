@@ -52,10 +52,10 @@ type jobResult struct {
 // It will use a ticket system to get a ticket to run. If an incr job doesnt get a ticket, it will be postponed until
 // next run, if a full job doesn't get one, we assume it is waiting for an incr job to finnish, so it gets postponed for
 // 5s
-func (job *job) Run() {
-	ticket := job.runner.raffle.borrowTicket(job)
+func (j *job) Run() {
+	ticket := j.runner.raffle.borrowTicket(j)
 	if ticket == nil {
-		if job.pipeline.isFullSync() { // reschedule to try again in a bit
+		if j.pipeline.isFullSync() { // reschedule to try again in a bit
 			duration := 5 * time.Second
 			// TODO: read this through viper into env.Config? curretnly only used in unit test but could be useful as general config?
 			durationOverride, found := os.LookupEnv("JOB_FULLSYNC_RETRY_INTERVAL")
@@ -65,91 +65,97 @@ func (job *job) Run() {
 					duration = d
 				}
 			}
-			job.runner.logger.Infow(fmt.Sprintf("Job %v (%s) is running or could not get a ticket (%v avail). "+
-				"queuing for retry in %v", job.title, job.id, job.runner.raffle.ticketsFull, duration),
-				"job.jobId", job.id,
-				"job.jobTitle", job.title,
+			j.runner.logger.Infow(fmt.Sprintf("Job %v (%s) is running or could not get a ticket (%v avail). "+
+				"queuing for retry in %v", j.title, j.id, j.runner.raffle.ticketsFull, duration),
+				"job.jobId", j.id,
+				"job.jobTitle", j.title,
 				"job.state", "Running")
-			if queueRetry(duration, job) { // reschedule the full sync again in 5 seconds
-				_ = job.runner.statsdClient.Count("jobs.backpressure", 1, []string{"application:datahub"}, 1)
+			if queueRetry(duration, j) { // reschedule the full sync again in 5 seconds
+				_ = j.runner.statsdClient.Count("jobs.backpressure", 1, []string{"application:datahub"}, 1)
 			}
 			return
 		}
 		// could not obtain ticket. This indicates a job with the same jobId is running already. Or tickets are empty.
 		// We skip this execution request
-		job.runner.logger.Infow(fmt.Sprintf("Job %v (%s) running or did not get a ticket (%v avail), skipping.",
-			job.title, job.id, job.runner.raffle.ticketsIncr), "job.jobId", job.id, "job.jobTitle", job.title)
+		j.runner.logger.Infow(fmt.Sprintf("Job %v (%s) running or did not get a ticket (%v avail), skipping.",
+			j.title, j.id, j.runner.raffle.ticketsIncr), "job.jobId", j.id, "job.jobTitle", j.title)
 		return
 	}
+
+	// attach error handlers
 	var pipelineErr error
-	defer job.handleJobError(&pipelineErr)
-	defer job.runner.raffle.returnTicket(ticket)
+	j.instrumentErrorHandling()
+	defer func() {
+		j.handleJobError(&pipelineErr)
+	}()
+
+	defer j.runner.raffle.returnTicket(ticket)
 	msg := "job"
-	if job.isEvent {
+	if j.isEvent {
 		msg = "event"
 	}
 	jobType := "incremental"
-	if job.pipeline.isFullSync() {
+	if j.pipeline.isFullSync() {
 		jobType = "fullsync"
 	}
 
-	job.runner.logger.Infow(fmt.Sprintf("Starting %v %s with id '%s' (%s)", jobType, msg, job.title, job.id),
-		"job.jobId", job.id,
-		"job.jobTitle", job.title,
+	j.runner.logger.Infow(fmt.Sprintf("Starting %v %s with id '%s' (%s)", jobType, msg, j.title, j.id),
+		"job.jobId", j.id,
+		"job.jobTitle", j.title,
 		"job.state", "Starting",
 		"job.jobType", jobType)
 
 	tags := []string{
 		"application:datahub",
-		fmt.Sprintf("jobs:job-%s", job.title),
+		fmt.Sprintf("jobs:job-%s", j.title),
 		fmt.Sprintf("jobtype:%v", jobType),
 	}
-	_ = job.runner.statsdClient.Count("jobs.count", 1, tags, 1)
+	_ = j.runner.statsdClient.Count("jobs.count", 1, tags, 1)
 
-	sourceType := job.pipeline.spec().source.GetConfig()["Type"]
-	sinkType := job.pipeline.spec().sink.GetConfig()["Type"]
-	job.runner.logger.Infow(fmt.Sprintf(" > Running task '%s' (%s): %s -> %s", job.title, job.id, sourceType, sinkType),
-		"job.jobId", job.id,
-		"job.jobTitle", job.title,
+	sourceType := j.pipeline.spec().source.GetConfig()["Type"]
+	sinkType := j.pipeline.spec().sink.GetConfig()["Type"]
+	j.runner.logger.Infow(fmt.Sprintf(" > Running task '%s' (%s): %s -> %s", j.title, j.id, sourceType, sinkType),
+		"job.jobId", j.id,
+		"job.jobTitle", j.title,
 		"job.state", "Running",
 		"job.jobType", jobType)
-	processed, err := job.pipeline.sync(job, ticket.runState.ctx)
+	processed, err := j.pipeline.sync(j, ticket.runState.ctx)
 	pipelineErr = err
 	timed := time.Since(ticket.runState.started)
 	if err != nil {
 		if err.Error() == "got job interrupt" { // if a job gets killed, this will trigger
-			_ = job.runner.statsdClient.Count("jobs.cancelled", timed.Nanoseconds(), tags, 1)
-			job.runner.logger.Infow(fmt.Sprintf("Job '%s' (%s) was terminated", job.title, job.id),
-				"job.jobId", job.id,
-				"job.jobTitle", job.title,
+			_ = j.runner.statsdClient.Count("jobs.cancelled", timed.Nanoseconds(), tags, 1)
+			j.runner.logger.Infow(fmt.Sprintf("Job '%s' (%s) was terminated", j.title, j.id),
+				"job.jobId", j.id,
+				"job.jobTitle", j.title,
 				"job.state", "Terminated",
 				"job.jobType", jobType)
 		} else {
-			_ = job.runner.statsdClient.Count("jobs.error", timed.Nanoseconds(), tags, 1)
-			job.runner.logger.Warnw(fmt.Sprintf("Failed running task for job '%s' (%s): %s", job.title, job.id, err.Error()),
-				"job.jobId", job.id,
-				"job.jobTitle", job.title,
+			_ = j.runner.statsdClient.Count("jobs.error", timed.Nanoseconds(), tags, 1)
+			j.runner.logger.Warnw(fmt.Sprintf("Failed running task for job '%s' (%s): %s", j.title, j.id, err.Error()),
+				"job.jobId", j.id,
+				"job.jobTitle", j.title,
 				"job.state", "Failed",
 				"job.jobType", jobType,
 				"job.executionErrorMessage", err.Error())
 		}
 	} else {
-		_ = job.runner.statsdClient.Count("jobs.success", timed.Nanoseconds(), tags, 1)
+		_ = j.runner.statsdClient.Count("jobs.success", timed.Nanoseconds(), tags, 1)
 	}
 
-	job.runner.logger.Infow(
+	j.runner.logger.Infow(
 		fmt.Sprintf("Finished %s with id '%s' (%s) - duration was %s. processed %v entities",
-			msg, job.title, job.id, timed, processed),
-		"job.jobId", job.id,
-		"job.jobTitle", job.title,
+			msg, j.title, j.id, timed, processed),
+		"job.jobId", j.id,
+		"job.jobTitle", j.title,
 		"job.state", "Finished",
 		"job.jobType", jobType,
 	)
 
 	// we store the last run info
 	lastRun := &jobResult{
-		ID:        job.id,
-		Title:     job.title,
+		ID:        j.id,
+		Title:     j.title,
 		Start:     ticket.runState.started,
 		End:       time.Now(),
 		Processed: processed,
@@ -159,7 +165,7 @@ func (job *job) Run() {
 		lastRun.LastError = err.Error()
 	}
 	// its not really a problem to ignore this error
-	_ = job.runner.store.StoreObject(server.JobResultIndex, job.id, lastRun)
+	_ = j.runner.store.StoreObject(server.JobResultIndex, j.id, lastRun)
 }
 
 var retryJobIds sync.Map

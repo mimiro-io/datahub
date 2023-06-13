@@ -15,6 +15,7 @@
 package source
 
 import (
+	"math"
 	"strconv"
 
 	"github.com/mimiro-io/datahub/internal/server"
@@ -61,7 +62,7 @@ func (source *SampleSource) ReadEntities(
 		return err
 	}
 
-	endIndex := sinceOffset + batchSize
+	endIndex := int(math.Min(float64(sinceOffset+batchSize), float64(source.NumberOfEntities)))
 
 	entities := make([]*server.Entity, 0)
 	for i := sinceOffset; i < endIndex; i++ {
