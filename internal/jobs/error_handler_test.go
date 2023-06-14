@@ -56,6 +56,9 @@ type (
 		succeed         bool
 	}
 
+	pickySink struct {
+	}
+
 	recordingLogHandler struct {
 		f        failingEntityHandler
 		recorded []int
@@ -512,6 +515,10 @@ var _ = Describe("A failed trigger", func() {
 				Runs:          3,
 				Logged: func(batchSize int) []int {
 					if batchSize < 6 {
+						// depending on the batch size, when the last batch is only partially logged, it must be
+						// reprocessed during a rerun. this will give duplicate logging of the overlapping entities.
+						//TODO: should we consider constructing partial continuation tokens here? so that the retry
+						// 	picks up after the last logged entity?
 						return map[int][]int{
 							1: {0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 							2: {0, 1, 2, 3, 4, 4, 5, 6, 7, 8, 8, 9},
@@ -539,14 +546,14 @@ var _ = Describe("A failed trigger", func() {
 				ReQueued:      []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 			}),
 
-		// recovering means the sink fails the first attempt, but succeeds on the second attempt
+		// recovering means the sink fails the first job run, but succeeds on the second attempt
 		// we want to make sure that we still log the failed entities the first time around,
 		// but also end up in a succeeded state after the second attempt
 		Entry("recovering sink with capped log handler and reRun handler",
-			// going recursively through a batch of 10 entities in splits means 7 sink probes.
-			// on the 8th sink access, it should be the next pipeline run
-			tableInput{sink: &failingSink{recoverAfterRun: 1},
-				onErrorJSON: `[{"errorHandler": "log", "maxItems": 2},{"errorHandler": "rerun", "retryDelay": 1, "maxRetries": 5}]`},
+			tableInput{
+				sink:        &failingSink{recoverAfterRun: 1},
+				onErrorJSON: `[{"errorHandler": "log", "maxItems": 2},{"errorHandler": "rerun", "retryDelay": 1, "maxRetries": 5}]`,
+			},
 			expected{
 				ErrorHandlers: []*ErrorHandler{{Type: "log", MaxItems: 2}, {Type: "rerun", MaxRetries: 5, RetryDelay: 1}},
 				Runs:          2, // not maxing out reRuns, because sink recovers
@@ -554,6 +561,10 @@ var _ = Describe("A failed trigger", func() {
 					return []int{0, 1} // logging 2 entities during first run
 				},
 				ProcessedFunc: func(batchSize int) int {
+					// for batch size up to 2, the first batch is completely handled
+					// by log handler, so it does not come up again during rerun
+					// for larger batches, the run fails the first batch after logging 2 entities,
+					// so the first batch is reprocessed during rerun
 					if batchSize < 3 {
 						return 8
 					} else {
@@ -563,6 +574,13 @@ var _ = Describe("A failed trigger", func() {
 			}),
 
 		// single entities in sink fail
+		// picky sink has some accepted entities and some failing entities
+		Entry("picky sink without error handlers",
+			tableInput{sink: &pickySink{}},
+			expected{
+				ErrorHandlers: []*ErrorHandler{},
+			}),
+
 		// test next run
 		// test reruns
 
@@ -604,3 +622,10 @@ func (r *recordingLogHandler) handleFailingEntity(runner *Runner, entity *server
 	r.recorded = append(r.recorded, recId)
 	return nil
 }
+func (p pickySink) processEntities(runner *Runner, entities []*server.Entity) error {
+	panic("implement me")
+}
+
+func (p pickySink) GetConfig() map[string]interface{}  { return map[string]interface{}{"Type": "picky"} }
+func (p pickySink) startFullSync(runner *Runner) error { panic("implement me") }
+func (p pickySink) endFullSync(runner *Runner) error   { panic("implement me") }

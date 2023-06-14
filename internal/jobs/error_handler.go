@@ -89,8 +89,8 @@ type wrappedSink struct {
 	failingEntityHandlers []failingEntityHandler
 	jobId                 string
 	lastError             error
-	lastProcessed         int
-	recursionCount        int
+	lastProcessed  int
+	recursionDepth int
 }
 
 // verifyErrorHandlers checks that the error handlers are valid, and also
@@ -285,7 +285,7 @@ func (w *wrappedSink) processEntities(runner *Runner, entities []*server.Entity)
 			}
 			return nil
 		} else {
-			w.recursionCount++
+			w.recursionDepth++
 			splitPoint := len(entities) / 2
 			left := entities[:splitPoint]
 			leftErr := w.processEntities(runner, left)
@@ -305,7 +305,7 @@ func (w *wrappedSink) processEntities(runner *Runner, entities []*server.Entity)
 			return leftErr
 		}
 	} else {
-		if w.recursionCount == 0 {
+		if w.recursionDepth == 0 {
 			w.lastError = nil
 		}
 	}
@@ -321,7 +321,7 @@ func (w *wrappedSink) endFullSync(runner *Runner) error {
 }
 
 func (w *wrappedSink) reset() {
-	w.recursionCount = 0
+	w.recursionDepth = 0
 	for _, eh := range w.failingEntityHandlers {
 		eh.reset()
 	}
