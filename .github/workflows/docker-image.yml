@@ -46,7 +46,7 @@ jobs:
           DESCRIBE=$( git describe --always --tags --long --first-parent )
           VERSION=$(echo $DESCRIBE | cut -d "-" -f 1)
           NEXT=$( pysemver bump patch $VERSION )
-          echo "::set-output name=tag::$NEXT"
+          echo "tag=$NEXT" >> $GITHUB_OUTPUT
 
       - name: "Calculated unstable tag"
         run: echo "base tag next unstable version... ${{ steps.semver-tag.outputs.tag }}"
@@ -57,10 +57,10 @@ jobs:
           if [ ${{ github.event_name }} == 'release' ]
           then
             echo "Setting Stable Image Tag"
-            echo ::set-output name=image_tag:: ${{ env.DOCKERHUB_REPOSITORY }}:$(echo $GITHUB_REF | cut -d / -f 3)-$(uname -m)
+            echo "image_tag=${{ env.DOCKERHUB_REPOSITORY }}:$(echo $GITHUB_REF | cut -d / -f 3)-$(uname -m)" >> $GITHUB_OUTPUT
           else
             echo "Setting Unstable Image"
-            echo ::set-output name=image_tag:: ${{ env.DOCKERHUB_REPOSITORY }}:${{ steps.semver-tag.outputs.tag }}-$GITHUB_RUN_NUMBER-unstable-$(uname -m)
+            echo "image_tag=${{ env.DOCKERHUB_REPOSITORY }}:${{ steps.semver-tag.outputs.tag }}-$GITHUB_RUN_NUMBER-unstable-$(uname -m)" >> $GITHUB_OUTPUT
           fi
        
       # Login to Docker registry except on PR
@@ -139,7 +139,7 @@ jobs:
           DESCRIBE=$( git describe --always --tags --long --first-parent )
           VERSION=$(echo $DESCRIBE | cut -d "-" -f 1)
           NEXT=$( /home/ec2-user/.local/bin/pysemver bump patch $VERSION )
-          echo "::set-output name=tag::$NEXT"
+          echo "tag=$NEXT" >> $GITHUB_OUTPUT
 
       - name: "Calculated unstable tag"
         run: echo "base tag next unstable version... ${{ steps.semver-tag.outputs.tag }}"
@@ -150,10 +150,10 @@ jobs:
           if [ ${{ github.event_name }} == 'release' ]
           then
             echo "Setting Stable Image Tag"
-            echo ::set-output name=image_tag:: ${{ env.DOCKERHUB_REPOSITORY }}:$(echo $GITHUB_REF | cut -d / -f 3)-$(uname -m)
+            echo "image_tag=${{ env.DOCKERHUB_REPOSITORY }}:$(echo $GITHUB_REF | cut -d / -f 3)-$(uname -m)" >> $GITHUB_OUTPUT
           else
             echo "Setting Unstable Image"
-            echo ::set-output name=image_tag:: ${{ env.DOCKERHUB_REPOSITORY }}:${{ steps.semver-tag.outputs.tag }}-$GITHUB_RUN_NUMBER-unstable-$(uname -m)
+            echo "image_tag=${{ env.DOCKERHUB_REPOSITORY }}:${{ steps.semver-tag.outputs.tag }}-$GITHUB_RUN_NUMBER-unstable-$(uname -m) >> $GITHUB_OUTPUT
           fi
        
       # Login to Docker registry except on PR
@@ -235,7 +235,7 @@ jobs:
           DESCRIBE=$( git describe --always --tags --long --first-parent )
           VERSION=$(echo $DESCRIBE | cut -d "-" -f 1)
           NEXT=$( pysemver bump patch $VERSION )
-          echo "::set-output name=tag::$NEXT"
+          echo "tag=$NEXT" >> $GITHUB_OUTPUT
 
       - name: "Calculated unstable tag"
         run: echo "base tag next unstable version... ${{ steps.semver-tag.outputs.tag }}"
@@ -253,10 +253,10 @@ jobs:
           if [ ${{ github.event_name }} == 'release' ]
           then
             echo "Setting Stable Image Tag"
-            echo ::set-output name=image_tag:: ${{ env.DOCKERHUB_REPOSITORY }}:$(echo $GITHUB_REF | cut -d / -f 3)
+            echo "image_tag=${{ env.DOCKERHUB_REPOSITORY }}:$(echo $GITHUB_REF | cut -d / -f 3)" >> $GITHUB_OUTPUT
           else
             echo "Setting Unstable Image"
-            echo ::set-output name=image_tag:: ${{ env.DOCKERHUB_REPOSITORY }}:${{ steps.semver-tag.outputs.tag }}-$GITHUB_RUN_NUMBER-unstable
+            echo "image_tag=${{ env.DOCKERHUB_REPOSITORY }}:${{ steps.semver-tag.outputs.tag }}-$GITHUB_RUN_NUMBER-unstable" >> $GITHUB_OUTPUT
           fi
 
       - name: Show Tag
