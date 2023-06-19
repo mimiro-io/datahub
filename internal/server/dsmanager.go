@@ -100,6 +100,7 @@ func (dsm *DsManager) storeEntity(dataset *Dataset, entity *Entity) error {
 type CreateDatasetConfig struct {
 	ProxyDatasetConfig *ProxyDatasetConfig `json:"ProxyDatasetConfig"`
 	PublicNamespaces   []string            `json:"publicNamespaces"`
+	SmartDatasetConfig *SmartDatasetConfig `json:"SmartDatasetConfig"`
 }
 
 type UpdateDatasetConfig struct {
