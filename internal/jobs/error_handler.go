@@ -38,6 +38,15 @@ type ErrorHandler struct {
 	failingEntityHandler failingEntityHandler
 }
 
+func (h *ErrorHandler) init(dsm *server.DsManager) {
+	if h.failingEntityHandler != nil && h.Type == ErrorHandlerReQueue {
+		feh, ok := h.failingEntityHandler.(*ReQueueFailingEntityHandler)
+		if ok {
+			feh.dsm = dsm
+		}
+	}
+}
+
 type failingEntityHandler interface {
 	handleFailingEntity(runner *Runner, entity *server.Entity, jobId string) error
 	reset()
@@ -64,6 +73,8 @@ func (l *LogFailingEntityHandler) handleFailingEntity(runner *Runner, entity *se
 type ReQueueFailingEntityHandler struct {
 	count    int
 	MaxItems int
+	queue    *reQueue
+	dsm      *server.DsManager
 }
 
 func (r *ReQueueFailingEntityHandler) reset() {
@@ -71,11 +82,19 @@ func (r *ReQueueFailingEntityHandler) reset() {
 }
 
 func (r *ReQueueFailingEntityHandler) handleFailingEntity(runner *Runner, entity *server.Entity, jobId string) error {
-	r.count = r.count + 1
 	if r.MaxItems > 0 && r.count >= r.MaxItems {
 		return MaxItemsExceededError
 	}
-	return nil
+	r.count = r.count + 1
+	runner.logger.Warnf("entity %v failed to process, requeueing", entity.ID)
+	if r.queue == nil {
+		q, err := newReQueue(jobId, r.dsm)
+		if err != nil {
+			return err
+		}
+		r.queue = q
+	}
+	return r.queue.enQueue(entity)
 }
 
 type wrappedTransform struct {
@@ -89,8 +108,8 @@ type wrappedSink struct {
 	failingEntityHandlers []failingEntityHandler
 	jobId                 string
 	lastError             error
-	lastProcessed  int
-	recursionDepth int
+	lastProcessed         int
+	recursionDepth        int
 }
 
 // verifyErrorHandlers checks that the error handlers are valid, and also
@@ -209,7 +228,7 @@ func (j *job) instrumentErrorHandling() {
 			wrapped.reset()
 		}
 	}
-
+	j.pipeline.spec().source = &reQueuePrependingSource{s: j.pipeline.spec().source, jobId: j.id, dsm: j.dsm}
 }
 
 func (w *wrappedTransform) GetConfig() map[string]interface{} {
@@ -276,7 +295,7 @@ func (w *wrappedSink) processEntities(runner *Runner, entities []*server.Entity)
 					err2 := eh.handleFailingEntity(runner, entity, w.jobId)
 					if err2 != nil {
 						return err2
-						//return w.lastError
+						// return w.lastError
 					}
 				}
 			}

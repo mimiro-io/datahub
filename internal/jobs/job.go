@@ -34,6 +34,7 @@ type job struct {
 	isEvent       bool
 	runner        *Runner
 	errorHandlers []*ErrorHandler
+	dsm           *server.DsManager
 }
 
 type jobResult struct {

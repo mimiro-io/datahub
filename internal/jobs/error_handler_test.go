@@ -22,7 +22,7 @@ type (
 	// tableInput is a struct that contains the input to a test
 	tableInput struct {
 		onErrorJSON string
-		source      testSource
+		source      source.Source
 		sink        Sink
 		transform   Transform
 	}
@@ -33,21 +33,18 @@ type (
 		InitError     error                     // error expected from config validation
 		SyncError     error                     // error expected from pipeline.Sync()
 		Runs          int                       // number of times the source (and therefore the whole pipeline) was run
-		Logged        func(batchSize int) []int // ids of entities that were logged
+		Logged        func(batchSize int) []int // function generating list of ids of entities that were logged
 		ReQueued      []int                     // ids of entities that were requeued
-		ProcessedFunc func(batchSize int) int
+		Processed     func(batchSize int) int   // function calculating expected numbor of processed (pulled from source) entities
+		SinkRecorded  []int
 	}
 
 	////////////////////////// the following types are mock types for testing //////////////////////////
-	testSource interface {
-		source.Source
-	}
-	testSampleSource struct {
+
+	failingSource struct {
 		source.SampleSource
 	}
-	failingSource struct {
-		testSampleSource
-	}
+
 	failingSink struct {
 		devNullSink
 		recoverAfterRun int
@@ -56,7 +53,12 @@ type (
 		succeed         bool
 	}
 
+	recordingSink struct {
+		recorded []int
+	}
+
 	pickySink struct {
+		recordingSink
 	}
 
 	recordingLogHandler struct {
@@ -118,9 +120,9 @@ var _ = Describe("A failed trigger", func() {
 			// first, we set up the job config
 			errorHandlers := ""
 
-			// using random batchsize with total dataset size of 10 (default)
-			rndBatchSize := rand.Intn(9) + 2
-			//rndBatchSize = 11
+			// using random batch size to make sure we cover issues where MaxItems in error handlers don't match batch size
+			rndBatchSize := rand.Intn(10) + 1
+			// rndBatchSize = 11
 			tag := fmt.Sprintf("(input was %+v, batchSize:%v)", input, rndBatchSize)
 			if input.onErrorJSON != "" {
 				errorHandlers = fmt.Sprintf(`,"onError": %v`, input.onErrorJSON)
@@ -183,7 +185,7 @@ var _ = Describe("A failed trigger", func() {
 			}
 			Expect(comparableErrorHandlers).To(BeEquivalentTo(behaviour.ErrorHandlers), tag)
 
-			// 4th we prepare a pipeline with table entry overrides if given
+			// 4th we prepare a pipeline with overrides if given (redoing parts of what AddJob did in 3rd)
 			jobs, err := scheduler.toTriggeredJobs(j)
 			Expect(err).To(BeNil(), tag)
 			Expect(jobs).To(HaveLen(1), tag)
@@ -191,9 +193,10 @@ var _ = Describe("A failed trigger", func() {
 			if input.source != nil {
 				jobs[0].pipeline.(*IncrementalPipeline).source = input.source
 			} else {
-				defaultSource := &testSampleSource{SampleSource: source.SampleSource{NumberOfEntities: 10, Store: store}}
-				jobs[0].pipeline.(*IncrementalPipeline).source = defaultSource
-				input.source = defaultSource
+				// override sampleSource with source
+				//defaultSource := &testSampleSource{SampleSource: source.SampleSource{NumberOfEntities: 10, Store: store}}
+				//jobs[0].pipeline.(*IncrementalPipeline).source = defaultSource
+				//input.source = defaultSource
 			}
 			if input.sink != nil {
 				jobs[0].pipeline.(*IncrementalPipeline).sink = input.sink
@@ -227,7 +230,7 @@ var _ = Describe("A failed trigger", func() {
 							cnt += 1
 						case <-time.After(100 * time.Millisecond):
 							if cntP.runChan != nil {
-								//close(cntP.runChan)
+								// close(cntP.runChan)
 							}
 							return
 						}
@@ -254,8 +257,8 @@ var _ = Describe("A failed trigger", func() {
 			}
 
 			// verify number of entities pulled from source
-			if behaviour.ProcessedFunc != nil {
-				expectedProcessed := behaviour.ProcessedFunc(rndBatchSize)
+			if behaviour.Processed != nil {
+				expectedProcessed := behaviour.Processed(rndBatchSize)
 				if expectedProcessed != -1 {
 					Expect(processed).To(Equal(expectedProcessed), tag)
 				}
@@ -267,6 +270,13 @@ var _ = Describe("A failed trigger", func() {
 			// verify expected list of logged entities
 			if behaviour.Logged != nil {
 				Expect(recorder.recorded).To(BeEquivalentTo(behaviour.Logged(rndBatchSize)), tag)
+			}
+			if behaviour.ReQueued != nil {
+				// attack new recordingSink to register emitted entities
+				reQueueSink := &recordingSink{}
+				jobs[0].pipeline.spec().sink = reQueueSink
+				jobs[0].Run()
+				Expect(reQueueSink.recorded).To(BeEquivalentTo(behaviour.ReQueued), tag)
 			}
 		},
 
@@ -369,7 +379,7 @@ var _ = Describe("A failed trigger", func() {
 			expected{
 				ErrorHandlers: []*ErrorHandler{},
 				SyncError:     errors.New("failing source"),
-				ProcessedFunc: func(batchSize int) int { return 0 },
+				Processed:     func(batchSize int) int { return 0 },
 			},
 		),
 		Entry(
@@ -378,7 +388,7 @@ var _ = Describe("A failed trigger", func() {
 			expected{
 				ErrorHandlers: []*ErrorHandler{{Type: "log", MaxItems: 0}},
 				SyncError:     errors.New("failing source"), // expect job status to be failed
-				ProcessedFunc: func(batchSize int) int { return 0 },
+				Processed:     func(batchSize int) int { return 0 },
 			},
 		),
 		Entry(
@@ -387,7 +397,7 @@ var _ = Describe("A failed trigger", func() {
 			expected{
 				ErrorHandlers: []*ErrorHandler{{Type: "requeue", MaxItems: 0}},
 				SyncError:     errors.New("failing source"),
-				ProcessedFunc: func(batchSize int) int { return 0 },
+				Processed:     func(batchSize int) int { return 0 },
 			},
 		),
 		Entry(
@@ -399,7 +409,7 @@ var _ = Describe("A failed trigger", func() {
 			expected{
 				ErrorHandlers: []*ErrorHandler{{Type: "rerun", MaxRetries: 3, RetryDelay: 1}}, // 5 ns delay
 				SyncError:     errors.New("failing source"),
-				ProcessedFunc: func(batchSize int) int { return 0 },
+				Processed:     func(batchSize int) int { return 0 },
 				Runs:          4, // check the pipeline was run 4 time (one regular + 3 retries)
 			},
 		),
@@ -419,9 +429,9 @@ var _ = Describe("A failed trigger", func() {
 					{Type: "log"},
 					{Type: "requeue"},
 				},
-				SyncError:     errors.New("failing source"),
-				ProcessedFunc: func(batchSize int) int { return 0 },
-				Runs:          4, // check the pipeline was run 4 time (one regular + 3 retries)
+				SyncError: errors.New("failing source"),
+				Processed: func(batchSize int) int { return 0 },
+				Runs:      4, // check the pipeline was run 4 time (one regular + 3 retries)
 			},
 		),
 
@@ -431,7 +441,7 @@ var _ = Describe("A failed trigger", func() {
 			expected{
 				ErrorHandlers: []*ErrorHandler{},
 				SyncError:     errors.New("failing sink"),
-				ProcessedFunc: func(batchSize int) int { return int(math.Min(float64(batchSize), 10.0)) },
+				Processed:     func(batchSize int) int { return int(math.Min(float64(batchSize), 10.0)) },
 			},
 		),
 		Entry("failing sink with reRun handler should repeat run n times",
@@ -440,7 +450,7 @@ var _ = Describe("A failed trigger", func() {
 				ErrorHandlers: []*ErrorHandler{{Type: "rerun", MaxRetries: 3, RetryDelay: 1}}, // 5 ns delay
 				SyncError:     errors.New("failing sink"),
 				Runs:          4,
-				ProcessedFunc: func(batchSize int) int { return int(math.Min(float64(batchSize), 10.0)) },
+				Processed:     func(batchSize int) int { return int(math.Min(float64(batchSize), 10.0)) },
 			},
 		),
 		Entry("failing sink with unlimited log handler should log all entities",
@@ -458,7 +468,7 @@ var _ = Describe("A failed trigger", func() {
 				ErrorHandlers: []*ErrorHandler{{Type: "log", MaxItems: 5}},
 				SyncError:     errors.New("failing sink"),
 				Runs:          1,
-				ProcessedFunc: func(batchSize int) int {
+				Processed: func(batchSize int) int {
 					if batchSize > 5 {
 						return int(math.Min(float64(batchSize), 10.0))
 					}
@@ -474,7 +484,7 @@ var _ = Describe("A failed trigger", func() {
 				SyncError:     errors.New("failing sink"),
 				Runs:          1,
 				Logged:        func(batchSize int) []int { return []int{0} },
-				ProcessedFunc: func(batchSize int) int { return int(math.Min(math.Max(float64(2), float64(batchSize)), 10)) },
+				Processed:     func(batchSize int) int { return int(math.Min(math.Max(float64(2), float64(batchSize)), 10)) },
 			},
 		),
 		Entry("failing sink with log handler where cap = batch size should log maxItems entities",
@@ -497,8 +507,10 @@ var _ = Describe("A failed trigger", func() {
 		),
 
 		Entry("failing sink with log handler and reRun handler",
-			tableInput{sink: &failingSink{},
-				onErrorJSON: `[{"errorHandler": "log"},{"errorHandler": "rerun", "retryDelay": 1, "maxRetries": 2}]`},
+			tableInput{
+				sink:        &failingSink{},
+				onErrorJSON: `[{"errorHandler": "log"},{"errorHandler": "rerun", "retryDelay": 1, "maxRetries": 2}]`,
+			},
 			expected{
 				ErrorHandlers: []*ErrorHandler{{Type: "log"}, {Type: "rerun", MaxRetries: 2, RetryDelay: 1}},
 				SyncError:     errors.New("failing sink"),
@@ -507,8 +519,10 @@ var _ = Describe("A failed trigger", func() {
 			},
 		),
 		Entry("failing sink with capped log handler and reRun handler",
-			tableInput{sink: &failingSink{},
-				onErrorJSON: `[{"errorHandler": "log", "maxItems": 5},{"errorHandler": "rerun", "retryDelay": 1, "maxRetries": 2}]`},
+			tableInput{
+				sink:        &failingSink{},
+				onErrorJSON: `[{"errorHandler": "log", "maxItems": 5},{"errorHandler": "rerun", "retryDelay": 1, "maxRetries": 2}]`,
+			},
 			expected{
 				ErrorHandlers: []*ErrorHandler{{Type: "log", MaxItems: 5}, {Type: "rerun", MaxRetries: 2, RetryDelay: 1}},
 				SyncError:     errors.New("failing sink"),
@@ -517,7 +531,7 @@ var _ = Describe("A failed trigger", func() {
 					if batchSize < 6 {
 						// depending on the batch size, when the last batch is only partially logged, it must be
 						// reprocessed during a rerun. this will give duplicate logging of the overlapping entities.
-						//TODO: should we consider constructing partial continuation tokens here? so that the retry
+						// TODO: should we consider constructing partial continuation tokens here? so that the retry
 						// 	picks up after the last logged entity?
 						return map[int][]int{
 							1: {0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
@@ -529,7 +543,7 @@ var _ = Describe("A failed trigger", func() {
 					}
 					return []int{0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4}
 				},
-				ProcessedFunc: func(batchSize int) int {
+				Processed: func(batchSize int) int {
 					if batchSize > 5 {
 						return int(math.Min(float64(batchSize), 10.0))
 					}
@@ -537,7 +551,7 @@ var _ = Describe("A failed trigger", func() {
 				},
 			},
 		),
-		Entry("failing sink with reQueue handler",
+		Entry("failing sink with reQueue handler should requeue all entities",
 			tableInput{sink: &failingSink{}, onErrorJSON: `[{"errorHandler": "requeue"}]`},
 			expected{
 				ErrorHandlers: []*ErrorHandler{{Type: "requeue"}},
@@ -545,6 +559,9 @@ var _ = Describe("A failed trigger", func() {
 				Runs:          1,
 				ReQueued:      []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 			}),
+
+		// TODO: reboot test. make a sink that restarts eveything , reparses job etc and does a new run. make sure no reQueue item is lost
+		// TODO: how to deal with latestOnly? when the requeued item is not latest anymore at time of reprocessing
 
 		// recovering means the sink fails the first job run, but succeeds on the second attempt
 		// we want to make sure that we still log the failed entities the first time around,
@@ -560,7 +577,7 @@ var _ = Describe("A failed trigger", func() {
 				Logged: func(batchSize int) []int {
 					return []int{0, 1} // logging 2 entities during first run
 				},
-				ProcessedFunc: func(batchSize int) int {
+				Processed: func(batchSize int) int {
 					// for batch size up to 2, the first batch is completely handled
 					// by log handler, so it does not come up again during rerun
 					// for larger batches, the run fails the first batch after logging 2 entities,
@@ -579,7 +596,12 @@ var _ = Describe("A failed trigger", func() {
 			tableInput{sink: &pickySink{}},
 			expected{
 				ErrorHandlers: []*ErrorHandler{},
-			}),
+				SyncError:     errors.New("picky sink"),
+				Runs:          1,
+				Processed:     func(batchSize int) int { return batchSize },
+				SinkRecorded:  []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+			},
+		),
 
 		// test next run
 		// test reruns
@@ -622,10 +644,34 @@ func (r *recordingLogHandler) handleFailingEntity(runner *Runner, entity *server
 	r.recorded = append(r.recorded, recId)
 	return nil
 }
-func (p pickySink) processEntities(runner *Runner, entities []*server.Entity) error {
-	panic("implement me")
+
+func (p *pickySink) processEntities(runner *Runner, entities []*server.Entity) error {
+	for _, entity := range entities {
+		id, err := strconv.Atoi(strings.Split(entity.ID, "-")[1])
+		if err != nil {
+			return err
+		}
+		if id%3 == 0 {
+			return errors.New("picky sink")
+		}
+		p.recorded = append(p.recorded, id)
+	}
+	return nil
 }
 
-func (p pickySink) GetConfig() map[string]interface{}  { return map[string]interface{}{"Type": "picky"} }
-func (p pickySink) startFullSync(runner *Runner) error { panic("implement me") }
-func (p pickySink) endFullSync(runner *Runner) error   { panic("implement me") }
+func (p *recordingSink) processEntities(runner *Runner, entities []*server.Entity) error {
+	for _, entity := range entities {
+		id, err := strconv.Atoi(strings.Split(entity.ID, "-")[1])
+		if err != nil {
+			return err
+		}
+		p.recorded = append(p.recorded, id)
+	}
+	return nil
+}
+
+func (p *recordingSink) GetConfig() map[string]interface{} {
+	return map[string]interface{}{"Type": "test"}
+}
+func (p *recordingSink) startFullSync(runner *Runner) error { panic("implement me") }
+func (p *recordingSink) endFullSync(runner *Runner) error   { panic("implement me") }
