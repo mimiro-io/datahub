@@ -1798,12 +1798,57 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 		txn.DatasetEntities["people"] = entities
 		txn.DatasetEntities["places"] = entities1
 
+		// get counts before txn
+		dsInfo, err := store.NamespaceManager.GetDatasetNamespaceInfo()
+
+		// check counts after txn
+		datasets := []string{"core.Dataset"}
+		dsEntity, err := store.GetEntity(fmt.Sprintf("%s:%s", dsInfo.DatasetPrefix, "people"), datasets)
+		Expect(err).To(BeNil())
+
+		if dsEntity != nil {
+			items, ok := dsEntity.Properties[dsInfo.ItemsKey]
+			Expect(ok).To(BeTrue())
+			Expect(items).To(Equal(float64(5)))
+		}
+
+		// check that the item counts have been updated	for places
+		dsEntity, err = store.GetEntity(fmt.Sprintf("%s:%s", dsInfo.DatasetPrefix, "places"), datasets)
+		Expect(err).To(BeNil())
+
+		if dsEntity != nil {
+			items, ok := dsEntity.Properties[dsInfo.ItemsKey]
+			Expect(ok).To(BeTrue())
+			Expect(items).To(Equal(float64(0)))
+		}
+
 		err = store.ExecuteTransaction(txn)
 		Expect(err).To(BeNil())
 
 		people := dsm.GetDataset("people")
 		peopleEntities, _ := people.GetEntities("", 100)
 		Expect(len(peopleEntities.Entities)).To(Equal(6))
+
+		// check counts after txn
+		datasets = []string{"core.Dataset"}
+		dsEntity, err = store.GetEntity(fmt.Sprintf("%s:%s", dsInfo.DatasetPrefix, people.ID), datasets)
+		Expect(err).To(BeNil())
+
+		if dsEntity != nil {
+			items, ok := dsEntity.Properties[dsInfo.ItemsKey]
+			Expect(ok).To(BeTrue())
+			Expect(items).To(Equal(float64(6)))
+		}
+
+		// check that the item counts have been updated	for places
+		dsEntity, err = store.GetEntity(fmt.Sprintf("%s:%s", dsInfo.DatasetPrefix, "places"), datasets)
+		Expect(err).To(BeNil())
+
+		if dsEntity != nil {
+			items, ok := dsEntity.Properties[dsInfo.ItemsKey]
+			Expect(ok).To(BeTrue())
+			Expect(items).To(Equal(float64(1)))
+		}
 	})
 
 	ginkgo.It("should find deleted version of entity with lookup", func() {

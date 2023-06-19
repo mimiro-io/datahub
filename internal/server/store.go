@@ -1476,12 +1476,16 @@ func (s *Store) ExecuteTransaction(transaction *Transaction) error {
 	txn := s.database.NewTransaction(true)
 	defer txn.Discard()
 
+	updateCountsPerDataset := make(map[string]int64)
+
 	for k, ds := range datasets {
 		entities := transaction.DatasetEntities[k]
-		_, err := ds.StoreEntitiesWithTransaction(entities, txnTime, txn)
+		newItems, err := ds.StoreEntitiesWithTransaction(entities, txnTime, txn)
 		if err != nil {
 			return err
 		}
+
+		updateCountsPerDataset[k] = newItems
 	}
 
 	err := s.commitIDTxn()
@@ -1492,6 +1496,19 @@ func (s *Store) ExecuteTransaction(transaction *Transaction) error {
 	err = txn.Commit()
 	if err != nil {
 		return err
+	}
+
+	// update the txn counts
+	for k, v := range updateCountsPerDataset {
+		ds, ok := s.datasets.Load(k)
+		if !ok {
+			return errors.New("no dataset " + k)
+		}
+
+		err = ds.(*Dataset).updateDataset(v, nil)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
