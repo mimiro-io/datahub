@@ -153,7 +153,7 @@ jobs:
             echo "image_tag=${{ env.DOCKERHUB_REPOSITORY }}:$(echo $GITHUB_REF | cut -d / -f 3)-$(uname -m)" >> $GITHUB_OUTPUT
           else
             echo "Setting Unstable Image"
-            echo "image_tag=${{ env.DOCKERHUB_REPOSITORY }}:${{ steps.semver-tag.outputs.tag }}-$GITHUB_RUN_NUMBER-unstable-$(uname -m) >> $GITHUB_OUTPUT
+            echo "image_tag=${{ env.DOCKERHUB_REPOSITORY }}:${{ steps.semver-tag.outputs.tag }}-$GITHUB_RUN_NUMBER-unstable-$(uname -m)" >> $GITHUB_OUTPUT
           fi
        
       # Login to Docker registry except on PR
