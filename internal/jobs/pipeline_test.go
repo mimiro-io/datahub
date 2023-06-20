@@ -127,6 +127,7 @@ var _ = Describe("A pipeline", func() {
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
 			runner:   runner,
+			dsm:      dsm,
 		}
 
 		job.Run()
@@ -199,6 +200,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil(), "pipeline is parsed")
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
@@ -254,6 +256,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil(), "jobConfig to Pipeline returns no error")
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
@@ -289,6 +292,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil(), "jobConfig to Pipeline returns no error")
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
@@ -326,6 +330,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil(), "jobConfig to Pipeline returns no error")
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
@@ -374,6 +379,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil(), "pipeline is parsed correctly")
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
@@ -426,6 +432,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil(), "pipeline is parsed")
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
@@ -486,6 +493,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil(), "pipeline is parsed")
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
@@ -544,6 +552,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil(), "pipeline is parsed")
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
@@ -623,6 +632,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil())
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
@@ -713,6 +723,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil())
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
@@ -767,6 +778,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil())
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
@@ -800,6 +812,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil())
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
@@ -840,6 +853,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil())
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
@@ -875,6 +889,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil())
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
@@ -910,6 +925,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil())
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
@@ -946,6 +962,7 @@ var _ = Describe("A pipeline", func() {
 			Expect(err).To(BeNil())
 
 			job := &job{
+				dsm:      dsm,
 				id:       jobConfig.ID,
 				pipeline: pipeline,
 				schedule: jobConfig.Triggers[0].Schedule,
@@ -985,7 +1002,7 @@ var _ = Describe("A pipeline", func() {
 				sink:   &datasetSink{DatasetName: "people2", Store: store, DatasetManager: dsm},
 			}}
 
-			job := &job{id: "fullsync-1", pipeline: pipeline, runner: runner}
+			job := &job{id: "fullsync-1", pipeline: pipeline, runner: runner, dsm: dsm}
 
 			// run once, both entities should sync
 			job.Run()
@@ -1021,7 +1038,7 @@ var _ = Describe("A pipeline", func() {
 			source:    &source.SampleSource{NumberOfEntities: 10, Store: store},
 			sink:      &httpDatasetSink{Endpoint: "http://localhost:7777/datasets/inctest/fullsync", Store: store},
 		}}
-		job := &job{id: "inc-1", pipeline: pipeline, runner: runner}
+		job := &job{id: "inc-1", pipeline: pipeline, runner: runner, dsm: dsm}
 
 		// run async, so we can verify tokens in parallel
 		wg := sync.WaitGroup{}
@@ -1058,7 +1075,7 @@ var _ = Describe("A pipeline", func() {
 			// sink:      &httpDatasetSink{Endpoint: "http://localhost:7777/datasets/fulltest/fullsync", Store: store},
 			sink: &devNullSink{},
 		}}
-		job := &job{id: "full-1", pipeline: pipeline, runner: runner}
+		job := &job{id: "full-1", pipeline: pipeline, runner: runner, dsm: dsm}
 
 		// run async, so we can verify tokens in parallel
 		wg := sync.WaitGroup{}
@@ -1111,7 +1128,7 @@ var _ = Describe("A pipeline", func() {
 			source:    &source.DatasetSource{DatasetName: "src", Store: store, DatasetManager: dsm},
 			sink:      &httpDatasetSink{Endpoint: "http://localhost:7777/datasets/inctest/fullsync", Store: store},
 		}}
-		job := &job{id: "inc-1", pipeline: pipeline, runner: runner}
+		job := &job{id: "inc-1", pipeline: pipeline, runner: runner, dsm: dsm}
 		job.Run()
 		sinkChanges := mockService.getRecordedEntitiesForDataset("inctest")
 		Expect(len(sinkChanges)).To(Equal(4), "Expected all 4 changes in sink for incremental")
@@ -1139,7 +1156,7 @@ var _ = Describe("A pipeline", func() {
 			source:    &source.DatasetSource{DatasetName: "src", Store: store, DatasetManager: dsm},
 			sink:      &httpDatasetSink{Endpoint: "http://localhost:7777/datasets/fulltest/fullsync", Store: store},
 		}}
-		job := &job{id: "inc-1", pipeline: pipeline, runner: runner}
+		job := &job{id: "inc-1", pipeline: pipeline, runner: runner, dsm: dsm}
 		job.Run()
 		sinkChanges := mockService.getRecordedEntitiesForDataset("fulltest")
 		Expect(len(sinkChanges)).To(Equal(2), "Expected only 2 entities in current state in fullsync")
@@ -1174,7 +1191,7 @@ var _ = Describe("A pipeline", func() {
 			},
 			sink: &httpDatasetSink{Endpoint: "http://localhost:7777/datasets/fulltest/fullsync", Store: store},
 		}}
-		job := &job{id: "fs-1", pipeline: pipeline, runner: runner}
+		job := &job{id: "fs-1", pipeline: pipeline, runner: runner, dsm: dsm}
 		job.Run()
 
 		sinkChanges := mockService.getRecordedEntitiesForDataset("fulltest")
@@ -1218,7 +1235,7 @@ var _ = Describe("A pipeline", func() {
 			},
 			sink: &httpDatasetSink{Endpoint: "http://localhost:7777/datasets/fulltest/fullsync", Store: store},
 		}}
-		job := &job{id: "fs-1", pipeline: pipeline, runner: runner}
+		job := &job{id: "fs-1", pipeline: pipeline, runner: runner, dsm: dsm}
 		job.Run()
 
 		sinkChanges := mockService.getRecordedEntitiesForDataset("fulltest")
@@ -1300,7 +1317,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil())
 		pipeline, err := scheduler.toPipeline(jobConfig, JobTypeFull)
 		Expect(err).To(BeNil())
-		job := &job{id: "fs-1", pipeline: pipeline, runner: runner}
+		job := &job{id: "fs-1", pipeline: pipeline, runner: runner, dsm: dsm}
 		job.Run()
 
 		sinkChanges := mockService.getRecordedEntitiesForDataset("fulltest")
@@ -1342,7 +1359,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil())
 		pipeline, err := scheduler.toPipeline(jobConfig, JobTypeIncremental)
 		Expect(err).To(BeNil())
-		job := &job{id: "inc-1", pipeline: pipeline, runner: runner}
+		job := &job{id: "inc-1", pipeline: pipeline, runner: runner, dsm: dsm}
 		job.Run()
 
 		sinkChanges := mockService.getRecordedEntitiesForDataset("inctest")
@@ -1404,6 +1421,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(pipeline.spec().source.(*source.DatasetSource).LatestOnly).To(BeTrue())
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
@@ -1451,6 +1469,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil(), "pipeline is parsed correctly")
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
@@ -1490,6 +1509,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil(), "pipeline is parsed correctly")
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
@@ -1531,6 +1551,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil(), "pipeline is parsed correctly")
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
@@ -1591,6 +1612,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil(), "pipeline is parsed correctly")
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,
@@ -1664,6 +1686,7 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil(), "pipeline is parsed correctly")
 
 		job := &job{
+			dsm:      dsm,
 			id:       jobConfig.ID,
 			pipeline: pipeline,
 			schedule: jobConfig.Triggers[0].Schedule,

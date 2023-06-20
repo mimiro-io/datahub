@@ -424,6 +424,9 @@ func (s *Scheduler) RunJob(jobid string, jobType string) (string, error) {
 		title:    jobConfig.Title,
 		pipeline: pipeline,
 		runner:   s.Runner,
+		dsm:      s.DatasetManager,
+		// no error handlers when running manually
+		errorHandlers: nil,
 	}
 
 	// is the job running?
