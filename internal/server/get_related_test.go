@@ -726,6 +726,50 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 		})
+		ginkgo.It("many datasets, all but one deleted", func() {
+			pref := persist("friends", store, dsm, buildTestBatch(store, []testPerson{
+				{id: 1, friends: []int{2}},
+				{id: 2, friends: []int{}},
+			}))
+			_ = persist("family", store, dsm, buildTestBatch(store, []testPerson{
+				{id: 1, friends: []int{2}},
+				{id: 2, friends: []int{}},
+			}))
+			_ = persist("other", store, dsm, buildTestBatch(store, []testPerson{
+				{id: 1, friends: []int{2}},
+				{id: 2, friends: []int{}},
+			}))
+			_ = persist("family", store, dsm, buildTestBatch(store, []testPerson{
+				{id: 1, deleted: true, friends: []int{2}},
+				{id: 2, friends: []int{}},
+			}))
+			_ = persist("other2", store, dsm, buildTestBatch(store, []testPerson{
+				{id: 1, friends: []int{2}},
+				{id: 2, friends: []int{}},
+			}))
+			_ = persist("other", store, dsm, buildTestBatch(store, []testPerson{
+				{id: 1, deleted: true, friends: []int{2}},
+				{id: 2, friends: []int{}},
+			}))
+			_ = persist("friends", store, dsm, buildTestBatch(store, []testPerson{
+				{id: 1, deleted: true, friends: []int{2}},
+				{id: 2, friends: []int{}},
+			}))
+			start := []string{pref + ":person-2"}
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			Expect(err).To(BeNil())
+			Expect(queryResult.Relations).To(HaveLen(1))
+			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-1"))
+			Expect(queryResult.Relations[0].RelatedEntity.Properties[pref+":Name"]).To(Equal("Person 1"), "only one partial expected")
+			Expect(queryResult.Relations[0].RelatedEntity.IsDeleted).To(BeFalse())
+			start = []string{pref + ":person-1"}
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			Expect(err).To(BeNil())
+			Expect(queryResult.Relations).To(HaveLen(1))
+			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-2"))
+			Expect(queryResult.Relations[0].RelatedEntity.Properties[pref+":Name"]).To(Equal([]any{
+				"Person 2", "Person 2", "Person 2", "Person 2"}))
+		})
 	})
 })
 

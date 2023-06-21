@@ -952,6 +952,8 @@ func (s *Store) GetRelatedAtTime(from *RelatedFrom, limit int) ([]qresult, *Rela
 
 			var prevResult qresult
 			var prevDeleted bool
+			var prevDatasetID uint32
+			var dsSpillOver map[uint32]qresult
 			for outgoingIterator.Seek(startBuffer); outgoingIterator.ValidForPrefix(searchBuffer); outgoingIterator.Next() {
 				//if skipToPageStart {
 				//	skipToPageStart = false
@@ -1000,15 +1002,40 @@ func (s *Store) GetRelatedAtTime(from *RelatedFrom, limit int) ([]qresult, *Rela
 					continue
 				}
 
+				// since we are going forward through the index, we know the previous
+				// result is the most current result for this related entity. so we add it to the results
 				if relatedID != currentRID {
-					// add to results
+					// add to results if not deleted
 					if currentRID != 0 && !prevDeleted {
 						results = append(results, prevResult)
+					} else {
+						// i the last result was deleted, check if there
+						// are any non deleted results for other datasets containing this relation.
+						// dsSpillOver only contains a non-deleted result for a dataset or nothing
+						for _, dsResult := range dsSpillOver {
+							results = append(results, dsResult)
+							break
+						}
+					}
+					// reset dsSpillOver since we start a new related entity now
+					dsSpillOver = map[uint32]qresult{}
+				} else if datasetID != prevDatasetID {
+					// if the related entity is the same, but the dataset is different,
+					// we want to track the most current version of the related entity
+					// for each dataset. non-deleted only.
+					// this is needed so we can detect if *any* dataset contains a non-deleted
+					// relation, because then we want to include it in the results.
+					if prevDeleted {
+						delete(dsSpillOver, prevDatasetID)
+					}
+					if currentRID != 0 && !prevDeleted {
+						dsSpillOver[prevDatasetID] = prevResult
 					}
 				}
 
 				del := binary.BigEndian.Uint16(k[34:])
 				prevDeleted = del == 1
+				prevDatasetID = datasetID
 				prevResult = qresult{Time: uint64(et), EntityID: relatedID, PredicateID: predID, DatasetID: datasetID}
 
 				// set current to be this related object
@@ -1018,9 +1045,21 @@ func (s *Store) GetRelatedAtTime(from *RelatedFrom, limit int) ([]qresult, *Rela
 			}
 			var added bool
 			// add the last iteration result
-			if currentRID != 0 && !prevDeleted && (limit == 0 || len(results) < limit) {
-				results = append(results, prevResult)
-				added = true
+			if limit == 0 || len(results) < limit {
+				if currentRID != 0 && !prevDeleted {
+					results = append(results, prevResult)
+					added = true
+				} else if dsSpillOver != nil && (limit == 0 || len(results) < limit) {
+					// if there is a spillOver left, add it
+					if prevDeleted {
+						delete(dsSpillOver, prevDatasetID)
+					}
+					for _, dsResult := range dsSpillOver {
+						results = append(results, dsResult)
+						added = true
+						break
+					}
+				}
 			}
 			// mark this as the last query result page
 			if !outgoingIterator.ValidForPrefix(searchBuffer) && (len(results) == 0 || added) {
@@ -1049,7 +1088,8 @@ func (s *Store) GetRelatedAtTime(from *RelatedFrom, limit int) ([]qresult, *Rela
 			outgoingIterator := txn.NewIterator(opts1)
 			defer outgoingIterator.Close()
 
-			seenIds := map[uint64]map[uint64]bool{}
+			seenIds := map[uint64]map[uint64]map[uint32]bool{}
+			added := map[uint64]map[uint64]bool{}
 			var hasReachedStartKey bool
 			if len(from.RelationIndexFromKey) == 10 {
 				hasReachedStartKey = true
@@ -1087,16 +1127,35 @@ func (s *Store) GetRelatedAtTime(from *RelatedFrom, limit int) ([]qresult, *Rela
 				if from.Predicate != predID && from.Predicate > 0 {
 					continue
 				}
-				if seenIds[predID] == nil {
-					seenIds[predID] = map[uint64]bool{}
-				}
-
 				// get related
 				relatedID := binary.BigEndian.Uint64(k[26:])
-				if _, seen := seenIds[predID][relatedID]; seen {
+
+				// init tracking maps for this predicate
+				if seenIds[predID] == nil {
+					seenIds[predID] = map[uint64]map[uint32]bool{}
+					added[predID] = map[uint64]bool{}
+				}
+
+				// check if this related entity has been added to results
+				isAdded := added[predID][relatedID]
+
+				// init tracking map per dataset for this related entity
+				// the existence of this map means we've seen this related entity for this predicate
+				if seenIds[predID][relatedID] == nil {
+					seenIds[predID][relatedID] = map[uint32]bool{}
+				}
+				// check if we've seen this related entity for this predicate for this dataset
+				_, dsSeen := seenIds[predID][relatedID][datasetID]
+
+				// since we're iterating in reverse, we only need to
+				// consider the first instance of a related entity for a predicate + dataset combo
+				// also, once we've added a related entity for a predicate to results,
+				// we don't need to add it again
+				if dsSeen || isAdded {
 					continue
 				}
-				seenIds[predID][relatedID] = true
+				seenIds[predID][relatedID][datasetID] = true
+
 				// get deleted
 				del := binary.BigEndian.Uint16(k[34:])
 				if del != 1 && hasReachedStartKey {
@@ -1105,6 +1164,7 @@ func (s *Store) GetRelatedAtTime(from *RelatedFrom, limit int) ([]qresult, *Rela
 					}
 					copy(cont.RelationIndexFromKey, k)
 					results = append(results, qresult{Time: uint64(et), EntityID: relatedID, PredicateID: predID, DatasetID: datasetID})
+					added[predID][relatedID] = true
 				}
 
 				// set at end of iteration so that we jump over the item the previous page gave as continuation, while still
