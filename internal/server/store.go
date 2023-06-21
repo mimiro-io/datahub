@@ -456,7 +456,7 @@ func (s *Store) loadDatasets() error {
 	})
 }
 
-func (s *Store) MergeInto(target *Entity, source *Entity) {
+func (s *Store) mergeInto(target *Entity, source *Entity) {
 	for sk, sv := range source.Properties {
 		if tv, ok := target.Properties[sk]; ok {
 			// property already exists - add to existing list
@@ -523,13 +523,13 @@ func (s *Store) MergeInto(target *Entity, source *Entity) {
 	}
 }
 
-func (s *Store) MergePartials(partials []*Entity) *Entity {
+func (s *Store) mergePartials(partials []*Entity) *Entity {
 	if len(partials) == 1 {
 		return partials[0]
 	} else if len(partials) > 1 {
 		r := partials[0]
 		for i := 1; i < len(partials); i++ {
-			s.MergeInto(r, partials[i])
+			s.mergeInto(r, partials[i])
 		}
 		return r
 	}
@@ -638,7 +638,9 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 				if err != nil {
 					return nil, err
 				}
-				partials = append(partials, e)
+				if !e.IsDeleted {
+					partials = append(partials, e)
+				}
 			}
 		}
 
@@ -660,10 +662,12 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 		if e.References == nil {
 			e.References = make(map[string]interface{})
 		}
-		partials = append(partials, e)
+		if !e.IsDeleted {
+			partials = append(partials, e)
+		}
 	}
 	// merge partials
-	mergedEntity := s.MergePartials(partials)
+	mergedEntity := s.mergePartials(partials)
 
 	// if no entity for this id then return the empty object
 	if mergedEntity == nil {

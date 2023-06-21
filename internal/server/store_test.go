@@ -912,13 +912,13 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 				partials := make([]*Entity, 2)
 				partials[0] = e1
 				partials[1] = e2
-				result := store.MergePartials(partials)
+				result := store.mergePartials(partials)
 				Expect(result).NotTo(BeZero())
 				Expect(result.ID).To(Equal("x:e1"))
 				Expect(result.Properties["x:name"]).To(BeNil())
 
 				e2.Properties["x:name"] = "homer"
-				result = store.MergePartials(partials)
+				result = store.mergePartials(partials)
 				Expect(result).NotTo(BeZero())
 				Expect(result.ID).To(Equal("x:e1"))
 				Expect(result.Properties["x:name"]).To(Equal("homer"))
@@ -933,7 +933,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 
 				e1.Properties["x:name"] = "homer"
 
-				result := store.MergePartials(partials)
+				result := store.mergePartials(partials)
 				Expect(result).NotTo(BeZero())
 				Expect(result.ID).To(Equal("x:e1"))
 				Expect(result.Properties["x:name"]).To(Equal("homer"))
@@ -948,7 +948,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 
 				e2.Properties["x:name"] = "homer"
 
-				result := store.MergePartials(partials)
+				result := store.mergePartials(partials)
 				Expect(result).NotTo(BeZero())
 				Expect(result.ID).To(Equal("x:e1"))
 				Expect(result.Properties["x:name"]).To(Equal("homer"))
@@ -964,7 +964,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 				e1.Properties["x:name"] = "homer"
 				e2.Properties["x:name"] = "bob"
 
-				result := store.MergePartials(partials)
+				result := store.mergePartials(partials)
 				Expect(result).NotTo(BeZero())
 				Expect(result.ID).To(Equal("x:e1"))
 				Expect(result.Properties["x:name"]).To(Equal([]interface{}{"homer", "bob"}))
@@ -983,7 +983,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 				e1.Properties["x:name"] = names
 				e2.Properties["x:name"] = "bob"
 
-				result := store.MergePartials(partials)
+				result := store.mergePartials(partials)
 				Expect(result).NotTo(BeZero())
 				Expect(result.ID).To(Equal("x:e1"))
 				Expect(result.Properties["x:name"]).To(Equal([]interface{}{"homer", "brian", "bob"}))
@@ -1002,7 +1002,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 				e1.Properties["x:name"] = "bob"
 				e2.Properties["x:name"] = names
 
-				result := store.MergePartials(partials)
+				result := store.mergePartials(partials)
 				Expect(result).NotTo(BeZero())
 				Expect(result.ID).To(Equal("x:e1"))
 				Expect(result.Properties["x:name"]).To(Equal([]interface{}{"bob", "homer", "brian"}))
@@ -1026,7 +1026,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 
 				e2.Properties["x:name"] = names1
 
-				result := store.MergePartials(partials)
+				result := store.mergePartials(partials)
 				Expect(result).NotTo(BeZero())
 				Expect(result.ID).To(Equal("x:e1"))
 				Expect(result.Properties["x:name"]).To(Equal([]interface{}{"homer", "brian", "bob", "james"}))
@@ -1053,7 +1053,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 				partials[1] = e2
 				partials[2] = e3
 
-				result := store.MergePartials(partials)
+				result := store.mergePartials(partials)
 				Expect(result).NotTo(BeZero())
 				Expect(result.ID).To(Equal("x:e1"))
 				Expect(result.Properties["x:name"]).To(Equal([]interface{}{"bob", "brian", "james"}))
