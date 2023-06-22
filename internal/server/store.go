@@ -950,7 +950,7 @@ func (s *Store) GetRelatedAtTime(from *RelatedFrom, limit int) ([]qresult, *Rela
 			currentRID = 0
 			// tmpResult := make(map[[12]byte]result)
 
-			var prevResult qresult
+			var prevResults map[uint64]qresult
 			var prevDeleted bool
 			var prevDatasetID uint32
 			var dsSpillOver map[uint32]qresult
@@ -1007,9 +1007,11 @@ func (s *Store) GetRelatedAtTime(from *RelatedFrom, limit int) ([]qresult, *Rela
 				if relatedID != currentRID {
 					// add to results if not deleted
 					if currentRID != 0 && !prevDeleted {
-						results = append(results, prevResult)
+						for _, prevResult := range prevResults {
+							results = append(results, prevResult)
+						}
 					} else {
-						// i the last result was deleted, check if there
+						// if the last result was deleted, check if there
 						// are any non deleted results for other datasets containing this relation.
 						// dsSpillOver only contains a non-deleted result for a dataset or nothing
 						for _, dsResult := range dsSpillOver {
@@ -1019,6 +1021,7 @@ func (s *Store) GetRelatedAtTime(from *RelatedFrom, limit int) ([]qresult, *Rela
 					}
 					// reset dsSpillOver since we start a new related entity now
 					dsSpillOver = map[uint32]qresult{}
+					prevResults = map[uint64]qresult{}
 				} else if datasetID != prevDatasetID {
 					// if the related entity is the same, but the dataset is different,
 					// we want to track the most current version of the related entity
@@ -1029,14 +1032,19 @@ func (s *Store) GetRelatedAtTime(from *RelatedFrom, limit int) ([]qresult, *Rela
 						delete(dsSpillOver, prevDatasetID)
 					}
 					if currentRID != 0 && !prevDeleted {
-						dsSpillOver[prevDatasetID] = prevResult
+						for _, prevResult := range prevResults {
+							if prevResult.DatasetID == prevDatasetID {
+
+								dsSpillOver[prevDatasetID] = prevResult
+							}
+						}
 					}
 				}
 
 				del := binary.BigEndian.Uint16(k[34:])
 				prevDeleted = del == 1
 				prevDatasetID = datasetID
-				prevResult = qresult{Time: uint64(et), EntityID: relatedID, PredicateID: predID, DatasetID: datasetID}
+				prevResults[predID] = qresult{Time: uint64(et), EntityID: relatedID, PredicateID: predID, DatasetID: datasetID}
 
 				// set current to be this related object
 				currentRID = relatedID
@@ -1047,7 +1055,9 @@ func (s *Store) GetRelatedAtTime(from *RelatedFrom, limit int) ([]qresult, *Rela
 			// add the last iteration result
 			if limit == 0 || len(results) < limit {
 				if currentRID != 0 && !prevDeleted {
-					results = append(results, prevResult)
+					for _, prevResult := range prevResults {
+						results = append(results, prevResult)
+					}
 					added = true
 				} else if dsSpillOver != nil && (limit == 0 || len(results) < limit) {
 					// if there is a spillOver left, add it

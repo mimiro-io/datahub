@@ -1057,6 +1057,79 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 
 	})
 	ginkgo.Describe("Multiple predicates and delete states, here:", func() {
+		ginkgo.It("two predicates, single dataset, specific query", func() {
+			pref := persist("friends", store, dsm, buildTestBatch(store, []testPerson{
+				{id: 1, friends: []int{2}, family: []int{2}},
+				{id: 2, friends: []int{}},
+			}))
+			start := []string{pref + ":person-1"}
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, pref+":Friend", false, nil, 0)
+			Expect(err).To(BeNil())
+			Expect(queryResult.Relations).To(HaveLen(1))
+			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-2"))
+			start = []string{pref + ":person-2"}
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, pref+":Friend", true, nil, 0)
+			Expect(err).To(BeNil())
+			Expect(queryResult.Relations).To(HaveLen(1))
+			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-1"))
+		})
+		ginkgo.It("two predicates, single dataset, specific query, deleted ref, same batch", func() {
+			pref := persist("friends", store, dsm, buildTestBatch(store, []testPerson{
+				{id: 1, friends: []int{2}, family: []int{2}},
+				{id: 2, friends: []int{}},
+				{id: 1, deleted: true, friends: []int{2}, family: []int{2}},
+			}))
+			start := []string{pref + ":person-1"}
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, pref+":Friend", false, nil, 0)
+			Expect(err).To(BeNil())
+			Expect(queryResult.Relations).To(HaveLen(0))
+			start = []string{pref + ":person-2"}
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, pref+":Friend", true, nil, 0)
+			Expect(err).To(BeNil())
+			Expect(queryResult.Relations).To(HaveLen(0))
+		})
+		ginkgo.It("two predicates, two datasetd, specific query, deleted ref in one ds, same batch", func() {
+			pref := persist("friends", store, dsm, buildTestBatch(store, []testPerson{
+				{id: 1, friends: []int{2}, family: []int{2}},
+				{id: 2, friends: []int{}},
+				{id: 1, deleted: true, friends: []int{2}, family: []int{2}},
+			}))
+			_ = persist("family", store, dsm, buildTestBatch(store, []testPerson{
+				{id: 1, friends: []int{2}, family: []int{2}},
+				{id: 2, friends: []int{}},
+			}))
+			start := []string{pref + ":person-1"}
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, pref+":Friend", false, nil, 0)
+			Expect(err).To(BeNil())
+
+			Expect(queryResult.Relations).To(HaveLen(1))
+			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-2"))
+			start = []string{pref + ":person-2"}
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, pref+":Friend", true, nil, 0)
+			Expect(err).To(BeNil())
+			Expect(queryResult.Relations).To(HaveLen(1))
+			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-1"))
+		})
+		ginkgo.It("two predicates, two datasets, specific query", func() {
+			pref := persist("friends", store, dsm, buildTestBatch(store, []testPerson{
+				{id: 1, friends: []int{2}, family: []int{2}},
+				{id: 2, friends: []int{}},
+			}))
+			_ = persist("family", store, dsm, buildTestBatch(store, []testPerson{
+				{id: 1, friends: []int{2}, family: []int{2}},
+				{id: 2, friends: []int{}},
+			}))
+			start := []string{pref + ":person-1"}
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, pref+":Friend", false, nil, 0)
+			Expect(err).To(BeNil())
+			Expect(queryResult.Relations).To(HaveLen(1))
+			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-2"))
+			start = []string{pref + ":person-2"}
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, pref+":Friend", true, nil, 0)
+			Expect(err).To(BeNil())
+			Expect(queryResult.Relations).To(HaveLen(1))
+			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-1"))
+		})
 		ginkgo.It("two predicates, single dataset, star query", func() {
 			pref := persist("friends", store, dsm, buildTestBatch(store, []testPerson{
 				{id: 1, friends: []int{2}, family: []int{2}},
