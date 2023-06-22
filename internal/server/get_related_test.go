@@ -960,7 +960,7 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 			start := []string{pref + ":person-1"}
 			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
 			Expect(err).To(BeNil())
-			Expect(queryResult.Relations).To(HaveLen(1))
+			Expect(queryResult.Relations).To(HaveLen(2))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-1"))
 			Expect(queryResult.Relations[0].RelatedEntity.IsDeleted).To(BeFalse())
 		})
@@ -1010,7 +1010,7 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 			start := []string{pref + ":person-1"}
 			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
 			Expect(err).To(BeNil())
-			Expect(queryResult.Relations).To(HaveLen(1))
+			Expect(queryResult.Relations).To(HaveLen(2))
 		})
 		ginkgo.It("multiple datasets, multiple predicates with deletes 7", func() {
 			pref := persist("people", store, dsm, buildTestBatch(store, []testPerson{
