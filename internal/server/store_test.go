@@ -1851,9 +1851,6 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 		}
 	})
 
-	// TODO: this test is not valid anymore, as we don't have a "deleted" version of the entity anymore
-	// mergePartials now skips deleted entities
-	// we should still add an on demand option for retrieving deleted entities
 	ginkgo.It("should find deleted version of entity with lookup", func() {
 		peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
 			"http://data.mimiro.io/people/",
