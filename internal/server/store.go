@@ -602,6 +602,7 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 	var prevValueBytes []byte
 	var previousDatasetID uint32 = 0
 	var currentDatasetID uint32 = 0
+	var hasDeleted bool
 	for entityLocatorIterator.Seek(entityLocatorPrefixBuffer); entityLocatorIterator.ValidForPrefix(entityLocatorPrefixBuffer); entityLocatorIterator.Next() {
 		item := entityLocatorIterator.Item()
 		key := item.Key()
@@ -640,6 +641,8 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 				}
 				if !e.IsDeleted {
 					partials = append(partials, e)
+				} else {
+					hasDeleted = true
 				}
 			}
 		}
@@ -664,6 +667,8 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 		}
 		if !e.IsDeleted {
 			partials = append(partials, e)
+		} else {
+			hasDeleted = true
 		}
 	}
 	// merge partials
@@ -676,6 +681,7 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 		mergedEntity.References = make(map[string]interface{})
 
 		mergedEntity.InternalID = internalID
+		mergedEntity.IsDeleted = hasDeleted
 		uri, err := s.getURIForID(internalID)
 		if err != nil {
 			return nil, err

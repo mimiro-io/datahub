@@ -1854,7 +1854,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 	// TODO: this test is not valid anymore, as we don't have a "deleted" version of the entity anymore
 	// mergePartials now skips deleted entities
 	// we should still add an on demand option for retrieving deleted entities
-	ginkgo.PIt("should find deleted version of entity with lookup", func() {
+	ginkgo.It("should find deleted version of entity with lookup", func() {
 		peopleNamespacePrefix, _ := store.NamespaceManager.AssertPrefixMappingForExpansion(
 			"http://data.mimiro.io/people/",
 		)
@@ -1890,7 +1890,6 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 
 		e, err = store.GetEntity("http://data.mimiro.io/people/p1", nil)
 		Expect(err).To(BeNil(), "GetEntity failed unexpectedly")
-		// in store.go L672 an undeleted default entity is created, therefore no deleted set.
 		Expect(e.IsDeleted).To(BeTrue())
 	})
 })
