@@ -79,6 +79,7 @@ type ReQueueFailingEntityHandler struct {
 
 func (r *ReQueueFailingEntityHandler) reset() {
 	r.count = 0
+	r.queue = nil
 }
 
 func (r *ReQueueFailingEntityHandler) handleFailingEntity(runner *Runner, entity *server.Entity, jobId string) error {
@@ -237,36 +238,36 @@ func (w *wrappedTransform) GetConfig() map[string]interface{} {
 
 func (w *wrappedTransform) transformEntities(runner *Runner, entities []*server.Entity, jobTag string) ([]*server.Entity, error) {
 	transformedEntities, err := w.t.transformEntities(runner, entities, jobTag)
-	if err != nil {
-		splitPoint := len(entities) / 2
-		left := entities[:splitPoint]
-		leftResult, leftErr := w.transformEntities(runner, left, jobTag)
-		if leftErr != nil && len(entities) <= 1 {
-			for _, eh := range w.failingEntityHandlers {
-				for _, entity := range entities {
-					err2 := eh.handleFailingEntity(runner, entity, w.jobId)
-					if err2 != nil {
-						return nil, err2
-					}
-				}
-			}
-		}
-
-		right := entities[splitPoint:]
-		rightResult, rightErr := w.transformEntities(runner, right, jobTag)
-		if rightErr != nil && len(entities) <= 1 {
-			for _, eh := range w.failingEntityHandlers {
-				for _, entity := range entities {
-					err2 := eh.handleFailingEntity(runner, entity, w.jobId)
-					if err2 != nil {
-						return nil, err2
-					}
-				}
-			}
-		}
-
-		return append(leftResult, rightResult...), nil
-	}
+	//if err != nil {
+	//	splitPoint := len(entities) / 2
+	//	left := entities[:splitPoint]
+	//	leftResult, leftErr := w.transformEntities(runner, left, jobTag)
+	//	if leftErr != nil && len(entities) <= 1 {
+	//		for _, eh := range w.failingEntityHandlers {
+	//			for _, entity := range entities {
+	//				err2 := eh.handleFailingEntity(runner, entity, w.jobId)
+	//				if err2 != nil {
+	//					return nil, err2
+	//				}
+	//			}
+	//		}
+	//	}
+	//
+	//	right := entities[splitPoint:]
+	//	rightResult, rightErr := w.transformEntities(runner, right, jobTag)
+	//	if rightErr != nil && len(entities) <= 1 {
+	//		for _, eh := range w.failingEntityHandlers {
+	//			for _, entity := range entities {
+	//				err2 := eh.handleFailingEntity(runner, entity, w.jobId)
+	//				if err2 != nil {
+	//					return nil, err2
+	//				}
+	//			}
+	//		}
+	//	}
+	//
+	//	return append(leftResult, rightResult...), nil
+	//}
 	return transformedEntities, err
 }
 
@@ -287,13 +288,18 @@ func (w *wrappedSink) GetConfig() map[string]interface{} {
 var MaxItemsExceededError = errors.New("errorHandler: max items reached")
 
 func (w *wrappedSink) processEntities(runner *Runner, entities []*server.Entity) error {
+	// try to run batch
 	err := w.s.processEntities(runner, entities)
 	if err != nil {
+		// if this was a single entity, and it failed, run handles
 		if len(entities) <= 1 {
 			for _, eh := range w.failingEntityHandlers {
 				for _, entity := range entities {
 					err2 := eh.handleFailingEntity(runner, entity, w.jobId)
 					if err2 != nil {
+						if w.lastError == nil {
+							w.lastError = err
+						}
 						return err2
 						// return w.lastError
 					}
@@ -304,6 +310,7 @@ func (w *wrappedSink) processEntities(runner *Runner, entities []*server.Entity)
 			}
 			return nil
 		} else {
+			// if this was a larger batch, split and recusrse
 			w.recursionDepth++
 			splitPoint := len(entities) / 2
 			left := entities[:splitPoint]
@@ -324,6 +331,7 @@ func (w *wrappedSink) processEntities(runner *Runner, entities []*server.Entity)
 			return leftErr
 		}
 	} else {
+		// unset error if this was an unsplit batch without failure
 		if w.recursionDepth == 0 {
 			w.lastError = nil
 		}

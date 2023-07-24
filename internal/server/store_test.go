@@ -57,7 +57,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 	})
 	ginkgo.AfterEach(func() {
 		// closing is cleaner, but may trigger compaction and other stuff causing the tests to hang.
-		// since we are no reopening the same store, we can just skip closing
+		// since we are not reopening the same store, we can just skip closing
 		//	_ = store.Close()
 		_ = os.RemoveAll(storeLocation)
 	})

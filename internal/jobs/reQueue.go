@@ -65,11 +65,13 @@ func (r *reQueuePrependingSource) ReadEntities(since source.DatasetContinuation,
 					if err != nil {
 						return err
 					}
-					err = processEntities(batch, since)
+					err = processEntities(batch, &source.StringDatasetContinuation{})
 					if err != nil {
 						return err
 					}
 				}
+				// delete requeue when done. deliberately not as defer/guaranteed delete.
+				// it is better to reprocess twice than to lose queue when something unforeseen happens during processing
 				err := r.dsm.DeleteDataset(dsn.Name)
 				if err != nil {
 					return err
