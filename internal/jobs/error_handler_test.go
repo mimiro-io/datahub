@@ -33,9 +33,9 @@ type (
 		InitError     error                     // error expected from config validation
 		SyncError     error                     // error expected from pipeline.Sync()
 		Runs          int                       // number of times the source (and therefore the whole pipeline) was run
-		Logged        func(batchSize int) []int // function generating list of ids of entities that were logged
-		ReQueued      []int                     // ids of entities that were requeued
-		Processed     func(batchSize int) int   // function calculating expected numbor of processed (pulled from source) entities
+		Logged        func(batchSize int) []int // function generating list of ids of entities that are expected logged
+		ReQueued      []int                     // ids of entities that are expected requeued
+		Processed     func(batchSize int) int   // function calculating expected number of processed (pulled from source) entities
 		SinkRecorded  func(batchSize int) []int // function providing expected entities written to sink
 	}
 
@@ -122,7 +122,7 @@ var _ = Describe("A failed trigger", func() {
 
 			// using random batch size to make sure we cover issues where MaxItems in error handlers don't match batch size
 			rndBatchSize := rand.Intn(10) + 1
-			//rndBatchSize = 10
+			//rndBatchSize = 11
 			tag := fmt.Sprintf("(input was %+v, batchSize:%v)", input, rndBatchSize)
 			if input.onErrorJSON != "" {
 				errorHandlers = fmt.Sprintf(`,"onError": %v`, input.onErrorJSON)
@@ -512,10 +512,10 @@ var _ = Describe("A failed trigger", func() {
 				SyncError:     errors.New("failing sink"),
 				Runs:          1,
 				Processed: func(batchSize int) int {
-					if batchSize > 5 {
+					if batchSize >= 5 {
 						return int(math.Min(float64(batchSize), 10.0))
 					}
-					return map[int]int{1: 6, 2: 6, 3: 6, 4: 8, 5: 10}[batchSize]
+					return map[int]int{1: 5, 2: 6, 3: 6, 4: 8}[batchSize]
 				},
 				Logged: func(batchSize int) []int { return []int{0, 1, 2, 3, 4} },
 			},
@@ -527,7 +527,7 @@ var _ = Describe("A failed trigger", func() {
 				SyncError:     errors.New("failing sink"),
 				Runs:          1,
 				Logged:        func(batchSize int) []int { return []int{0} },
-				Processed:     func(batchSize int) int { return int(math.Min(math.Max(float64(2), float64(batchSize)), 10)) },
+				Processed:     func(batchSize int) int { return int(math.Min(float64(batchSize), 10)) },
 			},
 		),
 		Entry("failing sink with log handler where cap = batch size should log maxItems entities",
@@ -571,30 +571,27 @@ var _ = Describe("A failed trigger", func() {
 				SyncError:     errors.New("failing sink"),
 				Runs:          3,
 				Logged: func(batchSize int) []int {
-					if batchSize < 6 {
+					if batchSize < 5 {
 						// depending on the batch size, when the last batch is only partially logged, it must be
 						// reprocessed during a rerun. this will give duplicate logging of the overlapping entities.
-						// TODO: should we consider constructing partial continuation tokens here? so that the retry
-						// 	picks up after the last logged entity?
 						return map[int][]int{
-							1: {0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+							1: {0, 1, 2, 3, 4, 4, 5, 6, 7, 8, 8, 9},
 							2: {0, 1, 2, 3, 4, 4, 5, 6, 7, 8, 8, 9},
 							3: {0, 1, 2, 3, 4, 3, 4, 5, 6, 7, 6, 7, 8, 9},
 							4: {0, 1, 2, 3, 4, 4, 5, 6, 7, 8, 8, 9},
-							5: {0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 						}[batchSize]
 					}
 					return []int{0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4}
 				},
 				Processed: func(batchSize int) int {
-					if batchSize > 5 {
+					if batchSize >= 5 {
 						return int(math.Min(float64(batchSize), 10.0))
 					}
-					return map[int]int{1: 6, 2: 6, 3: 6, 4: 8, 5: 10}[batchSize]
+					return map[int]int{1: 5, 2: 6, 3: 6, 4: 8}[batchSize]
 				},
 			},
 		),
-		Entry("failing sink with reQueue handler should requeue all entities",
+		PEntry("failing sink with reQueue handler should requeue all entities",
 			tableInput{sink: &failingSink{}, onErrorJSON: `[{"errorHandler": "requeue"}]`},
 			expected{
 				ErrorHandlers: []*ErrorHandler{{Type: "requeue"}},
@@ -602,7 +599,7 @@ var _ = Describe("A failed trigger", func() {
 				Runs:          1,
 				ReQueued:      []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 			}),
-		Entry("failing sink with capped reQueue handler should requeue up to cap and then fail",
+		PEntry("failing sink with capped reQueue handler should requeue up to cap and then fail",
 			tableInput{sink: &failingSink{}, onErrorJSON: `[{"errorHandler": "requeue", "maxItems": 3}]`},
 			expected{
 				ErrorHandlers: []*ErrorHandler{{Type: "requeue", MaxItems: 3}},
@@ -613,7 +610,7 @@ var _ = Describe("A failed trigger", func() {
 				ReQueued:  []int{0, 1, 2},
 				Processed: func(batchSize int) int { return int(math.Min(float64((3/batchSize+1)*batchSize), 10)) },
 			}),
-		Entry("failing sink with capped reQueue handler and uncapped log handler",
+		PEntry("failing sink with capped reQueue handler and uncapped log handler",
 			tableInput{sink: &failingSink{}, onErrorJSON: `[{"errorHandler": "requeue", "maxItems": 3},{"errorHandler": "log"}]`},
 			expected{
 				ErrorHandlers: []*ErrorHandler{{Type: "requeue", MaxItems: 3}, {Type: "log"}},
@@ -625,20 +622,20 @@ var _ = Describe("A failed trigger", func() {
 				Logged:    func(batchSize int) []int { return []int{0, 1, 2} },
 				Processed: func(batchSize int) int { return int(math.Min(float64((3/batchSize+1)*batchSize), 10)) },
 			}),
-		Entry("failing sink with uncapped reQueue handler and capped log handler",
+		PEntry("failing sink with uncapped reQueue handler and capped log handler",
 			tableInput{sink: &failingSink{}, onErrorJSON: `[{"errorHandler": "requeue"},{"errorHandler": "log", "maxItems": 3}]`},
 			expected{
 				ErrorHandlers: []*ErrorHandler{{Type: "requeue"}, {Type: "log", MaxItems: 3}},
 				SyncError:     errors.New("failing sink"),
 				Runs:          1,
-				// due to handler order, requeue manages to pick up one more before log stops pipeline
-				ReQueued: []int{0, 1, 2, 3},
+				// requeue is not capped, but due to handler order (requeue after log), it stops when log stops pipeline
+				ReQueued: []int{0, 1, 2},
 				// strictest handler dictates how far we go through the source.
 				Logged:    func(batchSize int) []int { return []int{0, 1, 2} },
-				Processed: func(batchSize int) int { return int(math.Min(float64((3/batchSize+1)*batchSize), 10)) },
+				Processed: func(batchSize int) int { return int(math.Min(float64((2/batchSize+1)*batchSize), 10)) },
 			}),
 
-		Entry("failing sink with uncapped reQueue handler and reRun",
+		PEntry("failing sink with uncapped reQueue handler and reRun",
 			tableInput{sink: &failingSink{}, onErrorJSON: `[{"errorHandler": "requeue"},{"errorHandler": "reRun", "retryDelay":1,"maxRetries": 3}]`},
 			expected{
 				ErrorHandlers: []*ErrorHandler{{Type: "requeue"}, {Type: "rerun", RetryDelay: 1, MaxRetries: 3}},
@@ -666,12 +663,13 @@ var _ = Describe("A failed trigger", func() {
 					return []int{0, 1} // logging 2 entities during first run
 				},
 				Processed: func(batchSize int) int {
-					// for batch size up to 2, the first batch is completely handled
-					// by log handler, so it does not come up again during rerun
-					// for larger batches, the run fails the first batch after logging 2 entities,
+					// this checks the number of processed entities after rerun
+					// for batch size 1, the first batch is completely handled
+					// by log handler without error in the first run, so it does not come up again during rerun
+					// for larger batch sizes, the run fails the first batch after logging 2 entities,
 					// so the first batch is reprocessed during rerun
-					if batchSize < 3 {
-						return 8
+					if batchSize < 2 {
+						return 9
 					} else {
 						return 10
 					}
@@ -723,8 +721,7 @@ var _ = Describe("A failed trigger", func() {
 				ErrorHandlers: []*ErrorHandler{{Type: "rerun", MaxRetries: 3, RetryDelay: 1}},
 				SyncError:     errors.New("picky sink"),
 				Runs:          4,
-				//uncapped log handler, so expecting to go through complete source
-				Processed: func(batchSize int) int { return int(math.Min(float64(batchSize), 10)) },
+				Processed:     func(batchSize int) int { return int(math.Min(float64(batchSize), 10)) },
 				SinkRecorded: func(batchSize int) []int {
 					if batchSize == 1 || batchSize == 3 {
 						return []int{0, 1, 2}
@@ -736,7 +733,7 @@ var _ = Describe("A failed trigger", func() {
 				},
 			},
 		),
-		Entry("picky sink with capped reQueue handler",
+		PEntry("picky sink with capped reQueue handler",
 			tableInput{sink: &pickySink{}, onErrorJSON: `[{"errorHandler": "reQueue", "maxItems": 1}]`},
 			expected{
 				ErrorHandlers: []*ErrorHandler{{Type: "requeue", MaxItems: 1}},
@@ -754,6 +751,34 @@ var _ = Describe("A failed trigger", func() {
 					return 10
 				},
 				SinkRecorded: func(batchSize int) []int { return []int{0, 1, 2, 4, 5} },
+			},
+		),
+		Entry("picky sink with capped log handler and reRun handler",
+			tableInput{sink: &pickySink{},
+				onErrorJSON: `[ {"errorHandler": "reRun", "retryDelay": 1, "maxRetries": 3},
+								{"errorHandler": "log", "maxItems": 1}]`},
+			expected{
+				ErrorHandlers: []*ErrorHandler{
+					{Type: "rerun", MaxRetries: 3, RetryDelay: 1},
+					{Type: "log", MaxItems: 1}},
+				SyncError: errors.New("picky sink"),
+				Runs:      4,
+				Processed: func(batchSize int) int {
+					if batchSize < 4 {
+						return int(math.Min(float64((3/batchSize+1)*batchSize), 10))
+					}
+					return int(math.Min(float64(batchSize), 10))
+				},
+				SinkRecorded: func(batchSize int) []int {
+					if batchSize == 1 || batchSize == 3 {
+						return []int{0, 1, 2}
+					}
+					if batchSize == 2 {
+						return []int{0, 1, 2, 2, 2, 2}
+					}
+					return []int{0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2}
+				},
+				Logged: func(batchSize int) []int { return []int{3, 3, 3, 3} },
 			},
 		),
 
@@ -783,14 +808,14 @@ func (r *recordingLogHandler) reset() {
 
 func (r *recordingLogHandler) handleFailingEntity(runner *Runner, entity *server.Entity, jobId string) error {
 	result := r.f.handleFailingEntity(runner, entity, jobId)
-	if result != nil {
-		return result
-	}
 	recId, err := strconv.Atoi(strings.Split(entity.ID, "-")[1])
 	if err != nil {
 		return err
 	}
 	r.recorded = append(r.recorded, recId)
+	if result != nil {
+		return result
+	}
 	return nil
 }
 

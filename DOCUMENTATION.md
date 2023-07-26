@@ -506,7 +506,13 @@ Job definitions are described using JSON and can be uploaded to the data hub usi
             "triggerType": "either 'cron' or 'onchange'",
             "jobType": "either 'incremental' or 'fullsync'",
             "schedule": "a cron expression defining when to execute the defined jobType. Only set when triggerType=cron",
-            "monitoredDataset": "name of dataset to monitor, used with triggerType=onchange"
+            "monitoredDataset": "name of dataset to monitor, used with triggerType=onchange", 
+            "onError": [{
+              "errorHandler":  "log or reRun",
+                "retryDelay": "delay between retries, only used with reRun",
+                "maxRetries": "number of retries, only used with reRun",
+                "maxItems": "only used with log, the handler will log this many failing items before stopping. value 0 means log all failing items"
+            }]
         }
     ],
     "source": {
@@ -748,8 +754,28 @@ The following sink types are used to write data either to a dataset or to a remo
 
 ### Triggers
 
-The triggers list can contain any number of trigger definitions. It can make sense to transfer small incremental updates with high frequency,
-while also having a daily fullsync defined in the same job.
+The triggers list can contain any number of trigger definitions.
+
+There are two types of triggers that can be used to schedule jobs: 
+- `cron` periodically executes a job on a schedule
+- `onchange` executes a job when a monitored dataset changes.
+
+Additionally, a trigger configuration defines the mode of operation of the job:
+- `incremental` only processes changes that are new since the last run
+- `fullsync` processes all entities in the source dataset
+
+It can make sense to transfer small incremental updates with high frequency, while also having a daily fullsync defined in the same job.
+
+Triggers can be configured with an `onError` section, which defines how to handle sink errors in the job.
+There are two error handlers available:
+- `log` will log the error and continue with the next entity.
+  When the configured number of errors (`maxItems`) is reached, the job will stop and fail. 
+  If no `maxItems` is configured, the default is to log all errors and continue.
+- `reRun` will re-run the entire job a number of times, with a delay between each retry.
+  If the job still fails after the configured number of runs, the job will stop and fail.
+  `reRun` can be configured with `maxRetries` and `retryDelay` to control the number of retries and the delay between retries.
+  When `maxRetries` is omitted in config, the default is 3 tries. The default `retryDelay` is 10 seconds.
+
 
 ### Examples
 
@@ -799,7 +825,8 @@ The following example shows a job definition that reads from a remote datalayer 
 }
 ```
 
-The following example shows how to configure a job to send data from a dataset to a remote data layer:
+The following example shows how to configure a job to send data from a dataset to a remote data layer.
+It also has a log error handler that logs the first failing entity and then stops with failure:
 
 ```json
 {
@@ -808,7 +835,11 @@ The following example shows how to configure a job to send data from a dataset t
         {
             "triggerType": "cron",
             "jobType": "incremental",
-            "schedule": "@every 2s"
+            "schedule": "@every 2s",
+            "onError": [{
+              "errorHandler":  "log",
+              "maxItems": 1
+            }]
         }
     ],
     "source": {
@@ -847,7 +878,8 @@ Example for paused job:
 }
 ```
 
-To run a job that sends a full sync (snapshot) to a remote datalayer):
+To run a job that sends a full sync (snapshot) to a remote datalayer).
+The job has a reRun error handler that retries the job 3 times with a 10 second delay between each retry:
 
 ```json
 {
@@ -856,7 +888,8 @@ To run a job that sends a full sync (snapshot) to a remote datalayer):
         {
             "triggerType": "cron",
             "jobType": "fullsync",
-            "schedule": "@every 24h"
+            "schedule": "@every 24h",
+            "onError": [{ "errorHandler":  "reRun" }]
         }
     ],
     "source": {

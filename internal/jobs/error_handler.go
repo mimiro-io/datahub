@@ -55,6 +55,8 @@ type failingEntityHandler interface {
 type LogFailingEntityHandler struct {
 	count    int
 	MaxItems int
+	jobTitle string
+	jobId    string
 }
 
 func (l *LogFailingEntityHandler) reset() {
@@ -62,11 +64,15 @@ func (l *LogFailingEntityHandler) reset() {
 }
 
 func (l *LogFailingEntityHandler) handleFailingEntity(runner *Runner, entity *server.Entity, jobId string) error {
+	runner.logger.With(
+		"job.jobId", l.jobId,
+		"job.jobTitle", l.jobTitle,
+		"job.state", "Failing",
+	).Warnf("entity %v failed to process: %+v", entity.ID, entity)
+	l.count = l.count + 1
 	if l.MaxItems > 0 && l.count >= l.MaxItems {
 		return MaxItemsExceededError
 	}
-	l.count = l.count + 1
-	runner.logger.Warnf("entity %v failed to process", entity.ID)
 	return nil
 }
 
@@ -115,7 +121,7 @@ type wrappedSink struct {
 
 // verifyErrorHandlers checks that the error handlers are valid, and also
 // sets default values for the error handlers
-func verifyErrorHandlers(trigger JobTrigger) error {
+func verifyErrorHandlers(trigger JobTrigger, id string, title string) error {
 	counts := make(map[string]int)
 	if len(trigger.ErrorHandlers) > 0 {
 		for _, eh := range trigger.ErrorHandlers {
@@ -141,7 +147,7 @@ func verifyErrorHandlers(trigger JobTrigger) error {
 				}
 				eh.RetryDelay = int64(time.Second) * eh.RetryDelay
 			case ErrorHandlerLog:
-				eh.failingEntityHandler = &LogFailingEntityHandler{MaxItems: eh.MaxItems}
+				eh.failingEntityHandler = &LogFailingEntityHandler{MaxItems: eh.MaxItems, jobId: id, jobTitle: title}
 			case ErrorHandlerReQueue:
 				eh.failingEntityHandler = &ReQueueFailingEntityHandler{MaxItems: eh.MaxItems}
 			default:
@@ -201,7 +207,8 @@ func (j *job) instrumentErrorHandling() {
 	if j.errorHandlers != nil {
 		failingEntityHandlers := make([]failingEntityHandler, 0)
 		for _, eh := range j.errorHandlers {
-			if eh.Type == ErrorHandlerLog || eh.Type == ErrorHandlerReQueue {
+			// TODO: excluded reQueue handler for now. first release only supports reRun and log
+			if eh.Type == ErrorHandlerLog { //|| eh.Type == ErrorHandlerReQueue {
 				failingEntityHandlers = append(failingEntityHandlers, eh.failingEntityHandler)
 			}
 		}
@@ -229,7 +236,8 @@ func (j *job) instrumentErrorHandling() {
 			wrapped.reset()
 		}
 	}
-	j.pipeline.spec().source = &reQueuePrependingSource{s: j.pipeline.spec().source, jobId: j.id, dsm: j.dsm}
+	// TODO: excluded reQueue handler for now. first release only supports reRun and log
+	//j.pipeline.spec().source = &reQueuePrependingSource{s: j.pipeline.spec().source, jobId: j.id, dsm: j.dsm}
 }
 
 func (w *wrappedTransform) GetConfig() map[string]interface{} {

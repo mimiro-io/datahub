@@ -518,7 +518,7 @@ func (s *Scheduler) verify(jobConfiguration *JobConfiguration) error {
 			)
 		}
 
-		err = verifyErrorHandlers(trigger)
+		err = verifyErrorHandlers(trigger, jobConfiguration.ID, jobConfiguration.Title)
 		if err != nil {
 			return err
 		}
