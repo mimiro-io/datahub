@@ -66,7 +66,7 @@ var _ = Describe("A pipeline", func() {
 	})
 	It("Should produce consistent output for single change", func() {
 		ns, employees, people, companies := setupDatasets(store, dsm)
-		job := setupJob(scheduler, runner, false)
+		job := setupJob(scheduler, runner, dsm, false)
 		homer, _, mimiro := entityUpdaters(people, ns, companies)
 		checkChange, checkEntities, assertChangeCount, _ := setupCheckers(employees, people, companies, ns)
 		//	homer, homerWithFriend, mimiro := entityUpdaters(people, ns, companies)
@@ -86,7 +86,7 @@ var _ = Describe("A pipeline", func() {
 	})
 	It("Should produce consistent output for changes in dependency dataset", func() {
 		ns, employees, people, companies := setupDatasets(store, dsm)
-		job := setupJob(scheduler, runner, false)
+		job := setupJob(scheduler, runner, dsm, false)
 		homer, _, mimiro := entityUpdaters(people, ns, companies)
 		checkChange, checkEntities, assertChangeCount, _ := setupCheckers(employees, people, companies, ns)
 		// checkChange, checkEntities, assertChangeCount, printState := setupCheckers(employees, people, companies, ns)
@@ -107,7 +107,7 @@ var _ = Describe("A pipeline", func() {
 	})
 	It("Should produce consistent output for changes in source dataset", func() {
 		ns, employees, people, companies := setupDatasets(store, dsm)
-		job := setupJob(scheduler, runner, false)
+		job := setupJob(scheduler, runner, dsm, false)
 		homer, _, mimiro := entityUpdaters(people, ns, companies)
 		// checkChange, checkEntities, assertChangeCount, _ := setupCheckers(employees, people, companies, ns)
 		checkChange, checkEntities, assertChangeCount, printState := setupCheckers(
@@ -132,7 +132,7 @@ var _ = Describe("A pipeline", func() {
 	})
 	It("Should produce consistent output for LastOnly changes in source dataset", func() {
 		ns, employees, people, companies := setupDatasets(store, dsm)
-		job := setupJob(scheduler, runner, true)
+		job := setupJob(scheduler, runner, dsm, true)
 		homer, _, mimiro := entityUpdaters(people, ns, companies)
 		// checkChange, checkEntities, assertChangeCount, _ := setupCheckers(employees, people, companies, ns)
 		checkChange, checkEntities, assertChangeCount, printState := setupCheckers(
@@ -156,7 +156,7 @@ var _ = Describe("A pipeline", func() {
 	})
 	It("Should produce consistent output for 2 changes in different batches", func() {
 		ns, employees, people, companies := setupDatasets(store, dsm)
-		job := setupJob(scheduler, runner, false)
+		job := setupJob(scheduler, runner, dsm, false)
 		// set batchsize to 2
 		job.pipeline.(*FullSyncPipeline).batchSize = 2
 		homer, _, mimiro := entityUpdaters(people, ns, companies)
@@ -186,7 +186,7 @@ var _ = Describe("A pipeline", func() {
 	})
 	It("Should produce consistent output for 2 LastOnly changes in different batches", func() {
 		ns, employees, people, companies := setupDatasets(store, dsm)
-		job := setupJob(scheduler, runner, true)
+		job := setupJob(scheduler, runner, dsm, true)
 		// set batchsize to 2
 		job.pipeline.(*FullSyncPipeline).batchSize = 2
 		homer, _, mimiro := entityUpdaters(people, ns, companies)
@@ -221,7 +221,7 @@ var _ = Describe("A pipeline", func() {
 			of the joined "employee" entity if we run the transform again.
 		*/
 		ns, employees, people, companies := setupDatasets(store, dsm)
-		job := setupJob(scheduler, runner, false)
+		job := setupJob(scheduler, runner, dsm, false)
 		homer, homerWithFriend, mimiro := entityUpdaters(people, ns, companies)
 		checkChange, checkEntities, assertChangeCount, print := setupCheckers(
 			employees, people, companies, ns)
@@ -277,7 +277,7 @@ var _ = Describe("A pipeline", func() {
 	})
 	It("Should preserve state of composed LatestOnly change products also if sources change with time", func() {
 		ns, employees, people, companies := setupDatasets(store, dsm)
-		job := setupJob(scheduler, runner, true)
+		job := setupJob(scheduler, runner, dsm, true)
 		homer, homerWithFriend, mimiro := entityUpdaters(people, ns, companies)
 		checkChange, checkEntities, assertChangeCount, print := setupCheckers(
 			employees, people, companies, ns)
@@ -340,7 +340,7 @@ var _ = Describe("A pipeline", func() {
 				transform job once at the end.
 		*/
 		ns, employees, people, companies := setupDatasets(store, dsm)
-		job := setupJob(scheduler, runner, false)
+		job := setupJob(scheduler, runner, dsm, false)
 		homer, homerWithFriend, mimiro := entityUpdaters(people, ns, companies)
 		checkChange, checkEntities, assertChangeCount, print := setupCheckers(
 			employees, people, companies, ns)
@@ -493,7 +493,7 @@ func entityUpdaters(people *server.Dataset, ns string, companies *server.Dataset
 	return homer, homerWithFriend, mimiro
 }
 
-func setupJob(scheduler *Scheduler, runner *Runner, latestOnly bool) *job {
+func setupJob(scheduler *Scheduler, runner *Runner, dsm *server.DsManager, latestOnly bool) *job {
 	// now combine homer and mimiro into homer-the-employee
 	jsFun := `function transform_entities(entities) {
 			var result = []
@@ -530,6 +530,7 @@ func setupJob(scheduler *Scheduler, runner *Runner, latestOnly bool) *job {
 		pipeline: pipeline,
 		schedule: jobConfig.Triggers[0].Schedule,
 		runner:   runner,
+		dsm:      dsm,
 	}
 	return job
 }

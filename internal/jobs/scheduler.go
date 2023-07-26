@@ -59,11 +59,20 @@ var (
 	JobTypes     = map[string]bool{JobTypeFull: true, JobTypeIncremental: true}
 )
 
+type ErrorHandlers []*ErrorHandler
+
+func (ehs *ErrorHandlers) init(s *Scheduler) {
+	for _, eh := range *ehs {
+		eh.init(s.DatasetManager)
+	}
+}
+
 type JobTrigger struct {
-	TriggerType      string `json:"triggerType"`
-	JobType          string `json:"jobType"`
-	Schedule         string `json:"schedule"`
-	MonitoredDataset string `json:"monitoredDataset"`
+	TriggerType      string        `json:"triggerType"`
+	JobType          string        `json:"jobType"`
+	Schedule         string        `json:"schedule"`
+	MonitoredDataset string        `json:"monitoredDataset"`
+	ErrorHandlers    ErrorHandlers `json:"onError"`
 }
 
 // JobConfiguration is the external interfacing object to configure a job. It is also the one that gets persisted
@@ -189,20 +198,24 @@ func (s *Scheduler) toTriggeredJobs(jobConfig *JobConfiguration) ([]*job, error)
 		switch t.TriggerType {
 		case TriggerTypeOnChange:
 			result = append(result, &job{
-				id:       jobConfig.ID,
-				title:    jobConfig.Title,
-				pipeline: pipeline,
-				topic:    t.MonitoredDataset,
-				isEvent:  true,
-				runner:   s.Runner,
+				id:            jobConfig.ID,
+				title:         jobConfig.Title,
+				pipeline:      pipeline,
+				topic:         t.MonitoredDataset,
+				isEvent:       true,
+				runner:        s.Runner,
+				errorHandlers: t.ErrorHandlers,
+				dsm:           s.DatasetManager,
 			})
 		case TriggerTypeCron:
 			result = append(result, &job{
-				id:       jobConfig.ID,
-				title:    jobConfig.Title,
-				pipeline: pipeline,
-				schedule: t.Schedule,
-				runner:   s.Runner,
+				id:            jobConfig.ID,
+				title:         jobConfig.Title,
+				pipeline:      pipeline,
+				schedule:      t.Schedule,
+				runner:        s.Runner,
+				errorHandlers: t.ErrorHandlers,
+				dsm:           s.DatasetManager,
 			})
 		default:
 			return nil, fmt.Errorf("could not map trigger configuration to job: %v", t)
@@ -264,7 +277,7 @@ func (s *Scheduler) GetScheduleEntries() ScheduleEntries {
 		}
 	}
 
-	se := []ScheduleEntry{}
+	var se []ScheduleEntry
 	for _, e := range jobrunner.Entries() {
 		jobID := lookup[int(e.ID)]
 		jobTitle := s.resolveJobTitle(jobID)
@@ -392,11 +405,11 @@ func (s *Scheduler) ResetJob(jobid string, since string) error {
 // The temp job is added with the RunOnce flag set to true
 func (s *Scheduler) RunJob(jobid string, jobType string) (string, error) {
 	jobConfig, err := s.LoadJob(jobid)
-	s.Logger.Infof("Running job with id '%s' (%s)", jobid, jobConfig.Title)
-
 	if jobConfig == nil || jobConfig.ID == "" { // not found
 		return "", errors.New("could not load job with id " + jobid)
 	}
+
+	s.Logger.Infof("Running job with id '%s' (%s)", jobid, jobConfig.Title)
 
 	if err != nil {
 		return "", err
@@ -411,6 +424,9 @@ func (s *Scheduler) RunJob(jobid string, jobType string) (string, error) {
 		title:    jobConfig.Title,
 		pipeline: pipeline,
 		runner:   s.Runner,
+		dsm:      s.DatasetManager,
+		// no error handlers when running manually
+		errorHandlers: nil,
 	}
 
 	// is the job running?
@@ -501,6 +517,11 @@ func (s *Scheduler) verify(jobConfiguration *JobConfiguration) error {
 				"trigger type " + trigger.TriggerType + " requires a valid 'Schedule' expression. But: " + err.Error(),
 			)
 		}
+
+		err = verifyErrorHandlers(trigger, jobConfiguration.ID, jobConfiguration.Title)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -512,7 +533,7 @@ func (s *Scheduler) toPipeline(jobConfig *JobConfiguration, jobType string) (Pip
 	if err != nil {
 		return nil, err
 	}
-	source, err := s.parseSource(jobConfig)
+	jobSource, err := s.parseSource(jobConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -527,8 +548,10 @@ func (s *Scheduler) toPipeline(jobConfig *JobConfiguration, jobType string) (Pip
 		batchSize = defaultBatchSize // this is the default batch size
 	}
 
+	s.initErrorHandling(&jobConfig.Triggers)
+
 	pipeline := PipelineSpec{
-		source:    source,
+		source:    jobSource,
 		sink:      sink,
 		transform: transform,
 		batchSize: batchSize,
@@ -697,4 +720,10 @@ func (s *Scheduler) MultiSourceCodeRegistration(code64 string, reg source.Depend
 		return err
 	}
 	return nil
+}
+
+func (s *Scheduler) initErrorHandling(triggers *[]JobTrigger) {
+	for _, trigger := range *triggers {
+		trigger.ErrorHandlers.init(s)
+	}
 }

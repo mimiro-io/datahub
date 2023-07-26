@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gojektech/heimdall/v6"
 	"github.com/gojektech/heimdall/v6/httpclient"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -183,7 +184,15 @@ func (httpDatasetSink *httpDatasetSink) startFullSync(runner *Runner) error {
 func (httpDatasetSink *httpDatasetSink) endFullSync(runner *Runner) error {
 	// send empty batch to server with end
 	timeout := 60 * time.Minute
-	client := httpclient.NewClient(httpclient.WithHTTPTimeout(timeout))
+	client := httpclient.NewClient(
+		httpclient.WithHTTPTimeout(timeout),
+		httpclient.WithRetryCount(3),
+		httpclient.WithRetrier(
+			heimdall.NewRetrier(
+				heimdall.NewConstantBackoff(2*time.Second, 100*time.Millisecond),
+			),
+		),
+	)
 
 	// create headers if needed
 	url := httpDatasetSink.Endpoint
@@ -232,7 +241,15 @@ func (httpDatasetSink *httpDatasetSink) endFullSync(runner *Runner) error {
 
 func (httpDatasetSink *httpDatasetSink) processEntities(runner *Runner, entities []*server.Entity) error {
 	timeout := 60 * time.Minute
-	client := httpclient.NewClient(httpclient.WithHTTPTimeout(timeout))
+	client := httpclient.NewClient(
+		httpclient.WithHTTPTimeout(timeout),
+		httpclient.WithRetryCount(3),
+		httpclient.WithRetrier(
+			heimdall.NewRetrier(
+				heimdall.NewConstantBackoff(2*time.Second, 100*time.Millisecond),
+			),
+		),
+	)
 
 	// create headers if needed
 	url := httpDatasetSink.Endpoint
