@@ -731,6 +731,11 @@ The following sink types are used to write data either to a dataset or to a remo
 
 #### HttpDatasetSink
 
+HttpDatasetSink writes data to a remote data layer that implements the Universal Data API specification.
+The sink's HTTP client has a timeout of 1 minute.
+It will also retry failed requests up to 3 times in 2 second intervals.
+
+
 ```json
 {
     "sink": {
@@ -775,6 +780,9 @@ There are two error handlers available:
   If the job still fails after the configured number of runs, the job will stop and fail.
   `reRun` can be configured with `maxRetries` and `retryDelay` to control the number of retries and the delay between retries.
   When `maxRetries` is omitted in config, the default is 3 tries. The default `retryDelay` is 10 seconds.
+
+Note that [HttpDatasetSink](#HttpDatasetSink) also has a built in retry mechanism for failed HTTP requests. In many
+cases that will be sufficient. A `reRun` error handler can be added when a remote target is expected to have longer downtimes.
 
 
 ### Examples
