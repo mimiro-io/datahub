@@ -16,6 +16,7 @@ package datahub
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"go.uber.org/fx"
@@ -29,9 +30,18 @@ import (
 )
 
 func wire() *fx.App {
+	fxTimeout := 10 * time.Minute
+	// set STARTUP_TIMEOUT=120s to override the default timeout
+	override, found := os.LookupEnv("STARTUP_TIMEOUT")
+	if found {
+		d, err := time.ParseDuration(override)
+		if err == nil {
+			fxTimeout = d
+		}
+	}
 	return fx.New(
 		fx.Options(
-			fx.StartTimeout(60*time.Second),
+			fx.StartTimeout(fxTimeout),
 		),
 		fx.Provide(
 			conf.NewEnv,
