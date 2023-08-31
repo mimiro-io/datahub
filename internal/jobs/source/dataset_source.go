@@ -55,26 +55,55 @@ func (datasetSource *DatasetSource) ReadEntities(
 	var cont *StringDatasetContinuation
 	if datasetSource.isFullSync {
 		if dataset.IsProxy() {
-			continuation, err := dataset.AsProxy(
+			proxyDs := dataset.AsProxy(
 				datasetSource.AuthorizeProxyRequest(dataset.ProxyConfig.AuthProviderName),
-			).StreamEntitiesRaw(since.GetToken(), batchSize, func(jsonData []byte) error {
-				e := &server.Entity{}
-				err := json.Unmarshal(jsonData, e)
-				if err != nil {
-					return err
-				}
-				entities = append(entities, e)
-				return nil
-			}, nil)
+			)
+			var err error
+			var continuation string
+			// if latestOnly source, use changes so the pipeline can update the job continuation state with a changes token
+			if datasetSource.LatestOnly {
+				continuation, err = proxyDs.StreamChangesRaw(since.GetToken(), batchSize, datasetSource.LatestOnly, false, func(jsonData []byte) error {
+					e := &server.Entity{}
+					err := json.Unmarshal(jsonData, e)
+					if err != nil {
+						return err
+					}
+					entities = append(entities, e)
+					return nil
+				}, nil)
+			} else {
+				continuation, err = proxyDs.StreamEntitiesRaw(since.GetToken(), batchSize, func(jsonData []byte) error {
+					e := &server.Entity{}
+					err := json.Unmarshal(jsonData, e)
+					if err != nil {
+						return err
+					}
+					entities = append(entities, e)
+					return nil
+				}, nil)
+			}
 			if err != nil {
 				return err
 			}
 			cont = &StringDatasetContinuation{continuation}
 		} else {
-			continuation, err := dataset.MapEntities(since.GetToken(), batchSize, func(entity *server.Entity) error {
-				entities = append(entities, entity)
-				return nil
-			})
+			var err error
+			var continuation string
+
+			// if latestOnly source, use changes so the pipeline can update the job continuation state with a changes token
+			if datasetSource.LatestOnly {
+				var intCont uint64
+				intCont, err = dataset.ProcessChanges(since.AsIncrToken(), batchSize, datasetSource.LatestOnly,
+					func(entity *server.Entity) {
+						entities = append(entities, entity)
+					})
+				continuation = strconv.Itoa(int(intCont))
+			} else {
+				continuation, err = dataset.MapEntities(since.GetToken(), batchSize, func(entity *server.Entity) error {
+					entities = append(entities, entity)
+					return nil
+				})
+			}
 			if err != nil {
 				return err
 			}
