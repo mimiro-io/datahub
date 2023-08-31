@@ -161,7 +161,7 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) (int, erro
 	//   Difference there between fullsync and incremental is whether dependencies are processed
 	//Other exception is when the source is LatestOnly. In that case we can use the changes collection to produce entities
 	if pipeline.sink.GetConfig()["Type"] != "HttpDatasetSink" ||
-		pipeline.source.GetConfig()["LatestOnly"] == "true" ||
+		(isDatasetSource && dss.LatestOnly) ||
 		pipeline.source.GetConfig()["Type"] == "MultiSource" {
 		err = runner.store.StoreObject(server.JobDataIndex, job.id, syncJobState)
 		if err != nil {

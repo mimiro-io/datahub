@@ -33,7 +33,7 @@ func TestJobs(t *testing.T) {
 	RunSpecs(t, "Jobs Suite")
 }
 
-var _ = Describe("A pipeline", func() {
+var _ = Describe("Over time, a pipeline", func() {
 	testCnt := 0
 	var dsm *server.DsManager
 	var scheduler *Scheduler

@@ -270,6 +270,97 @@ var _ = Describe("A pipeline", func() {
 		Expect(len(mockService.getRecordedEntitiesForDataset(dsName))).To(Equal(2), "both 'pages' have been posted")
 	})
 
+	It("Should pick up incremental after fullsync to an HttpDatasetSink", func() {
+		// populate dataset with some entities
+		ds, _ := dsm.CreateDataset("Products", nil)
+
+		entities := make([]*server.Entity, 2)
+		entity := server.NewEntity("http://data.mimiro.io/people/homer", 0)
+		entity.Properties["name"] = "homer"
+		entities[0] = entity
+
+		entity = server.NewEntity("http://data.mimiro.io/people/homer1", 0)
+		entity.Properties["name"] = "homer"
+		entities[1] = entity
+
+		err := ds.StoreEntities(entities)
+		Expect(err).To(BeNil(), "dataset.StoreEntites returns no error")
+
+		dsName := "fstohttpthenincr"
+		jobJSON := `{
+			"id" : "sync-datasetssource-to-httpdatasetsink",
+			"triggers": [{"triggerType": "cron", "jobType": "fullsync", "schedule": "@every 2s"}],
+			"fullSyncSchedule" : "@every 2s",
+			"runOnce" : true,
+			"batchSize": 1,
+			"source" : {
+				"Type"       : "DatasetSource",
+				"Name"       : "Products",
+				"LatestOnly" : true
+			},
+			"sink" : {
+				"Type" : "HttpDatasetSink",
+				"Url" : "http://localhost:7777/datasets/` + dsName + `/fullsync"
+			}}`
+
+		jobConfig, _ := scheduler.Parse([]byte(jobJSON))
+		fsPipeline, err := scheduler.toPipeline(jobConfig, JobTypeFull)
+		Expect(err).To(BeNil(), "jobConfig to Pipeline returns no error")
+		Expect(fsPipeline.spec().batchSize).To(Equal(1), "Batch size should be 1")
+
+		// First run, full sync
+		(&job{dsm: dsm, id: jobConfig.ID, pipeline: fsPipeline, runner: runner}).Run()
+
+		Expect(len(scheduler.GetRunningJobs())).To(Equal(0), "running job list is empty, indicating job done")
+		Expect(len(mockService.getRecordedEntitiesForDataset(dsName))).To(Equal(2), "both 'pages' have been posted")
+
+		// reset recorder
+		for k := range mockService.RecordedEntities {
+			delete(mockService.RecordedEntities, k)
+		}
+
+		pipeline, err := scheduler.toPipeline(jobConfig, JobTypeIncremental)
+		Expect(err).To(BeNil())
+
+		// Second run, incremental sync. should pick up where full sync left off
+		(&job{dsm: dsm, id: jobConfig.ID, pipeline: pipeline, runner: runner}).Run()
+
+		Expect(len(scheduler.GetRunningJobs())).To(Equal(0), "running job list is empty, indicating job done")
+		Expect(len(mockService.getRecordedEntitiesForDataset(dsName))).To(Equal(0), "source exhausted by fullsync")
+
+		// create a new change
+		entities[0].Properties["name"] = "homer-changed"
+		err = ds.StoreEntities(entities)
+		Expect(err).To(BeNil(), "dataset.StoreEntites returns no error")
+
+		// reset recorder
+		for k := range mockService.RecordedEntities {
+			delete(mockService.RecordedEntities, k)
+		}
+		// Third run, incremental sync. should find the new change
+		(&job{dsm: dsm, id: jobConfig.ID, pipeline: pipeline, runner: runner}).Run()
+
+		Expect(len(scheduler.GetRunningJobs())).To(Equal(0), "running job list is empty, indicating job done")
+		Expect(len(mockService.getRecordedEntitiesForDataset(dsName))).To(Equal(1))
+		Expect(mockService.getRecordedEntitiesForDataset(dsName)[0].Properties["name"]).To(Equal("homer-changed"))
+
+		// reset recorder
+		for k := range mockService.RecordedEntities {
+			delete(mockService.RecordedEntities, k)
+		}
+
+		// Finally, another full sync. make sure we still only get 2 entities, but in latest version
+		(&job{dsm: dsm, id: jobConfig.ID, pipeline: fsPipeline, runner: runner}).Run()
+		Expect(len(scheduler.GetRunningJobs())).To(Equal(0), "running job list is empty, indicating job done")
+		Expect(len(mockService.getRecordedEntitiesForDataset(dsName))).To(Equal(2))
+		// order is reversed now because "homer-changed" is a newer item in the changes index. the test should not care abt order though
+		// we only care about completeness and latest version
+		Expect(mockService.getRecordedEntitiesForDataset(dsName)[0].Properties["name"]).To(Equal("homer"))
+		Expect(mockService.getRecordedEntitiesForDataset(dsName)[0].ID).To(Equal("http://data.mimiro.io/people/homer1"))
+		Expect(mockService.getRecordedEntitiesForDataset(dsName)[1].Properties["name"]).To(Equal("homer-changed"))
+		Expect(mockService.getRecordedEntitiesForDataset(dsName)[1].ID).To(Equal("http://data.mimiro.io/people/homer"))
+	})
+
 	It("Should fullsync from an untokenized HttpDatasetSource", func() {
 		// populate dataset with some entities
 		ds, _ := dsm.CreateDataset("People", nil)
