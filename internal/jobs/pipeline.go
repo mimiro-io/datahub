@@ -62,14 +62,14 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) (int, erro
 
 	keepReading := true
 
-	// dont call source.startFullSync, just sink.startFullSync. to make sure we run on changes.
+	// don't call source.startFullSync, just sink.startFullSync. to make sure we run on changes.
 	// exception is when the sink is http(we want to process entities instead of changes)
+	// or source is DatasetSource with LatestOnly (we can produce entities using the changes collection, also for http sink)
 	// or source is multisource (we need to grab watermarks at beginning of fullsync)
+	dss, isDatasetSource := pipeline.source.(*jobSource.DatasetSource)
 	if pipeline.sink.GetConfig()["Type"] == "HttpDatasetSink" ||
+		(isDatasetSource && dss.LatestOnly) ||
 		pipeline.source.GetConfig()["Type"] == "MultiSource" {
-		// if pipeline.source.GetConfig()["Type"] == "MultiSource" {
-		// 	return errors.New("MultiSource can only produce changes and must therefore not be used with HttpDatasetSink")
-		// }
 		pipeline.source.StartFullSync()
 	}
 	err = pipeline.sink.startFullSync(runner)
@@ -159,7 +159,10 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) (int, erro
 	//
 	//Exception is when used with MultiSource... MultiSource only operates on changes. also in fullsync mode.
 	//   Difference there between fullsync and incremental is whether dependencies are processed
-	if pipeline.sink.GetConfig()["Type"] != "HttpDatasetSink" || pipeline.source.GetConfig()["Type"] == "MultiSource" {
+	//Other exception is when the source is LatestOnly. In that case we can use the changes collection to produce entities
+	if pipeline.sink.GetConfig()["Type"] != "HttpDatasetSink" ||
+		(isDatasetSource && dss.LatestOnly) ||
+		pipeline.source.GetConfig()["Type"] == "MultiSource" {
 		err = runner.store.StoreObject(server.JobDataIndex, job.id, syncJobState)
 		if err != nil {
 			return entCnt, err
