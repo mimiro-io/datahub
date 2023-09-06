@@ -15,6 +15,7 @@
 package source
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -40,11 +41,7 @@ func (datasetSource *DatasetSource) EndFullSync() {
 	datasetSource.isFullSync = false
 }
 
-func (datasetSource *DatasetSource) ReadEntities(
-	since DatasetContinuation,
-	batchSize int,
-	processEntities func([]*server.Entity, DatasetContinuation) error,
-) error {
+func (datasetSource *DatasetSource) ReadEntities(ctx context.Context, since DatasetContinuation, batchSize int, processEntities func([]*server.Entity, DatasetContinuation) error) error {
 	exists := datasetSource.DatasetManager.IsDataset(datasetSource.DatasetName)
 	if !exists {
 		return fmt.Errorf("dataset does not exist: %v", datasetSource.DatasetName)
@@ -63,6 +60,9 @@ func (datasetSource *DatasetSource) ReadEntities(
 			// if latestOnly source, use changes so the pipeline can update the job continuation state with a changes token
 			if datasetSource.LatestOnly {
 				continuation, err = proxyDs.StreamChangesRaw(since.GetToken(), batchSize, datasetSource.LatestOnly, false, func(jsonData []byte) error {
+					if ctx.Err() != nil {
+						return ctx.Err()
+					}
 					e := &server.Entity{}
 					err := json.Unmarshal(jsonData, e)
 					if err != nil {
@@ -73,6 +73,9 @@ func (datasetSource *DatasetSource) ReadEntities(
 				}, nil)
 			} else {
 				continuation, err = proxyDs.StreamEntitiesRaw(since.GetToken(), batchSize, func(jsonData []byte) error {
+					if ctx.Err() != nil {
+						return ctx.Err()
+					}
 					e := &server.Entity{}
 					err := json.Unmarshal(jsonData, e)
 					if err != nil {
@@ -114,6 +117,9 @@ func (datasetSource *DatasetSource) ReadEntities(
 			continuation, err := dataset.AsProxy(
 				datasetSource.AuthorizeProxyRequest(dataset.ProxyConfig.AuthProviderName),
 			).StreamChangesRaw(since.GetToken(), batchSize, datasetSource.LatestOnly, false, func(jsonData []byte) error {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 				e := &server.Entity{}
 				err := json.Unmarshal(jsonData, e)
 				if err != nil {

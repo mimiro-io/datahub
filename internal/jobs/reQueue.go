@@ -1,6 +1,7 @@
 package jobs
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -42,7 +43,7 @@ func (r *reQueuePrependingSource) GetConfig() map[string]interface{} {
 	return r.s.GetConfig()
 }
 
-func (r *reQueuePrependingSource) ReadEntities(since source.DatasetContinuation, batchSize int, processEntities func([]*server.Entity, source.DatasetContinuation) error) error {
+func (r *reQueuePrependingSource) ReadEntities(ctx context.Context, since source.DatasetContinuation, batchSize int, processEntities func([]*server.Entity, source.DatasetContinuation) error) error {
 	if !r.prepended {
 		r.prepended = true
 		for _, dsn := range r.dsm.GetDatasetNames() {
@@ -79,7 +80,7 @@ func (r *reQueuePrependingSource) ReadEntities(since source.DatasetContinuation,
 			}
 		}
 	}
-	return r.s.ReadEntities(since, batchSize, processEntities)
+	return r.s.ReadEntities(ctx, since, batchSize, processEntities)
 }
 
 func (r *reQueuePrependingSource) StartFullSync() {

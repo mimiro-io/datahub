@@ -134,7 +134,7 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) (int, erro
 			return entCnt, err2
 		}
 
-		err = pipeline.source.ReadEntities(token, pipeline.batchSize,
+		err = pipeline.source.ReadEntities(ctx, token, pipeline.batchSize,
 			func(entities []*server.Entity, c jobSource.DatasetContinuation) error {
 				_ = runner.statsdClient.Timing("pipeline.source.batch", time.Since(readTS), tags, 1)
 				entCnt += len(entities)
@@ -149,7 +149,7 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) (int, erro
 	}
 
 	pipeline.source.EndFullSync()
-	err = pipeline.sink.endFullSync(runner)
+	err = pipeline.sink.endFullSync(ctx, runner)
 	if err != nil {
 		return entCnt, err
 	}
@@ -310,15 +310,13 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) (int, e
 		if err != nil {
 			return entCnt, err
 		}
-		err = pipeline.source.ReadEntities(since,
-			pipeline.batchSize,
-			func(entities []*server.Entity, c jobSource.DatasetContinuation) error {
-				_ = runner.statsdClient.Timing("pipeline.source.batch", time.Since(readTS), tags, 1)
-				entCnt += len(entities)
-				result := processEntities(entities, c)
-				readTS = time.Now()
-				return result
-			})
+		err = pipeline.source.ReadEntities(ctx, since, pipeline.batchSize, func(entities []*server.Entity, c jobSource.DatasetContinuation) error {
+			_ = runner.statsdClient.Timing("pipeline.source.batch", time.Since(readTS), tags, 1)
+			entCnt += len(entities)
+			result := processEntities(entities, c)
+			readTS = time.Now()
+			return result
+		})
 
 		if err != nil {
 			return entCnt, err

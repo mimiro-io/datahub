@@ -37,6 +37,7 @@ var _ = Describe("dependency tracking", func() {
 	var dsm *server.DsManager
 	var store *server.Store
 	var storeLocation string
+	var ctx context.Context
 	BeforeEach(func() {
 		testCnt += 1
 		storeLocation = fmt.Sprintf("./test_multi_source_%v", testCnt)
@@ -51,8 +52,8 @@ var _ = Describe("dependency tracking", func() {
 
 		store = server.NewStore(lc, e, &statsd.NoOpClient{})
 		dsm = server.NewDsManager(lc, e, store, server.NoOpBus())
-
-		err = lc.Start(context.Background())
+		ctx = context.Background()
+		err = lc.Start(ctx)
 		if err != nil {
 			fmt.Println(err.Error())
 			Fail(err.Error())
@@ -73,17 +74,13 @@ var _ = Describe("dependency tracking", func() {
 		var recordedEntities []server.Entity
 		token := &source.MultiDatasetContinuation{}
 		testSource.StartFullSync()
-		err := testSource.ReadEntities(
-			token,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				tokens = append(tokens, token)
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err := testSource.ReadEntities(ctx, token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			tokens = append(tokens, token)
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		testSource.EndFullSync()
 		Expect(len(recordedEntities)).To(Equal(4), "two entities with 2 changes each expected")
@@ -100,17 +97,13 @@ var _ = Describe("dependency tracking", func() {
 		since := tokens[len(tokens)-1]
 		tokens = []source.DatasetContinuation{}
 		recordedEntities = []server.Entity{}
-		err = testSource.ReadEntities(
-			since,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				tokens = append(tokens, token)
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, since, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			tokens = append(tokens, token)
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		Expect(len(recordedEntities)).To(Equal(1))
 		Expect(recordedEntities[0].Properties["name"]).To(Equal("Alice-changed"))
@@ -130,17 +123,13 @@ var _ = Describe("dependency tracking", func() {
 		var recordedEntities []server.Entity
 		token := &source.MultiDatasetContinuation{}
 		testSource.StartFullSync()
-		err := testSource.ReadEntities(
-			token,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				tokens = append(tokens, token)
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err := testSource.ReadEntities(ctx, token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			tokens = append(tokens, token)
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		testSource.EndFullSync()
 		Expect(len(recordedEntities)).
@@ -158,17 +147,13 @@ var _ = Describe("dependency tracking", func() {
 		since := tokens[len(tokens)-1]
 		tokens = []source.DatasetContinuation{}
 		recordedEntities = []server.Entity{}
-		err = testSource.ReadEntities(
-			since,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				tokens = append(tokens, token)
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, since, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			tokens = append(tokens, token)
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		Expect(len(recordedEntities)).To(Equal(1))
 		Expect(recordedEntities[0].Properties["name"]).To(Equal("Alice-changed"))
@@ -197,33 +182,25 @@ var _ = Describe("dependency tracking", func() {
 		token := &source.MultiDatasetContinuation{}
 		var lastToken source.DatasetContinuation
 		testSource.StartFullSync()
-		err = testSource.ReadEntities(
-			token,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		testSource.EndFullSync()
 
 		// test that we do not get anything emitted without further changes. verifying that watermarks are stored in lastToken
 		recordedEntities = []server.Entity{}
-		err = testSource.ReadEntities(
-			lastToken,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		Expect(len(recordedEntities)).To(Equal(0))
 	})
@@ -258,17 +235,13 @@ var _ = Describe("dependency tracking", func() {
 		token := &source.MultiDatasetContinuation{}
 		var lastToken source.DatasetContinuation
 		testSource.StartFullSync()
-		err = testSource.ReadEntities(
-			token,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		testSource.EndFullSync()
 
@@ -282,17 +255,13 @@ var _ = Describe("dependency tracking", func() {
 		})
 		Expect(err).To(BeNil())
 		recordedEntities = []server.Entity{}
-		err = testSource.ReadEntities(
-			lastToken,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		Expect(len(recordedEntities)).To(Equal(1))
 		// Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
@@ -330,17 +299,13 @@ var _ = Describe("dependency tracking", func() {
 		var recordedEntities []server.Entity
 		token := &source.MultiDatasetContinuation{}
 		var lastToken source.DatasetContinuation
-		err = testSource.ReadEntities(
-			token,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 
 		// now, modify Mainstreet address and verify that we get Bob emitted in next read (mainstreet is direct dependency to bob)
@@ -353,17 +318,13 @@ var _ = Describe("dependency tracking", func() {
 		})
 		Expect(err).To(BeNil())
 		recordedEntities = []server.Entity{}
-		err = testSource.ReadEntities(
-			lastToken,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		Expect(len(recordedEntities)).To(Equal(1))
 		// Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
@@ -395,17 +356,13 @@ var _ = Describe("dependency tracking", func() {
 		token := &source.MultiDatasetContinuation{}
 		var lastToken source.DatasetContinuation
 		testSource.StartFullSync()
-		err := testSource.ReadEntities(
-			token,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err := testSource.ReadEntities(ctx, token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		testSource.EndFullSync()
 
@@ -420,17 +377,13 @@ var _ = Describe("dependency tracking", func() {
 		Expect(err).To(BeNil())
 
 		recordedEntities = []server.Entity{}
-		err = testSource.ReadEntities(
-			lastToken,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		Expect(len(recordedEntities)).To(Equal(1))
 		// Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
@@ -449,17 +402,13 @@ var _ = Describe("dependency tracking", func() {
 		Expect(err).To(BeNil())
 
 		recordedEntities = []server.Entity{}
-		err = testSource.ReadEntities(
-			lastToken,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		// expect both referred-to people to be emitted
 		Expect(len(recordedEntities)).To(Equal(2))
@@ -498,17 +447,13 @@ var _ = Describe("dependency tracking", func() {
 		token := &source.MultiDatasetContinuation{}
 		var lastToken source.DatasetContinuation
 		testSource.StartFullSync()
-		err = testSource.ReadEntities(
-			token,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		testSource.EndFullSync()
 
@@ -522,17 +467,13 @@ var _ = Describe("dependency tracking", func() {
 		})
 		Expect(err).To(BeNil())
 		recordedEntities = []server.Entity{}
-		err = testSource.ReadEntities(
-			lastToken,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		Expect(len(recordedEntities)).To(Equal(1))
 
@@ -546,17 +487,13 @@ var _ = Describe("dependency tracking", func() {
 		})
 		Expect(err).To(BeNil())
 		recordedEntities = []server.Entity{}
-		err = testSource.ReadEntities(
-			lastToken,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		Expect(len(recordedEntities)).To(Equal(1))
 	})
@@ -599,17 +536,13 @@ var _ = Describe("dependency tracking", func() {
 		token := &source.MultiDatasetContinuation{}
 		var lastToken source.DatasetContinuation
 		testSource.StartFullSync()
-		err := testSource.ReadEntities(
-			token,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err := testSource.ReadEntities(ctx, token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		testSource.EndFullSync()
 
@@ -624,17 +557,13 @@ var _ = Describe("dependency tracking", func() {
 		Expect(err).To(BeNil())
 
 		recordedEntities = []server.Entity{}
-		err = testSource.ReadEntities(
-			lastToken,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		Expect(len(recordedEntities)).To(Equal(1))
 		// Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
@@ -666,17 +595,13 @@ var _ = Describe("dependency tracking", func() {
 		token := &source.MultiDatasetContinuation{}
 		var lastToken source.DatasetContinuation
 		testSource.StartFullSync()
-		err := testSource.ReadEntities(
-			token,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err := testSource.ReadEntities(ctx, token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		testSource.EndFullSync()
 
@@ -691,17 +616,13 @@ var _ = Describe("dependency tracking", func() {
 		Expect(err).To(BeNil())
 
 		recordedEntities = []server.Entity{}
-		err = testSource.ReadEntities(
-			lastToken,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		Expect(len(recordedEntities)).To(Equal(1))
 		// Bob was emitted enchanged. up to transform to do something with bob and dependency that triggered bob's emission
@@ -725,17 +646,13 @@ var _ = Describe("dependency tracking", func() {
 		token := &source.MultiDatasetContinuation{}
 		var lastToken source.DatasetContinuation
 		testSource.StartFullSync()
-		err := testSource.ReadEntities(
-			token,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err := testSource.ReadEntities(ctx, token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		testSource.EndFullSync()
 
@@ -743,17 +660,13 @@ var _ = Describe("dependency tracking", func() {
 
 		// run inc
 		recordedEntities = []server.Entity{}
-		err = testSource.ReadEntities(
-			lastToken,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		Expect(len(recordedEntities)).To(Equal(0))
 	})
@@ -797,17 +710,13 @@ var _ = Describe("dependency tracking", func() {
 		token := &source.MultiDatasetContinuation{}
 		var lastToken source.DatasetContinuation
 		testSource.StartFullSync()
-		err := testSource.ReadEntities(
-			token,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err := testSource.ReadEntities(ctx, token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		testSource.EndFullSync()
 
@@ -824,18 +733,14 @@ var _ = Describe("dependency tracking", func() {
 
 		recordedEntities = []server.Entity{}
 		batchCnt := 0
-		err = testSource.ReadEntities(
-			lastToken,
-			1,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				batchCnt++
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, lastToken, 1, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			batchCnt++
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(batchCnt).To(Equal(3), "2 batches of 1, and final main dataset batch is empty")
 		Expect(err).To(BeNil())
 		Expect(len(recordedEntities)).To(Equal(2))
@@ -901,17 +806,13 @@ var _ = Describe("dependency tracking", func() {
 		token := &source.MultiDatasetContinuation{}
 		var lastToken source.DatasetContinuation
 		testSource.StartFullSync()
-		err := testSource.ReadEntities(
-			token,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err := testSource.ReadEntities(ctx, token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		testSource.EndFullSync()
 
@@ -927,17 +828,13 @@ var _ = Describe("dependency tracking", func() {
 		Expect(err).To(BeNil())
 
 		recordedEntities = []server.Entity{}
-		err = testSource.ReadEntities(
-			lastToken,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		Expect(len(recordedEntities)).To(Equal(2))
 		var seenBob, seenAlice bool
@@ -1003,17 +900,13 @@ var _ = Describe("dependency tracking", func() {
 		token := &source.MultiDatasetContinuation{}
 		var lastToken source.DatasetContinuation
 		testSource.StartFullSync()
-		err := testSource.ReadEntities(
-			token,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err := testSource.ReadEntities(ctx, token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		testSource.EndFullSync()
 
@@ -1028,17 +921,13 @@ var _ = Describe("dependency tracking", func() {
 		Expect(err).To(BeNil())
 
 		recordedEntities = []server.Entity{}
-		err = testSource.ReadEntities(
-			lastToken,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		Expect(len(recordedEntities)).To(Equal(2))
 		var seenBob, seenHank bool
@@ -1061,17 +950,13 @@ var _ = Describe("dependency tracking", func() {
 		Expect(err).To(BeNil())
 
 		recordedEntities = []server.Entity{}
-		err = testSource.ReadEntities(
-			lastToken,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		Expect(len(recordedEntities)).To(Equal(5))
 		var lisaSeen, robSeen, marySeen, aliceSeen bool
@@ -1156,17 +1041,13 @@ var _ = Describe("dependency tracking", func() {
 		token := &source.MultiDatasetContinuation{}
 		var lastToken source.DatasetContinuation
 		testSource.StartFullSync()
-		err := testSource.ReadEntities(
-			token,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err := testSource.ReadEntities(ctx, token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		testSource.EndFullSync()
 
@@ -1182,17 +1063,13 @@ var _ = Describe("dependency tracking", func() {
 		Expect(err).To(BeNil())
 
 		recordedEntities = []server.Entity{}
-		err = testSource.ReadEntities(
-			lastToken,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 
 		Expect(err).To(BeNil())
 		Expect(len(recordedEntities)).To(Equal(3))
@@ -1239,17 +1116,13 @@ var _ = Describe("dependency tracking", func() {
 		token := &source.MultiDatasetContinuation{}
 		var lastToken source.DatasetContinuation
 		testSource.StartFullSync()
-		err := testSource.ReadEntities(
-			token,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err := testSource.ReadEntities(ctx, token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		testSource.EndFullSync()
 
@@ -1266,17 +1139,13 @@ var _ = Describe("dependency tracking", func() {
 		Expect(err).To(BeNil())
 
 		recordedEntities = []server.Entity{}
-		err = testSource.ReadEntities(
-			lastToken,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				lastToken = token
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, lastToken, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			lastToken = token
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		Expect(len(recordedEntities)).
 			To(Equal(1), "YardSale change points to non-existing entity 'Franz' in people, therefore only Bob should be emitted")
@@ -1312,23 +1181,19 @@ var _ = Describe("dependency tracking", func() {
 		// we go through batches of 1 to emulate a long-running pipeline read loop
 		for {
 			var stop bool
-			err := testSource.ReadEntities(
-				token,
-				1,
-				func(entities []*server.Entity, token source.DatasetContinuation) error {
-					if token.GetToken() != "" {
-						lastToken = token
-					}
-					for _, e := range entities {
-						recordedEntities = append(recordedEntities, *e)
-					}
-					if len(entities) == 0 {
-						stop = true
-					}
+			err := testSource.ReadEntities(ctx, token, 1, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				if token.GetToken() != "" {
+					lastToken = token
+				}
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				if len(entities) == 0 {
+					stop = true
+				}
 
-					return nil
-				},
-			)
+				return nil
+			})
 			Expect(err).To(BeNil())
 			if stop {
 				break

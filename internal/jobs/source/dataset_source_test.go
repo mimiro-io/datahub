@@ -42,6 +42,7 @@ var _ = Describe("a datasetSource", func() {
 	var dsm *server.DsManager
 	var store *server.Store
 	var storeLocation string
+	var ctx context.Context
 	BeforeEach(func() {
 		testCnt += 1
 		storeLocation = fmt.Sprintf("./test_dataset_source_%v", testCnt)
@@ -56,8 +57,8 @@ var _ = Describe("a datasetSource", func() {
 
 		store = server.NewStore(lc, e, &statsd.NoOpClient{})
 		dsm = server.NewDsManager(lc, e, store, server.NoOpBus())
-
-		err = lc.Start(context.Background())
+		ctx = context.Background()
+		err = lc.Start(ctx)
 		if err != nil {
 			fmt.Println(err.Error())
 			Fail(err.Error())
@@ -79,17 +80,13 @@ var _ = Describe("a datasetSource", func() {
 		var recordedEntities []server.Entity
 		token := &source.StringDatasetContinuation{}
 		// testSource.StartFullSync()
-		err := testSource.ReadEntities(
-			token,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				tokens = append(tokens, token)
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err := testSource.ReadEntities(ctx, token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			tokens = append(tokens, token)
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		testSource.EndFullSync()
 		Expect(len(recordedEntities)).To(Equal(4), "two entities with 2 changes each expected")
@@ -106,17 +103,13 @@ var _ = Describe("a datasetSource", func() {
 		since := tokens[len(tokens)-1]
 		tokens = []source.DatasetContinuation{}
 		recordedEntities = []server.Entity{}
-		err = testSource.ReadEntities(
-			since,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				tokens = append(tokens, token)
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, since, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			tokens = append(tokens, token)
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		Expect(len(recordedEntities)).To(Equal(1))
 		Expect(recordedEntities[0].Properties["name"]).To(Equal("Alice-changed"))
@@ -132,17 +125,13 @@ var _ = Describe("a datasetSource", func() {
 		var recordedEntities []server.Entity
 		token := &source.StringDatasetContinuation{}
 		testSource.StartFullSync()
-		err := testSource.ReadEntities(
-			token,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				tokens = append(tokens, token)
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err := testSource.ReadEntities(ctx, token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			tokens = append(tokens, token)
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		testSource.EndFullSync()
 		Expect(len(recordedEntities)).To(Equal(2), "two entities")
@@ -165,17 +154,13 @@ var _ = Describe("a datasetSource", func() {
 		tokens = []source.DatasetContinuation{}
 		recordedEntities = []server.Entity{}
 		testSource.StartFullSync()
-		err = testSource.ReadEntities(
-			since,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				tokens = append(tokens, token)
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, since, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			tokens = append(tokens, token)
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		testSource.EndFullSync()
 		Expect(len(recordedEntities)).To(Equal(1))
@@ -195,17 +180,13 @@ var _ = Describe("a datasetSource", func() {
 		var tokens []source.DatasetContinuation
 		var recordedEntities []server.Entity
 		token := &source.StringDatasetContinuation{}
-		err := testSource.ReadEntities(
-			token,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				tokens = append(tokens, token)
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err := testSource.ReadEntities(ctx, token, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			tokens = append(tokens, token)
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		testSource.EndFullSync()
 		Expect(len(recordedEntities)).
@@ -223,17 +204,13 @@ var _ = Describe("a datasetSource", func() {
 		since := tokens[len(tokens)-1]
 		tokens = []source.DatasetContinuation{}
 		recordedEntities = []server.Entity{}
-		err = testSource.ReadEntities(
-			since,
-			1000,
-			func(entities []*server.Entity, token source.DatasetContinuation) error {
-				tokens = append(tokens, token)
-				for _, e := range entities {
-					recordedEntities = append(recordedEntities, *e)
-				}
-				return nil
-			},
-		)
+		err = testSource.ReadEntities(ctx, since, 1000, func(entities []*server.Entity, token source.DatasetContinuation) error {
+			tokens = append(tokens, token)
+			for _, e := range entities {
+				recordedEntities = append(recordedEntities, *e)
+			}
+			return nil
+		})
 		Expect(err).To(BeNil())
 		Expect(len(recordedEntities)).To(Equal(1))
 		Expect(recordedEntities[0].Properties["name"]).To(Equal("Alice-changed"))

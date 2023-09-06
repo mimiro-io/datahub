@@ -284,8 +284,10 @@ var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
 			req, _ := http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
 			req.Header.Add("universal-data-api-full-sync-start", "true")
 			req.Header.Add("universal-data-api-full-sync-id", "42")
-			_, err := http.DefaultClient.Do(req)
+			res, err := http.DefaultClient.Do(req)
 			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
 			cancel()
 
 			// 2nd batch
@@ -293,7 +295,10 @@ var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
 			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
 			req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
 			req.Header.Add("universal-data-api-full-sync-id", "42")
-			_, _ = http.DefaultClient.Do(req)
+			res, err = http.DefaultClient.Do(req)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
 			cancel()
 
 			// last batch with "end" signal
@@ -302,11 +307,14 @@ var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
 			req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
 			req.Header.Add("universal-data-api-full-sync-id", "42")
 			req.Header.Add("universal-data-api-full-sync-end", "true")
-			_, _ = http.DefaultClient.Do(req)
+			res, err = http.DefaultClient.Do(req)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
 			cancel()
 
 			// read changes back
-			res, err := http.Get(dsURL + "/changes")
+			res, err = http.Get(dsURL + "/changes")
 			Expect(err).To(BeNil())
 			Expect(res).NotTo(BeZero())
 			Expect(res.StatusCode).To(Equal(200))

@@ -15,6 +15,7 @@
 package jobs
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"time"
@@ -351,8 +352,8 @@ func (w *wrappedSink) startFullSync(runner *Runner) error {
 	return w.s.startFullSync(runner)
 }
 
-func (w *wrappedSink) endFullSync(runner *Runner) error {
-	return w.s.endFullSync(runner)
+func (w *wrappedSink) endFullSync(ctx context.Context, runner *Runner) error {
+	return w.s.endFullSync(ctx, runner)
 }
 
 func (w *wrappedSink) reset() {

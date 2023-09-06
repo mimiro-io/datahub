@@ -15,6 +15,7 @@
 package source
 
 import (
+	"context"
 	"encoding/json"
 	"strconv"
 
@@ -24,11 +25,7 @@ import (
 // Source interface for pulling data
 type Source interface {
 	GetConfig() map[string]interface{}
-	ReadEntities(
-		since DatasetContinuation,
-		batchSize int,
-		processEntities func([]*server.Entity, DatasetContinuation) error,
-	) error
+	ReadEntities(ctx context.Context, since DatasetContinuation, batchSize int, processEntities func([]*server.Entity, DatasetContinuation) error) error
 	StartFullSync()
 	EndFullSync()
 }

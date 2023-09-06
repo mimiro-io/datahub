@@ -39,7 +39,7 @@ type Sink interface {
 	GetConfig() map[string]interface{}
 	processEntities(runner *Runner, entities []*server.Entity) error
 	startFullSync(runner *Runner) error
-	endFullSync(runner *Runner) error
+	endFullSync(ctx context.Context, runner *Runner) error
 }
 
 func (s *Scheduler) parseSink(jobConfig *JobConfiguration) (Sink, error) {
@@ -111,7 +111,7 @@ func (devNullSink *devNullSink) startFullSync(runner *Runner) error {
 	return nil
 }
 
-func (devNullSink *devNullSink) endFullSync(runner *Runner) error {
+func (devNullSink *devNullSink) endFullSync(ctx context.Context, runner *Runner) error {
 	return nil
 }
 
@@ -134,7 +134,7 @@ func (consoleSink *consoleSink) startFullSync(runner *Runner) error {
 	return nil
 }
 
-func (consoleSink *consoleSink) endFullSync(runner *Runner) error {
+func (consoleSink *consoleSink) endFullSync(ctx context.Context, runner *Runner) error {
 	return nil
 }
 
@@ -181,7 +181,7 @@ func (httpDatasetSink *httpDatasetSink) startFullSync(runner *Runner) error {
 	return nil
 }
 
-func (httpDatasetSink *httpDatasetSink) endFullSync(runner *Runner) error {
+func (httpDatasetSink *httpDatasetSink) endFullSync(ctx context.Context, runner *Runner) error {
 	// send empty batch to server with end
 	timeout := 60 * time.Minute
 	client := httpclient.NewClient(
@@ -328,12 +328,12 @@ func (datasetSink *datasetSink) startFullSync(runner *Runner) error {
 	return dataset.StartFullSync()
 }
 
-func (datasetSink *datasetSink) endFullSync(runner *Runner) error {
+func (datasetSink *datasetSink) endFullSync(ctx context.Context, runner *Runner) error {
 	dataset := datasetSink.DatasetManager.GetDataset(datasetSink.DatasetName)
 	if dataset == nil {
 		return fmt.Errorf("dataset does not exist: %v", datasetSink.DatasetName)
 	}
-	return dataset.CompleteFullSync()
+	return dataset.CompleteFullSync(ctx)
 }
 
 func (datasetSink *datasetSink) processEntities(runner *Runner, entities []*server.Entity) error {

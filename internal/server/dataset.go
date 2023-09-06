@@ -151,7 +151,7 @@ func (ds *Dataset) ReleaseFullSyncLease(fullSyncID string) error {
 }
 
 // CompleteFullSync Full sync completed - mark unseen entities as deleted
-func (ds *Dataset) CompleteFullSync() error {
+func (ds *Dataset) CompleteFullSync(ctx context.Context) error {
 	defer func() {
 		ds.fullSyncStarted = false
 		ds.fullSyncSeen = make(map[uint64]int) // release sync state
@@ -165,6 +165,9 @@ func (ds *Dataset) CompleteFullSync() error {
 
 	deleteBatch := make([]*Entity, 0)
 	_, err := ds.MapEntities("", -1, func(e *Entity) error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		if !e.IsDeleted {
 			_, ok := ds.fullSyncSeen[e.InternalID]
 			if !ok {

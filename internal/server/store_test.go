@@ -836,7 +836,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 		err = ds.StoreEntities(entities)
 		Expect(err).To(BeNil())
 
-		err = ds.CompleteFullSync()
+		err = ds.CompleteFullSync(context.Background())
 		Expect(err).To(BeNil())
 
 		// start 2nd fullsync
@@ -851,7 +851,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 		err = ds.StoreEntities(entities)
 		Expect(err).To(BeNil())
 
-		err = ds.CompleteFullSync()
+		err = ds.CompleteFullSync(context.Background())
 		Expect(err).To(BeNil())
 
 		allEntities := make([]*Entity, 0)
