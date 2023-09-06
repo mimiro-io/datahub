@@ -101,7 +101,7 @@ func (esp *EntityStreamParser) ParseTransaction(reader io.Reader) (*Transaction,
 			if !isDelim && delimVal.String() != "[" {
 				return nil, errors.New("parsing error: Unexpected delimiter - expected [ but got : " + delimVal.String())
 			}
-
+			done := false
 			entities := make([]*Entity, 0)
 			for {
 				t, err = decoder.Token() // starting { or ending ]
@@ -117,14 +117,17 @@ func (esp *EntityStreamParser) ParseTransaction(reader io.Reader) (*Transaction,
 					}
 					entities = append(entities, e)
 				} else if isDelim && delimVal.String() == "]" {
+					done = true
 					break
 				}
 			}
 
+			if !done {
+				return nil, errors.New("parsing error: unexpected end of stream")
+			}
 			txn.DatasetEntities[datasetName] = entities
 		}
 	}
-
 	return txn, nil
 }
 
@@ -141,6 +144,7 @@ func (esp *EntityStreamParser) ParseStream(reader io.Reader, emitEntity func(*En
 		return errors.New("parsing error: Expected [ at start of document")
 	}
 
+	done := false
 	// decode context object
 	context := make(map[string]interface{})
 	err = decoder.Decode(&context)
@@ -179,6 +183,7 @@ func (esp *EntityStreamParser) ParseStream(reader io.Reader, emitEntity func(*En
 				}
 			} else if v == ']' {
 				// done
+				done = true
 				break
 			}
 		default:
@@ -186,6 +191,9 @@ func (esp *EntityStreamParser) ParseStream(reader io.Reader, emitEntity func(*En
 		}
 	}
 
+	if !done {
+		return errors.New("parsing error: unexpected end of stream")
+	}
 	return nil
 }
 

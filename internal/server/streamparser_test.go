@@ -16,6 +16,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -439,5 +440,31 @@ var _ = ginkgo.Describe("The stream parser", func() {
 			}
 		}
 		Expect(addressSeen).To(BeTrue(), "Expected address property to be mapped")
+	})
+
+	ginkgo.It("Should detect incomplete batch array", func() {
+		reader := strings.NewReader(` [ {
+					"id" : "@context",
+					"namespaces" : {
+						"_" : "http://data.mimiro.io/core/",
+						"people" : "http://data.mimiro.io/people/",
+						"addresses" : "http://data.mimiro.io/addresses/"
+					}
+				},
+				{
+					"id" : "people:23",
+					"props" : { },
+					"refs" : { }
+				}
+			`) // <-- missing closing bracket
+
+		esp := NewEntityStreamParser(store)
+		entities := make([]*Entity, 0)
+		err := esp.ParseStream(reader, func(e *Entity) error {
+			entities = append(entities, e)
+			return nil
+		})
+		Expect(err).To(Equal(errors.New("parsing error: unexpected end of stream")), "Parsing did not produce expected error")
+
 	})
 })
