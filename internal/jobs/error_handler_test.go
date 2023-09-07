@@ -798,7 +798,7 @@ func (fs *failingSink) processEntities(runner *Runner, entities []*server.Entity
 	return errors.New("failing sink")
 }
 
-func (fs *failingSource) ReadEntities(cont source.DatasetContinuation, limit int, f func(entities []*server.Entity, continuation source.DatasetContinuation) error) error {
+func (fs *failingSource) ReadEntities(ctx context.Context, since source.DatasetContinuation, batchSize int, processEntities func([]*server.Entity, source.DatasetContinuation) error) error {
 	return errors.New("failing source")
 }
 
@@ -853,5 +853,5 @@ func (p *recordingSink) processEntities(runner *Runner, entities []*server.Entit
 func (p *recordingSink) GetConfig() map[string]interface{} {
 	return map[string]interface{}{"Type": "test"}
 }
-func (p *recordingSink) startFullSync(runner *Runner) error { panic("implement me") }
-func (p *recordingSink) endFullSync(runner *Runner) error   { panic("implement me") }
+func (p *recordingSink) startFullSync(runner *Runner) error                    { panic("implement me") }
+func (p *recordingSink) endFullSync(ctx context.Context, runner *Runner) error { panic("implement me") }

@@ -15,6 +15,7 @@
 package source
 
 import (
+	"context"
 	"strconv"
 	"time"
 
@@ -43,11 +44,7 @@ func (source *SlowSource) GetConfig() map[string]interface{} {
 	return config
 }
 
-func (source *SlowSource) ReadEntities(
-	since DatasetContinuation,
-	batchSize int,
-	processEntities func([]*server.Entity, DatasetContinuation) error,
-) error {
+func (source *SlowSource) ReadEntities(ctx context.Context, since DatasetContinuation, batchSize int, processEntities func([]*server.Entity, DatasetContinuation) error) error {
 	// assert sample source namespace
 
 	entities := make([]*server.Entity, source.BatchSize)

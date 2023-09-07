@@ -47,9 +47,7 @@ func (httpDatasetSource *HTTPDatasetSource) EndFullSync() {
 	// empty for now (this makes sonar not complain)
 }
 
-func (httpDatasetSource *HTTPDatasetSource) ReadEntities(since DatasetContinuation, batchSize int,
-	processEntities func([]*server.Entity, DatasetContinuation) error,
-) error {
+func (httpDatasetSource *HTTPDatasetSource) ReadEntities(ctx context.Context, since DatasetContinuation, batchSize int, processEntities func([]*server.Entity, DatasetContinuation) error) error {
 	// open connection
 	// timeout := 60 * time.Minute
 	// client := httpclient.NewClient(httpclient.WithHTTPTimeout(timeout))
@@ -72,7 +70,7 @@ func (httpDatasetSource *HTTPDatasetSource) ReadEntities(since DatasetContinuati
 	}
 
 	// we add a cancellable context, and makes sure it gets cancelled when we exit
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	// set up a transport with sane defaults, but with a default content timeout of 0 (infinite)
@@ -111,6 +109,9 @@ func (httpDatasetSource *HTTPDatasetSource) ReadEntities(since DatasetContinuati
 	continuationToken := &StringDatasetContinuation{}
 	esp := server.NewEntityStreamParser(httpDatasetSource.Store)
 	err = esp.ParseStream(res.Body, func(entity *server.Entity) error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		if entity.ID == "@continuation" {
 			continuationToken.Token = entity.GetStringProperty("token")
 		} else {

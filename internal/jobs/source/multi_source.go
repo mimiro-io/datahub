@@ -16,6 +16,7 @@
 package source
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -115,9 +116,7 @@ var (
 	ErrTokenType      = fmt.Errorf("continuation token is of wrong type")
 )
 
-func (multiSource *MultiSource) ReadEntities(since DatasetContinuation, batchSize int,
-	processEntities func([]*server.Entity, DatasetContinuation) error,
-) error {
+func (multiSource *MultiSource) ReadEntities(ctx context.Context, since DatasetContinuation, batchSize int, processEntities func([]*server.Entity, DatasetContinuation) error) error {
 	multiSource.resetChangesCache()
 	defer multiSource.resetChangesCache()
 
@@ -138,7 +137,7 @@ func (multiSource *MultiSource) ReadEntities(since DatasetContinuation, batchSiz
 
 	if !multiSource.isFullSync {
 		for _, dep := range multiSource.Dependencies {
-			err := multiSource.processDependency(dep, d, batchSize, processEntities)
+			err := multiSource.processDependency(ctx, dep, d, batchSize, processEntities)
 			if err != nil {
 				return err
 			}
@@ -163,9 +162,7 @@ func (multiSource *MultiSource) resetChangesCache() {
 	multiSource.changesCache = make(map[string]changeURIData)
 }
 
-func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatasetContinuation, batchSize int,
-	processEntities func([]*server.Entity, DatasetContinuation) error,
-) error {
+func (multiSource *MultiSource) processDependency(ctx context.Context, dep Dependency, d *MultiDatasetContinuation, batchSize int, processEntities func([]*server.Entity, DatasetContinuation) error) error {
 	depDataset, err2 := multiSource.getDatasetFor(dep)
 	targetDs := multiSource.Store.DatasetsToInternalIDs([]string{multiSource.DatasetName})
 	if err2 != nil {
@@ -211,6 +208,10 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 
 			// we go through all changed entities in the current join
 			for _, rid := range currentStartPoints {
+				if ctx.Err() != nil {
+					errChan <- ctx.Err()
+					return
+				}
 				// 1. build a RelatedFrom query input
 				searchBuffer := make([]byte, 10)
 				if join.Inverse {
@@ -229,11 +230,17 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 				}
 				nextRelatedFrom := relatedFrom
 			repeatQuery:
+				if ctx.Err() != nil {
+					errChan <- ctx.Err()
+					return
+				}
 				// 2. run query
 				relatedEntities, cont, err2 := multiSource.Store.GetRelatedAtTime(nextRelatedFrom, batchSize)
 				if err2 != nil {
 					errChan <- err2
+					return
 				}
+
 				// 3. put all query results onto channel
 				for _, r := range relatedEntities {
 					joinLvlChan <- r.EntityID
@@ -255,6 +262,7 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 					changes, err2 := depDataset.GetChanges(since, 1, multiSource.LatestOnly)
 					if err2 != nil {
 						errChan <- err2
+						return
 					}
 					if len(changes.Entities) > 0 {
 						timestamp := int64(changes.Entities[0].Recorded)
@@ -262,6 +270,10 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 						prevRelatedFrom := relatedFrom
 						prevRelatedFrom.At = timestamp
 					repeatPrevQuery:
+						if ctx.Err() != nil {
+							errChan <- ctx.Err()
+							return
+						}
 						// same query paging logic as lines 213-227, just different point in time. duplicates may be put onto channel here
 						prevRelatedEntities, cont, err2 := multiSource.Store.GetRelatedAtTime(prevRelatedFrom, batchSize)
 						if err2 != nil {
@@ -285,6 +297,9 @@ func (multiSource *MultiSource) processDependency(dep Dependency, d *MultiDatase
 	readRelations:
 		for {
 			select {
+			case <-ctx.Done():
+				return ctx.Err()
+
 			// we continuously read from our query result channel
 			case internalEntityID, ok := <-joinLvlChan:
 				// ok means the channel was not closed

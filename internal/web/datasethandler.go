@@ -788,7 +788,7 @@ func (handler *datasetHandler) processEntities(
 		if err := dataset.ReleaseFullSyncLease(fullSyncID); err != nil {
 			return echo.NewHTTPError(http.StatusGone, server.HTTPGenericErr(err).Error())
 		}
-		if err := dataset.CompleteFullSync(); err != nil {
+		if err := dataset.CompleteFullSync(c.Request().Context()); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, server.HTTPGenericErr(err).Error())
 		}
 	}

@@ -15,6 +15,7 @@
 package source
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -26,9 +27,7 @@ type UnionDatasetSource struct {
 	DatasetSources []*DatasetSource
 }
 
-func (s *UnionDatasetSource) ReadEntities(token DatasetContinuation, batchSize int,
-	processEntities func(entities []*server.Entity, token DatasetContinuation) error,
-) error {
+func (s *UnionDatasetSource) ReadEntities(ctx context.Context, token DatasetContinuation, batchSize int, processEntities func([]*server.Entity, DatasetContinuation) error) error {
 	d, ok := token.(*UnionDatasetContinuation)
 	if !ok {
 		return fmt.Errorf(
@@ -59,7 +58,9 @@ func (s *UnionDatasetSource) ReadEntities(token DatasetContinuation, batchSize i
 	var err error
 	keepGoing := true
 	for keepGoing {
-
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		datasetSource := s.DatasetSources[d.activeIdx]
 		exists := datasetSource.DatasetManager.IsDataset(datasetSource.DatasetName)
 		if !exists {
