@@ -18,7 +18,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 
 	"github.com/mimiro-io/datahub/internal/service/namespace"
 	"github.com/mimiro-io/datahub/internal/service/store"
