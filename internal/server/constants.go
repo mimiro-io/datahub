@@ -53,3 +53,47 @@ func uint16ToBytes(i CollectionIndex) []byte {
 	binary.BigEndian.PutUint16(indexBytes, uint16(i))
 	return indexBytes
 }
+
+func collectionToStr(idx uint16) string {
+	switch idx {
+	case URIToIDIndexID:
+		return "URIToIDIndexID"
+	case EntityIDToJSONIndexID:
+		return "EntityIDToJSONIndexID"
+	case IncomingRefIndex:
+		return "IncomingRefIndex"
+	case OutgoingRefIndex:
+		return "OutgoingRefIndex"
+	case DatasetEntityChangeLog:
+		return "DatasetEntityChangeLog"
+	case SysDatasetsID:
+		return "SysDatasetsID"
+	case SysJobsID:
+		return "SysJobsID"
+	case SysDatasetsSequences:
+		return "SysDatasetsSequences"
+	case DatasetLatestEntities:
+		return "DatasetLatestEntities"
+	case IDToURIIndexID:
+		return "IDToURIIndexID"
+	case uint16(StoreMetaIndex):
+		return "StoreMetaIndex"
+	case uint16(NamespacesIndex):
+		return "NamespacesIndex"
+	case uint16(JobResultIndex):
+		return "JobResultIndex"
+	case uint16(JobDataIndex):
+		return "JobDataIndex"
+	case uint16(JobConfigIndex):
+		return "JobConfigIndex"
+	case uint16(ContentIndex):
+		return "ContentIndex"
+	case uint16(StoreNextDatasetID):
+		return "StoreNextDatasetID"
+	case uint16(LoginProviderIndex):
+		return "LoginProviderIndex"
+	default:
+		return "unknown"
+	}
+
+}

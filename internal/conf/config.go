@@ -91,6 +91,7 @@ func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 			PoolFull:        viper.GetInt("JOBS_MAX_FULLSYNC"),
 			Concurrent:      1,
 		},
+		SlowLogThreshold: viper.GetDuration("SLOW_LOG_THRESHOLD"),
 	}, nil
 }
 
@@ -144,6 +145,7 @@ func parseEnv(basePath *string, logger *zap.SugaredLogger, loadFromHome bool) er
 	viper.SetDefault("SECURITY_STORAGE_LOCATION", fmt.Sprintf("%s/%s", home, "datahubsecurity"))
 	viper.SetDefault("JOBS_MAX_INCREMENTAL", 10)
 	viper.SetDefault("JOBS_MAX_FULLSYNC", 10)
+	viper.SetDefault("SLOW_LOG_THRESHOLD", "1s")
 	viper.AutomaticEnv()
 
 	viper.SetConfigType("env")

@@ -7,7 +7,7 @@ replace github.com/dop251/goja => github.com/mimiro-io/goja v1.0.0
 require (
 	github.com/DataDog/datadog-go/v5 v5.3.0
 	github.com/bamzi/jobrunner v1.0.0
-	github.com/dgraph-io/badger/v3 v3.2103.5
+	github.com/dgraph-io/badger/v4 v4.2.0
 	github.com/dop251/goja v1.0.0
 	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/gojektech/heimdall/v6 v6.1.0
@@ -32,12 +32,10 @@ require (
 
 require (
 	github.com/Microsoft/go-winio v0.6.1 // indirect
-	github.com/OneOfOne/xxhash v1.2.8 // indirect
-	github.com/cespare/xxhash v1.1.0 // indirect
+	github.com/benbjohnson/clock v1.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 // indirect
-	github.com/dgraph-io/badger/v4 v4.2.0 // indirect
 	github.com/dgraph-io/ristretto v0.1.1 // indirect
 	github.com/dlclark/regexp2 v1.10.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
