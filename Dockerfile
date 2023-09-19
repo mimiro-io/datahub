@@ -1,7 +1,6 @@
 FROM golang:1.21 as builder_src
 
 COPY jemalloc-install.sh .
-
 RUN apt-get update -y
 RUN apt-get install bzip2 -y
 RUN bash jemalloc-install.sh
@@ -17,6 +16,7 @@ COPY go.mod go.sum ./
 # Download all dependencies. Dependencies will be cached if the go.mod and go.sum files are not changed
 RUN go mod download
 
+RUN go install github.com/go-delve/delve/cmd/dlv@latest
 # Copy the source from the current directory to the Working Directory inside the container
 COPY cmd ./cmd
 COPY internal ./internal
@@ -41,9 +41,10 @@ WORKDIR /root/
 
 COPY --from=builder /app/server .
 COPY --from=builder /app/server-gogc .
+COPY --from=builder /go/bin/dlv .
 
-# Expose port 8080 to the outside world
-EXPOSE 8080
+# Expose port 8080 to the outside world, also 40000 for delve
+EXPOSE 8080 40000
 
 ENV GOMAXPROCS=128
 
