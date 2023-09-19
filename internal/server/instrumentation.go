@@ -40,7 +40,10 @@ func (i *InstumentedIterator) Item() *badger.Item {
 }
 
 func (t *InstrumentedTransaction) NewIterator(options badger.IteratorOptions) *InstumentedIterator {
-	return &InstumentedIterator{t.txn.NewIterator(options), options, t, atomic.Int64{}}
+	it := &InstumentedIterator{t.txn.NewIterator(options), options, t, atomic.Int64{}}
+	return slowLogAndReturn(func() *InstumentedIterator {
+		return it
+	}, it)
 }
 
 func InstrumentedTxn(btxn *badger.Txn, store *Store) *InstrumentedTransaction {
@@ -52,7 +55,7 @@ func (i *InstumentedIterator) slowLog(c func()) {
 	t := time.Now()
 	c()
 	elapsed := time.Since(t)
-	if elapsed > 1000*time.Millisecond {
+	if elapsed > i.txn.store.slowLogThreshold {
 		// log slow call
 		shortName, structLogPairs := callInfo(i, reflect.ValueOf(c).Pointer())
 		structLogPairs = append(structLogPairs, "itemCalls", i.itemCalls.Load())
@@ -64,22 +67,22 @@ func slowLogAndReturn[T any](c func() T, i Instrumented) T {
 	t := time.Now()
 	result := c()
 	elapsed := time.Since(t)
-	if elapsed > 1000*time.Millisecond {
+	if elapsed > i.getStore().slowLogThreshold {
 		// log slow call
 		fptr, _, _, _ := runtime.Caller(1)
 		shortName, structLogPairs := callInfo(i, fptr)
-		i.getLogger().Infow(fmt.Sprintf("slow badger call: %v , elapsed: %v", shortName, elapsed), structLogPairs...)
+		i.getStore().logger.Infow(fmt.Sprintf("slow badger call: %v , elapsed: %v", shortName, elapsed), structLogPairs...)
 	}
 	return result
 }
 
 type Instrumented interface {
 	callParams() string
-	getLogger() *zap.SugaredLogger
+	getStore() *Store
 }
 
-func (i *InstumentedIterator) getLogger() *zap.SugaredLogger {
-	return i.txn.logger
+func (i *InstumentedIterator) getStore() *Store {
+	return i.txn.store
 }
 
 func callInfo(i Instrumented, cptr uintptr) (string, []any) {
