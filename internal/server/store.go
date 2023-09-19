@@ -62,6 +62,7 @@ type Store struct {
 	blockCacheSize       int64
 	valueLogFileSize     int64
 	maxCompactionLevels  int
+	slowLogThreshold     time.Duration
 }
 
 type BadgerLogger struct { // we use this to implement the Badger Logger interface
@@ -90,6 +91,7 @@ func NewStore(lc fx.Lifecycle, env *conf.Env, statsdClient statsd.ClientInterfac
 		blockCacheSize:       env.BlockCacheSize,
 		valueLogFileSize:     env.ValueLogFileSize,
 		maxCompactionLevels:  env.MaxCompactionLevels,
+		slowLogThreshold:     env.SlowLogThreshold,
 	}
 	store.NamespaceManager = NewNamespaceManager(store)
 

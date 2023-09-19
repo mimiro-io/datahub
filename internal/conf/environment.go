@@ -43,6 +43,7 @@ type Env struct {
 	SecurityStorageLocation string
 	BackupSourceLocation    string
 	RunnerConfig            *RunnerConfig
+	SlowLogThreshold        time.Duration
 }
 
 type AuthConfig struct {
