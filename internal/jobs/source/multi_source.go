@@ -194,8 +194,8 @@ func (multiSource *MultiSource) processDependency(ctx context.Context, dep Depen
 		joinLvlChan := make(chan uint64)
 		errChan := make(chan error)
 		currentStartPoints := startPoints // copy by value
-		predID, err2 := multiSource.Store.GetPredicateID(join.Predicate, nil)
-		if err2 != nil {
+		predID, err3 := multiSource.Store.GetPredicateID(join.Predicate, nil)
+		if err3 != nil {
 			// predicate does not exist (yet), so we can drop out
 			startPoints = nil
 			continue
@@ -235,9 +235,9 @@ func (multiSource *MultiSource) processDependency(ctx context.Context, dep Depen
 					return
 				}
 				// 2. run query
-				relatedEntities, cont, err2 := multiSource.Store.GetRelatedAtTime(nextRelatedFrom, batchSize)
-				if err2 != nil {
-					errChan <- err2
+				relatedEntities, cont, err4 := multiSource.Store.GetRelatedAtTime(nextRelatedFrom, batchSize)
+				if err4 != nil {
+					errChan <- err4
 					return
 				}
 
@@ -259,9 +259,9 @@ func (multiSource *MultiSource) processDependency(ctx context.Context, dep Depen
 					if depSince.AsIncrToken() > 0 {
 						since = depSince.AsIncrToken() - 1
 					}
-					changes, err2 := depDataset.GetChanges(since, 1, multiSource.LatestOnly)
-					if err2 != nil {
-						errChan <- err2
+					changes, err5 := depDataset.GetChanges(since, 1, multiSource.LatestOnly)
+					if err5 != nil {
+						errChan <- err5
 						return
 					}
 					if len(changes.Entities) > 0 {
@@ -275,15 +275,16 @@ func (multiSource *MultiSource) processDependency(ctx context.Context, dep Depen
 							return
 						}
 						// same query paging logic as lines 213-227, just different point in time. duplicates may be put onto channel here
-						prevRelatedEntities, cont, err2 := multiSource.Store.GetRelatedAtTime(prevRelatedFrom, batchSize)
-						if err2 != nil {
-							errChan <- fmt.Errorf("previous GetRelatedAtTime failed for Join %+v at timestamp %v, %w", join, timestamp, err2)
+						prevRelatedEntities, c, err6 := multiSource.Store.GetRelatedAtTime(prevRelatedFrom, batchSize)
+						if err6 != nil {
+							errChan <- fmt.Errorf("previous GetRelatedAtTime failed for Join %+v at timestamp %v, %w", join, timestamp, err6)
+							return
 						}
 						for _, r := range prevRelatedEntities {
 							joinLvlChan <- r.EntityID
 						}
-						if cont != nil {
-							prevRelatedFrom = cont
+						if c != nil {
+							prevRelatedFrom = c
 							goto repeatPrevQuery
 						}
 
@@ -294,28 +295,34 @@ func (multiSource *MultiSource) processDependency(ctx context.Context, dep Depen
 
 		dedupCache := map[uint64]bool{}
 		startPoints = make([]uint64, 0)
+		ts := time.Now()
 	readRelations:
 		for {
+
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 
 			// we continuously read from our query result channel
 			case internalEntityID, ok := <-joinLvlChan:
+				since := time.Since(ts)
+				if since > multiSource.Store.SlowLogThreshold && multiSource.Logger != nil {
+					multiSource.Logger.Infow("slow multi source, blocking on channel", "dataset", multiSource.DatasetName, "join", join, "dep", dep, "duration", since)
+				}
 				// ok means the channel was not closed
 				if ok {
 					// if we are in the middle of a join-chain, all we need to do here is to preapare a list of input entities for the next join
 					if idx != len(dep.Joins)-1 {
 						// prepare uris list for next join
 						e := internalEntityID
-						if _, ok := dedupCache[e]; !ok {
+						if _, o := dedupCache[e]; !o {
 							dedupCache[e] = true
 							startPoints = append(startPoints, e)
 						}
 					} else {
 						// we reached the end of the join chain, here we can emit what we found
 						e := internalEntityID
-						if _, ok := dedupCache[e]; !ok {
+						if _, o := dedupCache[e]; !o {
 							dedupCache[e] = true
 							// we need to load the target entity only with target dataset scope, else we risk merged entities as result.
 							//
@@ -331,9 +338,9 @@ func (multiSource *MultiSource) processDependency(ctx context.Context, dep Depen
 							// a new API function which includes the target dataset in the bagder search key this would be more performant in
 							// cases where the ID exists in many datasets. Even better if we can have an API function version that allows
 							// reuse of a common read transaction.
-							mainEntity, err2 := multiSource.Store.GetEntityWithInternalID(e, targetDs)
-							if err2 != nil {
-								return fmt.Errorf("could not load entity %+v from dataset %v: %w", e, multiSource.DatasetName, err2)
+							mainEntity, err4 := multiSource.Store.GetEntityWithInternalID(e, targetDs)
+							if err4 != nil {
+								return fmt.Errorf("could not load entity %+v from dataset %v: %w", e, multiSource.DatasetName, err4)
 							}
 							// GetEntity is a Query Function. As such it returns skeleton Entities which only contain an ID for
 							// references to non-existing entities. Checking for recorded tells us whether this is a real entity hit
@@ -343,6 +350,9 @@ func (multiSource *MultiSource) processDependency(ctx context.Context, dep Depen
 								// when desired batch size is reached, emit
 								if len(entities) >= batchSize {
 									err = processEntities(entities, d)
+									if err != nil {
+										return err
+									}
 									entities = make([]*server.Entity, 0)
 								}
 							}
@@ -352,9 +362,10 @@ func (multiSource *MultiSource) processDependency(ctx context.Context, dep Depen
 					// channel close from go routine means we can stop listening
 					break readRelations
 				}
-			case err2, ok := <-errChan:
+				ts = time.Now()
+			case err4, ok := <-errChan:
 				if ok {
-					return err2
+					return err4
 				} else {
 					// channel close from go routine means we can stop listening
 					break readRelations
@@ -367,9 +378,9 @@ func (multiSource *MultiSource) processDependency(ctx context.Context, dep Depen
 	// if there are still unemitted search results, emit them now
 	if len(entities) > 0 {
 		err = processEntities(entities, d)
-	}
-	if err != nil {
-		return err
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

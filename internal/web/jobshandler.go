@@ -100,6 +100,12 @@ func (handler *jobsHandler) jobsGetDefinition(c echo.Context) error {
 	if err != nil || res.ID == "" {
 		return c.NoContent(http.StatusNotFound)
 	}
+	state, err := handler.jobScheduler.GetJobState(jobID)
+	if err != nil {
+		handler.jobScheduler.Logger.Errorf("Failed to get job state for job %s: %s", jobID, err.Error())
+		return c.NoContent(http.StatusInternalServerError)
+	}
+	res.Source["continuation"] = state.ContinuationToken
 
 	return c.JSON(http.StatusOK, res)
 }

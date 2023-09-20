@@ -24,6 +24,7 @@ type InstumentedIterator struct {
 	options   badger.IteratorOptions
 	txn       *InstrumentedTransaction
 	itemCalls atomic.Int64
+	nextCalls atomic.Int64
 }
 
 func (i *InstumentedIterator) Close() {
@@ -39,11 +40,28 @@ func (i *InstumentedIterator) Item() *badger.Item {
 	return slowLogAndReturn(func() *badger.Item { return i.iter.Item() }, i)
 }
 
+func (i *InstumentedIterator) Seek(buffer []byte) {
+	slowLogAndReturn(func() any { i.iter.Seek(buffer); return nil }, i)
+}
+
 func (t *InstrumentedTransaction) NewIterator(options badger.IteratorOptions) *InstumentedIterator {
-	it := &InstumentedIterator{t.txn.NewIterator(options), options, t, atomic.Int64{}}
+	it := &InstumentedIterator{t.txn.NewIterator(options), options, t, atomic.Int64{}, atomic.Int64{}}
 	return slowLogAndReturn(func() *InstumentedIterator {
 		return it
 	}, it)
+}
+
+func (t *InstrumentedTransaction) Get(id []byte) (*badger.Item, error) {
+	return t.txn.Get(id)
+}
+
+func (i *InstumentedIterator) ValidForPrefix(bytes []byte) bool {
+	return slowLogAndReturn(func() bool { return i.iter.ValidForPrefix(bytes) }, i)
+}
+
+func (i *InstumentedIterator) Next() {
+	defer i.nextCalls.Add(1)
+	i.slowLog(i.iter.Next)
 }
 
 func InstrumentedTxn(btxn *badger.Txn, store *Store) *InstrumentedTransaction {
@@ -55,10 +73,11 @@ func (i *InstumentedIterator) slowLog(c func()) {
 	t := time.Now()
 	c()
 	elapsed := time.Since(t)
-	if elapsed > i.txn.store.slowLogThreshold {
+	if elapsed > i.txn.store.SlowLogThreshold {
 		// log slow call
 		shortName, structLogPairs := callInfo(i, reflect.ValueOf(c).Pointer())
 		structLogPairs = append(structLogPairs, "itemCalls", i.itemCalls.Load())
+		structLogPairs = append(structLogPairs, "nextCalls", i.nextCalls.Load())
 		i.txn.logger.Infow(fmt.Sprintf("slow badger call: %v , elapsed: %v", shortName, elapsed), structLogPairs...)
 	}
 }
@@ -67,7 +86,7 @@ func slowLogAndReturn[T any](c func() T, i Instrumented) T {
 	t := time.Now()
 	result := c()
 	elapsed := time.Since(t)
-	if elapsed > i.getStore().slowLogThreshold {
+	if elapsed > i.getStore().SlowLogThreshold {
 		// log slow call
 		fptr, _, _, _ := runtime.Caller(1)
 		shortName, structLogPairs := callInfo(i, fptr)

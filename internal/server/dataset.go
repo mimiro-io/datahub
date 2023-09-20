@@ -1025,7 +1025,8 @@ func (ds *Dataset) ProcessChangesRaw(
 	lastSeen := since
 	foundChanges := false
 
-	err := ds.store.database.View(func(txn *badger.Txn) error {
+	err := ds.store.database.View(func(btxn *badger.Txn) error {
+		txn := InstrumentedTxn(btxn, ds.store)
 		searchBuffer := make([]byte, 14)
 		binary.BigEndian.PutUint16(searchBuffer, DatasetEntityChangeLog)
 		binary.BigEndian.PutUint32(searchBuffer[2:], ds.InternalID)
@@ -1079,7 +1080,7 @@ func (ds *Dataset) ProcessChangesRaw(
 	}
 }
 
-func latestOnlyWrapper(k []byte, ds *Dataset, txn *badger.Txn,
+func latestOnlyWrapper(k []byte, ds *Dataset, txn *InstrumentedTransaction,
 	next func(entityChangeID []byte) error,
 ) func(entityChangeID []byte) error {
 	return func(entityChangeID []byte) error {

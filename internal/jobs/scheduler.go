@@ -250,6 +250,14 @@ func (s *Scheduler) LoadJob(jobID string) (*JobConfiguration, error) {
 	}
 	return jobConfig, nil
 }
+func (s *Scheduler) GetJobState(id string) (*SyncJobState, error) {
+	syncJobState := &SyncJobState{}
+	err := s.Store.GetObject(server.JobDataIndex, id, syncJobState)
+	if err != nil {
+		return nil, err
+	}
+	return syncJobState, nil
+}
 
 // ListJobs returns a list of all stored configurations
 func (s *Scheduler) ListJobs() []*JobConfiguration {
