@@ -188,6 +188,16 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) (int, e
 		return 0, err
 	}
 
+	// if this job has never run before, and it is a multi source, we need to do a full sync first
+	if pipeline.source.GetConfig()["Type"] == "MultiSource" && syncJobState.ContinuationToken == "" {
+		runner.logger.With(
+			"job.jobId", job.id,
+			"job.jobTitle", job.title,
+			"job.state", "Running",
+		).Warnf("job %s has a multi source, and has never run before. Doing a full sync first", job.id)
+		return (&FullSyncPipeline{pipeline.PipelineSpec}).sync(job, ctx)
+	}
+
 	syncJobState.ID = job.id // add the id to the sync state
 
 	keepReading := true

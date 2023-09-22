@@ -254,40 +254,43 @@ func (multiSource *MultiSource) processDependency(ctx context.Context, dep Depen
 				// For non-inverse first-joins, we need to query back in time as well,
 				// to find related entities that have had their relation removed since "then"
 				if idx == 0 && !join.Inverse {
-					// get last change of previous run (cont-token minus 1 should give the last change index of previous processing run)
-					since := uint64(0)
 					if depSince.AsIncrToken() > 0 {
-						since = depSince.AsIncrToken() - 1
-					}
-					changes, err5 := depDataset.GetChanges(since, 1, multiSource.LatestOnly)
-					if err5 != nil {
-						errChan <- err5
-						return
-					}
-					if len(changes.Entities) > 0 {
-						timestamp := int64(changes.Entities[0].Recorded)
-						// create a copy of relatedFrom with back-dated timestamp
-						prevRelatedFrom := relatedFrom
-						prevRelatedFrom.At = timestamp
-					repeatPrevQuery:
-						if ctx.Err() != nil {
-							errChan <- ctx.Err()
-							return
-						}
-						// same query paging logic as lines 213-227, just different point in time. duplicates may be put onto channel here
-						prevRelatedEntities, c, err6 := multiSource.Store.GetRelatedAtTime(prevRelatedFrom, batchSize)
-						if err6 != nil {
-							errChan <- fmt.Errorf("previous GetRelatedAtTime failed for Join %+v at timestamp %v, %w", join, timestamp, err6)
-							return
-						}
-						for _, r := range prevRelatedEntities {
-							joinLvlChan <- r.EntityID
-						}
-						if c != nil {
-							prevRelatedFrom = c
-							goto repeatPrevQuery
-						}
+						// get last change of previous run (cont-token minus 1 should give the last change index of previous processing run)
+						since := depSince.AsIncrToken() - 1
 
+						// improve this using the previous seq-numbers of the specific entity to find timestamps.
+						// also run queries for all changed versions of the entity, not just the last one,
+						// with the respective recorded times of each change
+						changes, err5 := depDataset.GetChanges(since, 1, false)
+						if err5 != nil {
+							errChan <- err5
+							return
+						}
+						if len(changes.Entities) > 0 {
+							timestamp := int64(changes.Entities[0].Recorded)
+							// create a copy of relatedFrom with back-dated timestamp
+							prevRelatedFrom := relatedFrom
+							prevRelatedFrom.At = timestamp
+						repeatPrevQuery:
+							if ctx.Err() != nil {
+								errChan <- ctx.Err()
+								return
+							}
+							// same query paging logic as lines 213-227, just different point in time. duplicates may be put onto channel here
+							prevRelatedEntities, c, err6 := multiSource.Store.GetRelatedAtTime(prevRelatedFrom, batchSize)
+							if err6 != nil {
+								errChan <- fmt.Errorf("previous GetRelatedAtTime failed for Join %+v at timestamp %v, %w", join, timestamp, err6)
+								return
+							}
+							for _, r := range prevRelatedEntities {
+								joinLvlChan <- r.EntityID
+							}
+							if c != nil {
+								prevRelatedFrom = c
+								goto repeatPrevQuery
+							}
+
+						}
 					}
 				}
 			}
@@ -295,7 +298,6 @@ func (multiSource *MultiSource) processDependency(ctx context.Context, dep Depen
 
 		dedupCache := map[uint64]bool{}
 		startPoints = make([]uint64, 0)
-		ts := time.Now()
 	readRelations:
 		for {
 
@@ -305,10 +307,6 @@ func (multiSource *MultiSource) processDependency(ctx context.Context, dep Depen
 
 			// we continuously read from our query result channel
 			case internalEntityID, ok := <-joinLvlChan:
-				since := time.Since(ts)
-				if since > multiSource.Store.SlowLogThreshold && multiSource.Logger != nil {
-					multiSource.Logger.Infow("slow multi source, blocking on channel", "dataset", multiSource.DatasetName, "join", join, "dep", dep, "duration", since)
-				}
 				// ok means the channel was not closed
 				if ok {
 					// if we are in the middle of a join-chain, all we need to do here is to preapare a list of input entities for the next join
@@ -362,7 +360,6 @@ func (multiSource *MultiSource) processDependency(ctx context.Context, dep Depen
 					// channel close from go routine means we can stop listening
 					break readRelations
 				}
-				ts = time.Now()
 			case err4, ok := <-errChan:
 				if ok {
 					return err4

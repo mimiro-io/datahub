@@ -45,7 +45,8 @@ var _ = Describe("dependency tracking", func() {
 		Expect(err).To(BeNil(), "should be allowed to clean testfiles in "+storeLocation)
 
 		e := &conf.Env{
-			Logger:        zap.NewNop().Sugar(),
+			Logger: zap.NewNop().Sugar(),
+			//Logger:        zap.NewExample().Sugar(),
 			StoreLocation: storeLocation,
 		}
 		lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
@@ -1200,6 +1201,78 @@ var _ = Describe("dependency tracking", func() {
 			}
 		}
 		Expect(recordedEntities).To(HaveLen(4), "Bob and Alice twice each. once from main ds, once via dep")
+		Expect(lastToken).NotTo(BeNil())
+	})
+
+	It("Should not dead loop on self referencing dependencies", func() {
+		pfx, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://employment/")
+		ref := pfx + ":id"
+		var entities []*server.Entity
+		var entities2 []*server.Entity
+		for i := 0; i < 10; i++ {
+			id := fmt.Sprintf("%v:%d", pfx, i)
+
+			// create employments with an id and a ref pointing to same id
+			entities = append(entities, server.NewEntityFromMap(map[string]interface{}{
+				"id":    id,
+				"props": map[string]interface{}{"name": fmt.Sprintf("Employer %d", i)},
+				"refs":  map[string]interface{}{ref: id},
+			}))
+
+			// also add people with same id
+			entities2 = append(entities2, server.NewEntityFromMap(map[string]interface{}{
+				"id":    id,
+				"props": map[string]interface{}{"name": fmt.Sprintf("Person %d", i)},
+				"refs":  map[string]interface{}{},
+			}))
+		}
+		ds, err := dsm.CreateDataset("employment", nil)
+		Expect(err).To(BeNil())
+		err = ds.StoreEntities(entities)
+		Expect(err).To(BeNil())
+
+		ds, err = dsm.CreateDataset("people", nil)
+		Expect(err).To(BeNil())
+		err = ds.StoreEntities(entities2)
+		Expect(err).To(BeNil())
+
+		testSource := source.MultiSource{DatasetName: "people", Store: store, DatasetManager: dsm}
+		srcJSON := `{ "Type" : "MultiSource", "Name" : "people", "Dependencies": [ {
+							"dataset": "employment",
+							"joins": [ { "dataset": "people", "predicate": "` + ref + `", "inverse": false } ]
+						}] }`
+
+		srcConfig := map[string]interface{}{}
+		_ = json.Unmarshal([]byte(srcJSON), &srcConfig)
+		_ = testSource.ParseDependencies(srcConfig["Dependencies"], nil)
+
+		var recordedEntities []server.Entity
+		token := &source.MultiDatasetContinuation{}
+		var lastToken source.DatasetContinuation
+
+		// at this point, there is no continuation token present for the incremental logic.
+		// we go through batches of 1 to emulate a long-running pipeline read loop
+		for {
+			var stop bool
+			err := testSource.ReadEntities(ctx, token, 3, func(entities []*server.Entity, token source.DatasetContinuation) error {
+				if token.GetToken() != "" {
+					lastToken = token
+				}
+				for _, e := range entities {
+					recordedEntities = append(recordedEntities, *e)
+				}
+				if len(entities) == 0 {
+					stop = true
+				}
+
+				return nil
+			})
+			Expect(err).To(BeNil())
+			if stop {
+				break
+			}
+		}
+		Expect(recordedEntities).To(HaveLen(20))
 		Expect(lastToken).NotTo(BeNil())
 	})
 })
