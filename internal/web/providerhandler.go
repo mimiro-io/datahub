@@ -90,8 +90,23 @@ func (handler *providerHandler) loginList(c echo.Context) error {
 	if providers, err := handler.tokenProviders.ListProviders(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, server.HTTPGenericErr(err).Error())
 	} else {
-		return c.JSON(http.StatusOK, providers)
+		masked := make([]security.ProviderConfig, len(providers))
+		for i, provider := range providers {
+			masked[i] = mask(provider)
+		}
+		return c.JSON(http.StatusOK, masked)
 	}
+}
+
+func mask(provider security.ProviderConfig) security.ProviderConfig {
+	p2 := provider
+	if p2.ClientSecret != nil && p2.ClientSecret.Value != "" {
+		p2.ClientSecret.Value = "*****"
+	}
+	if p2.Password != nil && p2.Password.Value != "" {
+		p2.Password.Value = "*****"
+	}
+	return p2
 }
 
 func (handler *providerHandler) loginGet(c echo.Context) error {
@@ -102,7 +117,7 @@ func (handler *providerHandler) loginGet(c echo.Context) error {
 	if provider, err := handler.tokenProviders.GetProviderConfig(providerName); err != nil {
 		return c.NoContent(http.StatusNotFound)
 	} else {
-		return c.JSON(http.StatusOK, provider)
+		return c.JSON(http.StatusOK, mask(*provider))
 	}
 }
 
