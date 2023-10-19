@@ -142,8 +142,8 @@ func setupJWT(env *conf.Env, core *security.ServiceCore, skipper func(c echo.Con
 	// if node security is enabled
 	if env.Auth.Middleware == "local" {
 		config.NodePublicKey = core.NodeInfo.KeyPairs[0].PublicKey
-		config.Issuer = []string{"node:" + core.NodeInfo.NodeID}
-		config.Audience = []string{"node:" + core.NodeInfo.NodeID}
+		config.NodeIssuer = []string{"node:" + core.NodeInfo.NodeID}
+		config.NodeAudience = []string{"node:" + core.NodeInfo.NodeID}
 	}
 
 	return middlewares.JWTHandler(config)

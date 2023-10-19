@@ -43,6 +43,8 @@ type (
 
 		// This is set if Node security is enabled
 		NodePublicKey *rsa.PublicKey
+		NodeAudience  []string
+		NodeIssuer    []string
 	}
 )
 
@@ -115,9 +117,10 @@ func JWTHandler(config *JwtConfig) echo.MiddlewareFunc {
 
 func (config *JwtConfig) ValidateToken(auth string) (*jwt.Token, error) {
 	token, err := jwt.ParseWithClaims(auth, &security.CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
-		if config.NodePublicKey != nil {
-			return config.NodePublicKey, nil
-		} else {
+		return config.NodePublicKey, nil
+	})
+	if err != nil {
+		token, err = jwt.ParseWithClaims(auth, &security.CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 			set, err := config.Cache.Get(context.Background(), config.Wellknown)
 			if err != nil {
 				return nil, errors.New("unable to load well-known from cache")
@@ -133,7 +136,12 @@ func (config *JwtConfig) ValidateToken(auth string) (*jwt.Token, error) {
 
 				// Check for x5c. If present, convert to RSA Public key.
 				// If not present, create raw key.
-				der, ok := k.X509CertChain().Get(0)
+				x5c := k.X509CertChain()
+				ok = false
+				var der []byte
+				if x5c != nil {
+					der, ok = x5c.Get(0)
+				}
 				if ok {
 					pem := "-----BEGIN CERTIFICATE-----\n" + string(der) + "\n-----END CERTIFICATE-----"
 					return jwt.ParseRSAPublicKeyFromPEM([]byte(pem))
@@ -145,8 +153,8 @@ func (config *JwtConfig) ValidateToken(auth string) (*jwt.Token, error) {
 			default:
 				return nil, errors.New("unknown type in well-known cache")
 			}
-		}
-	})
+		})
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -156,8 +164,8 @@ func (config *JwtConfig) ValidateToken(auth string) (*jwt.Token, error) {
 	}
 
 	claims := token.Claims.(*security.CustomClaims)
-	audience := config.Audience
-	issuer := config.Issuer
+	audience := append(config.Audience, config.NodeAudience...)
+	issuer := append(config.Issuer, config.NodeIssuer...)
 
 	checkAud := false
 	for _, aud := range audience {

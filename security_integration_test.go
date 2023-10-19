@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v4"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/fx"
@@ -41,9 +42,28 @@ func TestFromOutside(t *testing.T) {
 var _ = Describe("The dataset endpoint", Ordered, func() {
 	var app *fx.App
 
+	privateKey := `-----BEGIN PRIVATE KEY-----
+MIIBVgIBADANBgkqhkiG9w0BAQEFAASCAUAwggE8AgEAAkEAgp2HWNZwdVzEflWx
+jK8hddWr2x+IKazSpMMfLg8oDQk+kYI6/ChNS4mdHWD58tQzI1FimW5z1lfPoSvc
+I5LzCwIDAQABAkBABnH7BRqZHQEgoGbo/EvdlACq57j6HMIgi5j0He/W+1SbAsoc
+zaAK2Wgr10dOt+r8URQ1BzYHokap67oLmy9RAiEA1eNGzCLrJsLO3OSaDsmBM0BQ
+Zks10U7AEugv+mPYuHMCIQCcVQR6isuehozn4YGev3jOZe6QuZUfAzw8elyFRobt
+CQIhALzted7dRTtCvnjt0IsZQO+lcp849fvBhPXudFrHEWqzAiEAjVvi3Nu8GvAX
+YWVry5vfJOLOwVbOHGjUgusx1eFcB+ECIQCyMIG0HM3l+maWePciN+ucgAhNLiiY
+9LvRBDUAB4Eoqw==
+-----END PRIVATE KEY-----`
+
+	//	publicKey := `-----BEGIN PUBLIC KEY-----
+	//MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAIKdh1jWcHVcxH5VsYyvIXXVq9sfiCms
+	//0qTDHy4PKA0JPpGCOvwoTUuJnR1g+fLUMyNRYpluc9ZXz6Er3COS8wsCAwEAAQ==
+	//-----END PUBLIC KEY-----`
+
 	location := "./node_security_integration_test"
+
+	wellKnownLocation := "http://localhost:14447/well-known.json"
 	securityLocation := "./node_security_integration_test_clients"
 	datahubURL := "http://localhost:24998/"
+	var server *http.Server
 	BeforeAll(func() {
 		_ = os.RemoveAll(location)
 		_ = os.RemoveAll(securityLocation)
@@ -54,10 +74,14 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 		_ = os.Setenv("AUTHORIZATION_MIDDLEWARE", "local")
 		_ = os.Setenv("ADMIN_USERNAME", "admin")
 		_ = os.Setenv("ADMIN_PASSWORD", "admin")
-		_ = os.Setenv("ENABLE_NODE_SECURITY", "true")
+		//_ = os.Setenv("ENABLE_NODE_SECURITY", "true")
 		_ = os.Setenv("NODE_ID", "node1")
+		_ = os.Setenv("TOKEN_AUDIENCE", "test_audience")
+		_ = os.Setenv("TOKEN_ISSUER", "test_issuer")
 		_ = os.Setenv("SECURITY_STORAGE_LOCATION", securityLocation)
 		_ = os.Setenv("DL_JWT_CLIENT_ID", "dummy_provider")
+
+		_ = os.Setenv("TOKEN_WELL_KNOWN", wellKnownLocation)
 
 		oldOut := os.Stdout
 		oldErr := os.Stderr
@@ -67,10 +91,26 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 		app, _ = datahub.Start(context.Background())
 		os.Stdout = oldOut
 		os.Stderr = oldErr
+
+		os.WriteFile(location+"/well-known.json", []byte(`{"keys":[{
+    "kty": "RSA",
+    "e": "AQAB",
+    "use": "sig",
+    "kid": "letmein",
+    "alg": "RS256",
+    "n": "gp2HWNZwdVzEflWxjK8hddWr2x-IKazSpMMfLg8oDQk-kYI6_ChNS4mdHWD58tQzI1FimW5z1lfPoSvcI5LzCw"
+}]}`), 0644)
+
+		mux := http.NewServeMux()
+		mux.Handle("/", http.FileServer(http.Dir(location)))
+		server = &http.Server{Addr: ":14447", Handler: mux}
+		go server.ListenAndServe()
 	})
 	AfterAll(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-		err := app.Stop(ctx)
+		err := server.Shutdown(ctx)
+		Expect(err).To(BeNil())
+		err = app.Stop(ctx)
 		defer cancel()
 		Expect(err).To(BeNil())
 		err = os.RemoveAll(location)
@@ -87,30 +127,14 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 		_ = os.Unsetenv("ENABLE_NODE_SECURITY")
 		_ = os.Unsetenv("NODE_ID")
 		_ = os.Unsetenv("SECURITY_STORAGE_LOCATION")
+		_ = os.Unsetenv("TOKEN_WELL_KNOWN")
 	})
 
 	It("Should authenticate with admin credentials", func(_ SpecContext) {
-		// create new dataset
-		data := url.Values{}
-		data.Set("grant_type", "client_credentials")
-		data.Set("client_id", "admin")
-		data.Set("client_secret", "admin")
-
-		reqURL := datahubURL + "security/token"
-		res, err := http.PostForm(reqURL, data)
-		Expect(err).To(BeNil())
-		Expect(res).NotTo(BeZero())
-		Expect(res.StatusCode).To(Equal(200))
-
-		decoder := json.NewDecoder(res.Body)
-		response := make(map[string]interface{})
-		err = decoder.Decode(&response)
-		Expect(err).To(BeNil())
-		token := response["access_token"].(string)
-		Expect(token).NotTo(BeNil())
+		token := getAdminToken(datahubURL)
 
 		// check JWT valid for endpoint access (also tests the admin role)
-		reqURL = datahubURL + "datasets"
+		reqURL := datahubURL + "datasets"
 		client := &http.Client{}
 		req, _ := http.NewRequest("GET", reqURL, nil)
 		req.Header = http.Header{
@@ -118,34 +142,16 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 			"Authorization": []string{"Bearer " + token},
 		}
 
-		res, err = client.Do(req)
+		res, err := client.Do(req)
 		Expect(err).To(BeNil())
 		Expect(res).NotTo(BeNil())
 		Expect(res.StatusCode).To(Equal(200))
 	}, SpecTimeout(15*time.Minute))
 
 	It("Should support admin control over data structures", func(_ SpecContext) {
-		// create new dataset
-		data := url.Values{}
-		data.Set("grant_type", "client_credentials")
-		data.Set("client_id", "admin")
-		data.Set("client_secret", "admin")
-
-		reqURL := datahubURL + "security/token"
-		res, err := http.PostForm(reqURL, data)
-		Expect(err).To(BeNil())
-		Expect(res).NotTo(BeZero())
-		Expect(res.StatusCode).To(Equal(200))
-
-		decoder := json.NewDecoder(res.Body)
-		response := make(map[string]interface{})
-		err = decoder.Decode(&response)
-		Expect(err).To(BeNil())
-		token := response["access_token"].(string)
-		Expect(token).NotTo(BeNil())
-
+		token := getAdminToken(datahubURL)
 		// check JWT valid for endpoint access (also tests the admin role)
-		reqURL = datahubURL + "datasets"
+		reqURL := datahubURL + "datasets"
 		client := &http.Client{}
 		req, _ := http.NewRequest("GET", reqURL, nil)
 		req.Header = http.Header{
@@ -153,7 +159,7 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 			"Authorization": []string{"Bearer " + token},
 		}
 
-		res, err = client.Do(req)
+		res, err := client.Do(req)
 		Expect(err).To(BeNil())
 		Expect(res).NotTo(BeNil())
 		Expect(res.StatusCode).To(Equal(200))
@@ -314,38 +320,8 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 		Expect(len(deletedeclientacls)).To(Equal(0))
 	}, SpecTimeout(15*time.Minute))
 	It("Should register client and allow access", func(_ SpecContext) {
-		// get jwt for admin
-		data := url.Values{}
-		data.Set("grant_type", "client_credentials")
-		data.Set("client_id", "admin")
-		data.Set("client_secret", "admin")
-
-		reqURL := datahubURL + "security/token"
-		res, err := http.PostForm(reqURL, data)
-		Expect(err).To(BeNil())
-		Expect(res).NotTo(BeZero())
-		Expect(res.StatusCode).To(Equal(200))
-
-		decoder := json.NewDecoder(res.Body)
-		response := make(map[string]interface{})
-		err = decoder.Decode(&response)
-		Expect(err).To(BeNil())
-		token := response["access_token"].(string)
-		Expect(token).NotTo(BeNil())
-
+		token := getAdminToken(datahubURL)
 		// check JWT valid for endpoint access (also tests the admin role)
-		reqURL = datahubURL + "datasets"
-		client := &http.Client{}
-		req, _ := http.NewRequest("GET", reqURL, nil)
-		req.Header = http.Header{
-			"Content-Type":  []string{"application/json"},
-			"Authorization": []string{"Bearer " + token},
-		}
-
-		res, err = client.Do(req)
-		Expect(err).To(BeNil())
-		Expect(res).NotTo(BeNil())
-		Expect(res.StatusCode).To(Equal(200))
 
 		// register new client
 		clientInfo := &security.ClientInfo{}
@@ -358,15 +334,15 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 		clientJSON, err := json.Marshal(clientInfo)
 		Expect(err).To(BeNil())
 
-		reqURL = datahubURL + "security/clients"
-		client = &http.Client{}
-		req, _ = http.NewRequest("POST", reqURL, bytes.NewBuffer(clientJSON))
+		reqURL := datahubURL + "security/clients"
+		client := &http.Client{}
+		req, _ := http.NewRequest("POST", reqURL, bytes.NewBuffer(clientJSON))
 		req.Header = http.Header{
 			"Content-Type":  []string{"application/json"},
 			"Authorization": []string{"Bearer " + token},
 		}
 
-		res, err = client.Do(req)
+		res, err := client.Do(req)
 		Expect(err).To(BeNil())
 		Expect(res).NotTo(BeNil())
 		Expect(res.StatusCode).To(Equal(200))
@@ -408,8 +384,8 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 		Expect(res).NotTo(BeZero())
 		Expect(res.StatusCode).To(Equal(200))
 
-		decoder = json.NewDecoder(res.Body)
-		response = make(map[string]interface{})
+		decoder := json.NewDecoder(res.Body)
+		response := make(map[string]interface{})
 		err = decoder.Decode(&response)
 		Expect(err).To(BeNil())
 		clientToken := response["access_token"].(string)
@@ -434,30 +410,13 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 		err = json.Unmarshal(jsonraw, &result)
 		Expect(err).To(BeNil())
 		Expect(len(result) == 1)
+		Expect(result[0]["Name"]).To(Equal("core.Dataset"))
 	}, SpecTimeout(15*time.Minute))
 
 	It("Should allow access to self via job and node jwt provider", func(_ SpecContext) {
-		// get jwt for admin
-		data := url.Values{}
-		data.Set("grant_type", "client_credentials")
-		data.Set("client_id", "admin")
-		data.Set("client_secret", "admin")
-
-		reqURL := datahubURL + "security/token"
-		res, err := http.PostForm(reqURL, data)
-		Expect(err).To(BeNil())
-		Expect(res).NotTo(BeZero())
-		Expect(res.StatusCode).To(Equal(200))
-
-		decoder := json.NewDecoder(res.Body)
-		response := make(map[string]interface{})
-		err = decoder.Decode(&response)
-		Expect(err).To(BeNil())
-		token := response["access_token"].(string)
-		Expect(token).NotTo(BeNil())
-
+		token := getAdminToken(datahubURL)
 		// check JWT valid for endpoint access (also tests the admin role)
-		reqURL = datahubURL + "datasets"
+		reqURL := datahubURL + "datasets"
 		client := &http.Client{}
 		req, _ := http.NewRequest("GET", reqURL, nil)
 		req.Header = http.Header{
@@ -465,7 +424,7 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 			"Authorization": []string{"Bearer " + token},
 		}
 
-		res, err = client.Do(req)
+		res, err := client.Do(req)
 		Expect(err).To(BeNil())
 		Expect(res).NotTo(BeNil())
 		Expect(res.StatusCode).To(Equal(200))
@@ -617,6 +576,68 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 		}
 	}, SpecTimeout(15*time.Minute))
 
+	It("Should support access via external jwt validator", func() {
+		// give "bob" access to datasets
+		aclJSON, err := json.Marshal([]*security.AccessControl{{
+			Action: "write", Resource: "/datasets*",
+		}})
+		Expect(err).To(BeNil())
+
+		adminToken := getAdminToken(datahubURL)
+		reqURL := datahubURL + "security/clients/bob/acl"
+		req, _ := http.NewRequest("POST", reqURL, bytes.NewBuffer(aclJSON))
+		req.Header = http.Header{
+			"Content-Type":  []string{"application/json"},
+			"Authorization": []string{"Bearer " + adminToken},
+		}
+
+		res, err := http.DefaultClient.Do(req)
+		Expect(err).To(BeNil())
+		Expect(res).NotTo(BeNil())
+		Expect(res.StatusCode).To(Equal(200))
+
+		privateKey, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(privateKey))
+
+		// make a JWT
+		roles := []string{"client"}
+
+		// add in roles in config
+		claims := security.CustomClaims{}
+		claims.Roles = roles
+		claims.RegisteredClaims = jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 15)),
+			Issuer:    "test_issuer",
+			Audience:  jwt.ClaimStrings{"test_audience"},
+			Subject:   "bob",
+		}
+
+		token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+		token.Header["kid"] = "letmein"
+		externalToken, err := token.SignedString(privateKey)
+
+		Expect(err).To(BeNil())
+		// use token to list datasets
+		reqURL = datahubURL + "datasets"
+		client := &http.Client{}
+		req, _ = http.NewRequest("GET", reqURL, nil)
+		req.Header = http.Header{
+			"Content-Type":  []string{"application/json"},
+			"Authorization": []string{"Bearer " + externalToken},
+		}
+
+		res, err = client.Do(req)
+		Expect(err).To(BeNil())
+		Expect(res).NotTo(BeNil())
+		Expect(res.StatusCode).To(Equal(200))
+
+		jsonraw, _ := io.ReadAll(res.Body)
+		result := make([]map[string]interface{}, 0)
+		err = json.Unmarshal(jsonraw, &result)
+		Expect(err).To(BeNil())
+		Expect(len(result) == 1)
+		Expect(result[0]["Name"]).To(Equal("core.Dataset"))
+	})
+
 	/*
 		It("Should remove client access", func() {
 			// create new dataset
@@ -643,3 +664,25 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 		})
 	*/
 })
+
+func getAdminToken(datahubURL string) string {
+	GinkgoHelper()
+	data := url.Values{}
+	data.Set("grant_type", "client_credentials")
+	data.Set("client_id", "admin")
+	data.Set("client_secret", "admin")
+
+	reqURL := datahubURL + "security/token"
+	res, err := http.PostForm(reqURL, data)
+	Expect(err).To(BeNil())
+	Expect(res).NotTo(BeZero())
+	Expect(res.StatusCode).To(Equal(200))
+
+	decoder := json.NewDecoder(res.Body)
+	response := make(map[string]interface{})
+	err = decoder.Decode(&response)
+	Expect(err).To(BeNil())
+	token := response["access_token"].(string)
+	Expect(token).NotTo(BeNil())
+	return token
+}
