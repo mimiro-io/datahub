@@ -133,7 +133,7 @@ func (j *job) Run() {
 				"job.jobType", jobType)
 		} else {
 			_ = j.runner.statsdClient.Count("jobs.error", timed.Nanoseconds(), tags, 1)
-			j.runner.logger.Warnw(fmt.Sprintf("Failed running task for job '%s' (%s): %s", j.title, j.id, err.Error()),
+			j.runner.logger.Warnw(fmt.Sprintf("Failed running task for job '%s' (%s) after processing %v entities with error: %s", j.title, j.id, processed, err.Error()),
 				"job.jobId", j.id,
 				"job.jobTitle", j.title,
 				"job.state", "Failed",
@@ -142,16 +142,15 @@ func (j *job) Run() {
 		}
 	} else {
 		_ = j.runner.statsdClient.Count("jobs.success", timed.Nanoseconds(), tags, 1)
+		j.runner.logger.Infow(
+			fmt.Sprintf("Finished %s with id '%s' (%s) - duration was %s. processed %v entities",
+				msg, j.title, j.id, timed, processed),
+			"job.jobId", j.id,
+			"job.jobTitle", j.title,
+			"job.state", "Finished",
+			"job.jobType", jobType,
+		)
 	}
-
-	j.runner.logger.Infow(
-		fmt.Sprintf("Finished %s with id '%s' (%s) - duration was %s. processed %v entities",
-			msg, j.title, j.id, timed, processed),
-		"job.jobId", j.id,
-		"job.jobTitle", j.title,
-		"job.state", "Finished",
-		"job.jobType", jobType,
-	)
 
 	// we store the last run info
 	lastRun := &jobResult{
