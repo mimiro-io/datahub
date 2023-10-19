@@ -42,6 +42,7 @@ func TestFromOutside(t *testing.T) {
 var _ = Describe("The dataset endpoint", Ordered, func() {
 	var app *fx.App
 
+	// privateKey and well-known.json are generated from https://mkjwk.org/
 	privateKey := `-----BEGIN PRIVATE KEY-----
 MIIBVgIBADANBgkqhkiG9w0BAQEFAASCAUAwggE8AgEAAkEAgp2HWNZwdVzEflWx
 jK8hddWr2x+IKazSpMMfLg8oDQk+kYI6/ChNS4mdHWD58tQzI1FimW5z1lfPoSvc
