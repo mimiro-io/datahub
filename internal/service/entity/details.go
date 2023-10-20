@@ -16,6 +16,7 @@ package entity
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 
 	"github.com/dgraph-io/badger/v4"
@@ -43,16 +44,16 @@ func NewLookup(s store.BadgerStore) (Lookup, error) {
 //	{
 //	    "dataset1": {
 //	        "changes": [
-//	            "{\"id\":\"ns3:3\",\"internalId\":8,\"recorded\":1662648998417816245,\"refs\":{},\"props\":{\"ns3:name\":\"Frank\"}}"
+//	            {"id":"ns3:3","internalId":8,"recorded":1662648998417816245,"refs":{},"props":{"ns3:name":"Frank"}}
 //	        ],
-//	        "latest": "{\"id\":\"ns3:3\",\"internalId\":8,\"recorded\":1662648998417816245,\"refs\":{},\"props\":{\"ns3:name\":\"Frank\"}}"
+//	        "latest": {"id":"ns3:3","internalId":8,"recorded":1662648998417816245,"refs":{},"props":{"ns3:name":"Frank"}}
 //	    },
 //	    "dataset2": {
 //	        "changes": [
-//	            "{\"id\":\"ns3:3\",\"internalId\":8,\"recorded\":1663074960494865060,\"refs\":{},\"props\":{\"ns3:name\":\"Frank\"}}",
-//	            "{\"id\":\"ns3:3\",\"internalId\":8,\"recorded\":1663075373488961084,\"refs\":{},\"props\":{\"ns3:name\":\"Frank\",\"ns4:extra\":{\"refs\":{},\"props\":{}}}}"
+//	            {"id":"ns3:3","internalId":8,"recorded":1663074960494865060,"refs":{},"props":{"ns3:name":"Frank"}},
+//	            {"id":"ns3:3","internalId":8,"recorded":1663075373488961084,"refs":{},"props":{"ns3:name":"Frank","ns4:extra":{"refs":{},"props":{}}}}
 //	        ],
-//	        "latest": "{\"id\":\"ns3:3\",\"internalId\":8,\"recorded\":1663075373488961084,\"refs\":{},\"props\":{\"ns3:name\":\"Frank\",\"ns4:extra\":{\"refs\":{},\"props\":{}}}}"
+//	        "latest": {"id":"ns3:3","internalId":8,"recorded":1663075373488961084,"refs":{},"props":{"ns3:name":"Frank","ns4:extra":{"refs":{},"props":{}}}}
 //	    },
 //	}
 func (l Lookup) Details(id string, datasetNames []string) (map[string]interface{}, error) {
@@ -137,9 +138,18 @@ func (l Lookup) loadDetails(
 		if !ok {
 			result[fmt.Sprintf("%v", internalDatasetID)] = "UNEXPECTED: dataset name not found"
 		} else {
+			var entity map[string]interface{}
+			err := json.Unmarshal(entityBytes, &entity)
+			if err != nil {
+				return nil, err
+			}
+			changes, err := l.loadChanges(rtxn, internalEntityID, internalDatasetID)
+			if err != nil {
+				return nil, err
+			}
 			result[n] = map[string]interface{}{
-				"latest":  string(entityBytes),
-				"changes": l.loadChanges(rtxn, internalEntityID, internalDatasetID),
+				"latest":  entity,
+				"changes": changes,
 			}
 		}
 	}
@@ -150,7 +160,7 @@ func (l Lookup) loadChanges(
 	rtxn *badger.Txn,
 	internalEntityID types.InternalID,
 	internalDatasetID types.InternalDatasetID,
-) []string {
+) ([]map[string]interface{}, error) {
 	seekPrefix := store.SeekEntityChanges(internalDatasetID, internalEntityID)
 	iteratorOptions := badger.DefaultIteratorOptions
 	iteratorOptions.PrefetchValues = true
@@ -159,11 +169,16 @@ func (l Lookup) loadChanges(
 	entityChangesIterator := rtxn.NewIterator(iteratorOptions)
 	defer entityChangesIterator.Close()
 
-	result := make([]string, 0)
+	result := make([]map[string]interface{}, 0)
 	for entityChangesIterator.Rewind(); entityChangesIterator.ValidForPrefix(seekPrefix); entityChangesIterator.Next() {
 		item := entityChangesIterator.Item()
 		change, _ := item.ValueCopy(nil)
-		result = append(result, string(change))
+		var entity map[string]interface{}
+		err := json.Unmarshal(change, &entity)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, entity)
 	}
-	return result
+	return result, nil
 }
