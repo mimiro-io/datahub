@@ -44,16 +44,16 @@ func NewLookup(s store.BadgerStore) (Lookup, error) {
 //	{
 //	    "dataset1": {
 //	        "changes": [
-//	            "{\"id\":\"ns3:3\",\"internalId\":8,\"recorded\":1662648998417816245,\"refs\":{},\"props\":{\"ns3:name\":\"Frank\"}}"
+//	            {"id":"ns3:3","internalId":8,"recorded":1662648998417816245,"refs":{},"props":{"ns3:name":"Frank"}}
 //	        ],
-//	        "latest": "{\"id\":\"ns3:3\",\"internalId\":8,\"recorded\":1662648998417816245,\"refs\":{},\"props\":{\"ns3:name\":\"Frank\"}}"
+//	        "latest": {"id":"ns3:3","internalId":8,"recorded":1662648998417816245,"refs":{},"props":{"ns3:name":"Frank"}}
 //	    },
 //	    "dataset2": {
 //	        "changes": [
-//	            "{\"id\":\"ns3:3\",\"internalId\":8,\"recorded\":1663074960494865060,\"refs\":{},\"props\":{\"ns3:name\":\"Frank\"}}",
-//	            "{\"id\":\"ns3:3\",\"internalId\":8,\"recorded\":1663075373488961084,\"refs\":{},\"props\":{\"ns3:name\":\"Frank\",\"ns4:extra\":{\"refs\":{},\"props\":{}}}}"
+//	            {"id":"ns3:3","internalId":8,"recorded":1663074960494865060,"refs":{},"props":{"ns3:name":"Frank"}},
+//	            {"id":"ns3:3","internalId":8,"recorded":1663075373488961084,"refs":{},"props":{"ns3:name":"Frank","ns4:extra":{"refs":{},"props":{}}}}
 //	        ],
-//	        "latest": "{\"id\":\"ns3:3\",\"internalId\":8,\"recorded\":1663075373488961084,\"refs\":{},\"props\":{\"ns3:name\":\"Frank\",\"ns4:extra\":{\"refs\":{},\"props\":{}}}}"
+//	        "latest": {"id":"ns3:3","internalId":8,"recorded":1663075373488961084,"refs":{},"props":{"ns3:name":"Frank","ns4:extra":{"refs":{},"props":{}}}}
 //	    },
 //	}
 func (l Lookup) Details(id string, datasetNames []string) (map[string]interface{}, error) {
