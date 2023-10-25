@@ -543,6 +543,7 @@ func (s *Store) mergePartials(partials []*Entity) *Entity {
 
 func (s *Store) createMultiOriginEntity(partials []*Entity) *Entity {
 	result := &Entity{}
+	result.ID = partials[0].ID
 	result.Properties = make(map[string]interface{})
 	propKey := "http://data.mimiro.io/core/partials"
 	result.Properties[propKey] = make([]interface{}, 0)
