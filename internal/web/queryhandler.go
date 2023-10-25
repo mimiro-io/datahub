@@ -55,6 +55,7 @@ type Query struct {
 	Details          bool     `json:"details"`
 	Limit            int      `json:"limit"`
 	Continuations    []string `json:"continuations"`
+	NoPartialMerging bool     `json:"noPartialMerging"`
 }
 
 type NamespacePrefix struct {
@@ -205,7 +206,7 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 	}
 
 	if query.EntityID != "" {
-		entity, err := handler.store.GetEntity(query.EntityID, query.Datasets)
+		entity, err := handler.store.GetEntity(query.EntityID, query.Datasets, !query.NoPartialMerging)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
@@ -236,7 +237,7 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
-		queryresult, err := handler.store.GetManyRelatedEntitiesAtTime(cont, query.Limit)
+		queryresult, err := handler.store.GetManyRelatedEntitiesAtTime(cont, query.Limit, !query.NoPartialMerging)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
@@ -253,7 +254,7 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 		return c.JSON(http.StatusOK, result)
 	} else {
 		// do query
-		queryresult, err := handler.store.GetManyRelatedEntitiesBatch(query.StartingEntities, query.Predicate, query.Inverse, query.Datasets, query.Limit)
+		queryresult, err := handler.store.GetManyRelatedEntitiesBatch(query.StartingEntities, query.Predicate, query.Inverse, query.Datasets, query.Limit, !query.NoPartialMerging)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}

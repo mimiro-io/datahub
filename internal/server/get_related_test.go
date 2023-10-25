@@ -67,7 +67,7 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 1, friends: []int{3, 2, 4}},
 			}))
 			start := []string{peopleNamespacePrefix + ":person-1"}
-			result, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			result, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(result.Cont).To(BeZero())
 			Expect(len(result.Relations)).To(Equal(3), "person-1 points to p2, p3 and (empty) p4")
@@ -78,22 +78,22 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 			Expect(result.Relations[2].RelatedEntity.ID).To(Equal(peopleNamespacePrefix + ":person-2"))
 			Expect(result.Relations[2].RelatedEntity.Recorded).NotTo(BeZero(), "make sure person-2 is an real entity")
 
-			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 1)
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 1, true)
 			Expect(err).To(BeNil())
 			Expect(len(result.Cont)).To(Equal(1))
 			Expect(len(result.Relations)).To(Equal(1))
 
-			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 2)
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 2, true)
 			Expect(err).To(BeNil())
 			Expect(len(result.Cont)).To(Equal(1))
 			Expect(len(result.Relations)).To(Equal(2))
 
-			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 3)
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 3, true)
 			Expect(err).To(BeNil())
 			Expect(len(result.Cont)).To(Equal(0))
 			Expect(len(result.Relations)).To(Equal(3))
 
-			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 4)
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 4, true)
 			Expect(err).To(BeNil())
 			Expect(len(result.Cont)).To(Equal(0))
 			Expect(len(result.Relations)).To(Equal(3))
@@ -110,42 +110,42 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 			}))
 			// get everything
 			start := []string{peopleNamespacePrefix + ":person-1", peopleNamespacePrefix + ":person-2"}
-			result, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			result, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(len(result.Cont)).To(BeZero())
 			// 3 relations from person-1 and 2 relations from person-2
 			Expect(len(result.Relations)).To(Equal(5))
 
 			// limit 1, should return first hit of first startUri
-			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 1)
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 1, true)
 			Expect(err).To(BeNil())
 			// continuations for both startUris expected
 			Expect(len(result.Cont)).To(Equal(2))
 			Expect(len(result.Relations)).To(Equal(1))
 
 			// limit 3, room for all 3 relations of first startUri
-			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 3)
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 3, true)
 			Expect(err).To(BeNil())
 			Expect(len(result.Relations)).To(Equal(3))
 			// only continuation for person-2 remains, since first startUri is exhausted
 			Expect(len(result.Cont)).To(Equal(1))
 
 			// limit 4, room for all 3 relations of first startUri plus 1 from other startUri
-			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 4)
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 4, true)
 			Expect(err).To(BeNil())
 			Expect(len(result.Relations)).To(Equal(4))
 			// only continuation for person-2 remains, since first startUri is exhausted
 			Expect(len(result.Cont)).To(Equal(1))
 
 			// limit 5, room for all 3 relations of first startUri plus all 2 from other startUri
-			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 5)
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 5, true)
 			Expect(err).To(BeNil())
 			Expect(len(result.Relations)).To(Equal(5))
 			// only continuation for person-2 remains, since first startUri is exhausted
 			Expect(len(result.Cont)).To(Equal(0))
 
 			// limit 6, room for all 3 relations of first startUri plus all 2 from other startUri
-			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 6)
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 6, true)
 			Expect(err).To(BeNil())
 			Expect(len(result.Relations)).To(Equal(5))
 			// only continuation for person-2 remains, since first startUri is exhausted
@@ -163,19 +163,19 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 			}))
 			// get everything, p2 points to p1; and p1+p3 point to p2
 			start := []string{peopleNamespacePrefix + ":person-1", peopleNamespacePrefix + ":person-2"}
-			result, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			result, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(result.Cont).To(BeZero())
 			Expect(len(result.Relations)).To(Equal(3))
 			// limit 1, should return first hit of first startUri
-			result, err = store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 1)
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 1, true)
 			Expect(err).To(BeNil())
 			// person-1 is exhausted, only expect one cont token
 			Expect(len(result.Cont)).To(Equal(1))
 			Expect(len(result.Relations)).To(Equal(1))
 
 			// limit 2, room for all 1 relations of first startUri plus 1 from other startUri
-			result, err = store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 2)
+			result, err = store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 2, true)
 			Expect(err).To(BeNil())
 			// one token for rest of person-2 expected
 			Expect(len(result.Cont)).To(Equal(1))
@@ -188,12 +188,12 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 			{id: 2, friends: []int{11, 12, 13, 14, 15, 16, 17, 18, 19, 20}},
 		}))
 		start := []string{pref + ":person-1", pref + ":person-2"}
-		queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+		queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 		Expect(err).To(BeNil())
 		Expect(len(queryResult.Cont)).To(Equal(0))
 		Expect(len(queryResult.Relations)).To(Equal(19))
 
-		queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 2)
+		queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 2, true)
 		Expect(err).To(BeNil())
 		Expect(len(queryResult.Cont)).To(Equal(2))
 		Expect(len(queryResult.Relations)).To(Equal(2))
@@ -201,7 +201,7 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 		Expect(queryResult.Relations[1].RelatedEntity.ID).To(Equal(pref + ":person-9"))
 		Expect(queryResult.Cont[0].RelationIndexFromKey).NotTo(BeNil())
 		startFromCont := queryResult.Cont
-		queryResult, err = store.GetManyRelatedEntitiesAtTime(startFromCont, 3)
+		queryResult, err = store.GetManyRelatedEntitiesAtTime(startFromCont, 3, true)
 		Expect(err).To(BeNil())
 		Expect(len(queryResult.Cont)).To(Equal(2))
 		Expect(len(queryResult.Relations)).To(Equal(3))
@@ -213,13 +213,13 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 		startFromCont = queryResult.Cont
 
 		// get get next 3, leaving exactly 1 result remaining for 1st startURI
-		queryResult, err = store.GetManyRelatedEntitiesAtTime(startFromCont, 3)
+		queryResult, err = store.GetManyRelatedEntitiesAtTime(startFromCont, 3, true)
 		Expect(err).To(BeNil())
 		Expect(len(queryResult.Cont)).To(Equal(2))
 		Expect(len(queryResult.Relations)).To(Equal(3))
 		Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal(pref + ":person-5"))
 		Expect(queryResult.Relations[2].RelatedEntity.ID).To(Equal(pref + ":person-3"))
-		queryResult, err = store.GetManyRelatedEntitiesAtTime(queryResult.Cont, 0)
+		queryResult, err = store.GetManyRelatedEntitiesAtTime(queryResult.Cont, 0, true)
 		Expect(err).To(BeNil())
 		Expect(queryResult.Cont).To(BeNil())
 		Expect(len(queryResult.Relations)).To(Equal(11))
@@ -227,13 +227,13 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 		Expect(queryResult.Relations[10].RelatedEntity.ID).To(Equal(pref + ":person-11"))
 
 		// get all of remaining items from 1st startURI
-		queryResult, err = store.GetManyRelatedEntitiesAtTime(startFromCont, 4)
+		queryResult, err = store.GetManyRelatedEntitiesAtTime(startFromCont, 4, true)
 		Expect(err).To(BeNil())
 		Expect(len(queryResult.Cont)).To(Equal(1), "1st exhausted query, one remaining")
 		Expect(len(queryResult.Relations)).To(Equal(4))
 		Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal(pref + ":person-5"))
 		Expect(queryResult.Relations[3].RelatedEntity.ID).To(Equal(pref + ":person-2"))
-		queryResult, err = store.GetManyRelatedEntitiesAtTime(queryResult.Cont, 0)
+		queryResult, err = store.GetManyRelatedEntitiesAtTime(queryResult.Cont, 0, true)
 		Expect(err).To(BeNil())
 		Expect(queryResult.Cont).To(BeNil())
 		Expect(len(queryResult.Relations)).To(Equal(10))
@@ -241,13 +241,13 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 		Expect(queryResult.Relations[9].RelatedEntity.ID).To(Equal(pref + ":person-11"))
 
 		// get all of remaining items from 1st startURI plus 1st item from 2nd startURI
-		queryResult, err = store.GetManyRelatedEntitiesAtTime(startFromCont, 5)
+		queryResult, err = store.GetManyRelatedEntitiesAtTime(startFromCont, 5, true)
 		Expect(err).To(BeNil())
 		Expect(len(queryResult.Cont)).To(Equal(1), "1st exhausted query, one remaining")
 		Expect(len(queryResult.Relations)).To(Equal(5))
 		Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal(pref + ":person-5"))
 		Expect(queryResult.Relations[4].RelatedEntity.ID).To(Equal(pref + ":person-20"))
-		queryResult, err = store.GetManyRelatedEntitiesAtTime(queryResult.Cont, 0)
+		queryResult, err = store.GetManyRelatedEntitiesAtTime(queryResult.Cont, 0, true)
 		Expect(err).To(BeNil())
 		Expect(queryResult.Cont).To(BeNil())
 		Expect(len(queryResult.Relations)).To(Equal(9))
@@ -267,7 +267,7 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 
 		// make sure we find person 4 as friend now, even though it is deleted from family.
 		start := []string{pref + ":person-1"}
-		queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+		queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 		Expect(err).To(BeNil())
 		Expect(queryResult.Relations).To(HaveLen(4))
 		Expect(queryResult.Relations[0].PredicateURI).To(Equal("ns3:Family"))
@@ -288,13 +288,13 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 1, deleted: false, friends: []int{2}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, []string{"friends"}, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, []string{"friends"}, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].PredicateURI).To(Equal("ns3:Friend"))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-1"))
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].PredicateURI).To(Equal("ns3:Friend"))
@@ -310,14 +310,14 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 1, deleted: false, friends: []int{2}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, []string{"friends"}, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, []string{"friends"}, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].PredicateURI).To(Equal("ns3:Friend"))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-1"))
 			Expect(queryResult.Relations[0].RelatedEntity.IsDeleted).To(BeFalse())
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].PredicateURI).To(Equal("ns3:Friend"))
@@ -330,11 +330,11 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 1, deleted: true, friends: []int{2}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, []string{"friends"}, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, []string{"friends"}, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 		})
@@ -349,11 +349,11 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 1, deleted: true, friends: []int{2}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, []string{"friends"}, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, []string{"friends"}, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 		})
@@ -369,14 +369,14 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 2, friends: []int{}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-1"))
 			Expect(queryResult.Relations[0].RelatedEntity.Properties[pref+":Name"]).To(Equal([]any{"Person 1", "Person 1"}), "merged properties expected")
 			Expect(queryResult.Relations[0].RelatedEntity.IsDeleted).To(BeFalse())
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-2"))
@@ -392,14 +392,14 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 2, friends: []int{}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-1"))
 			Expect(queryResult.Relations[0].RelatedEntity.Properties[pref+":Name"]).To(Equal("Person 1"), "only one partial expected")
 			Expect(queryResult.Relations[0].RelatedEntity.IsDeleted).To(BeFalse())
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-2"))
@@ -416,14 +416,14 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 1, deleted: true, friends: []int{2}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-1"))
 			Expect(queryResult.Relations[0].RelatedEntity.Properties[pref+":Name"]).To(Equal("Person 1"), "only one partial expected")
 			Expect(queryResult.Relations[0].RelatedEntity.IsDeleted).To(BeFalse())
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-2"))
@@ -443,14 +443,14 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 2, friends: []int{}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-1"))
 			Expect(queryResult.Relations[0].RelatedEntity.Properties[pref+":Name"]).To(Equal("Person 1"), "only one partial expected")
 			Expect(queryResult.Relations[0].RelatedEntity.IsDeleted).To(BeFalse())
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-2"))
@@ -466,14 +466,14 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 2, friends: []int{}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-1"))
 			Expect(queryResult.Relations[0].RelatedEntity.Properties[pref+":Name"]).To(Equal("Person 1"), "only one partial expected")
 			Expect(queryResult.Relations[0].RelatedEntity.IsDeleted).To(BeFalse())
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-2"))
@@ -490,14 +490,14 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 2, friends: []int{}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-1"))
 			Expect(queryResult.Relations[0].RelatedEntity.Properties[pref+":Name"]).To(Equal("Person 1"), "only one partial expected")
 			Expect(queryResult.Relations[0].RelatedEntity.IsDeleted).To(BeFalse())
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-2"))
@@ -517,14 +517,14 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 2, friends: []int{}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-1"))
 			Expect(queryResult.Relations[0].RelatedEntity.Properties[pref+":Name"]).To(Equal("Person 1"), "only one partial expected")
 			Expect(queryResult.Relations[0].RelatedEntity.IsDeleted).To(BeFalse())
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-2"))
@@ -540,11 +540,11 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 2, friends: []int{}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 		})
@@ -562,11 +562,11 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 2, friends: []int{}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 		})
@@ -581,11 +581,11 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 2, friends: []int{}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 		})
@@ -603,11 +603,11 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 2, friends: []int{}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 		})
@@ -625,11 +625,11 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 2, friends: []int{}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 		})
@@ -644,11 +644,11 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 1, deleted: true, friends: []int{2}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 		})
@@ -666,11 +666,11 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 2, friends: []int{}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 		})
@@ -692,11 +692,11 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 2, friends: []int{}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 		})
@@ -718,11 +718,11 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 2, friends: []int{}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 		})
@@ -756,14 +756,14 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 2, friends: []int{}},
 			}))
 			start := []string{pref + ":person-2"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-1"))
 			Expect(queryResult.Relations[0].RelatedEntity.Properties[pref+":Name"]).To(Equal("Person 1"), "only one partial expected")
 			Expect(queryResult.Relations[0].RelatedEntity.IsDeleted).To(BeFalse())
 			start = []string{pref + ":person-1"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-2"))
@@ -800,7 +800,7 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 					{id: 2, friends: []int{}},
 				})) */
 			start := []string{pref + ":person-1"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-2"))
@@ -840,7 +840,7 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 					{id: 2, friends: []int{}},
 				})) */
 			start := []string{pref + ":person-1"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-2"))
@@ -883,7 +883,7 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 					{id: 2, friends: []int{}},
 				})) */
 			start := []string{pref + ":person-1"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 		})
@@ -920,7 +920,7 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 					{id: 2, friends: []int{}},
 				})) */
 			start := []string{pref + ":person-1"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-2"))
@@ -958,7 +958,7 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 					{id: 2, friends: []int{}},
 				})) */
 			start := []string{pref + ":person-1"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(2))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-1"))
@@ -1008,7 +1008,7 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 					{id: 2, friends: []int{}},
 				})) */
 			start := []string{pref + ":person-1"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(2))
 		})
@@ -1047,10 +1047,10 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 					{id: 2, friends: []int{}},
 				})) */
 			start := []string{pref + ":person-1"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, []string{"people"}, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, []string{"people"}, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", true, []string{"family"}, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", true, []string{"family"}, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 		})
@@ -1063,12 +1063,12 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 2, friends: []int{}},
 			}))
 			start := []string{pref + ":person-1"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, pref+":Friend", false, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, pref+":Friend", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-2"))
 			start = []string{pref + ":person-2"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, pref+":Friend", true, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, pref+":Friend", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-1"))
@@ -1080,11 +1080,11 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 1, deleted: true, friends: []int{2}, family: []int{2}},
 			}))
 			start := []string{pref + ":person-1"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, pref+":Friend", false, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, pref+":Friend", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 			start = []string{pref + ":person-2"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, pref+":Friend", true, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, pref+":Friend", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(0))
 		})
@@ -1099,13 +1099,13 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 2, friends: []int{}},
 			}))
 			start := []string{pref + ":person-1"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, pref+":Friend", false, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, pref+":Friend", false, nil, 0, true)
 			Expect(err).To(BeNil())
 
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-2"))
 			start = []string{pref + ":person-2"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, pref+":Friend", true, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, pref+":Friend", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-1"))
@@ -1120,12 +1120,12 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 2, friends: []int{}},
 			}))
 			start := []string{pref + ":person-1"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, pref+":Friend", false, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, pref+":Friend", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-2"))
 			start = []string{pref + ":person-2"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, pref+":Friend", true, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, pref+":Friend", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-1"))
@@ -1136,7 +1136,7 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 				{id: 2, friends: []int{}},
 			}))
 			start := []string{pref + ":person-1"}
-			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0)
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", false, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(2))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-2"))
@@ -1144,7 +1144,7 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 			Expect(queryResult.Relations[1].RelatedEntity.ID).To(Equal("ns3:person-2"))
 			Expect(queryResult.Relations[1].RelatedEntity.Properties[pref+":Name"]).To(Equal("Person 2"))
 			start = []string{pref + ":person-2"}
-			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0)
+			queryResult, err = store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, true)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(2))
 			Expect(queryResult.Relations[0].RelatedEntity.ID).To(Equal("ns3:person-1"))

@@ -336,7 +336,7 @@ func (multiSource *MultiSource) processDependency(ctx context.Context, dep Depen
 							// a new API function which includes the target dataset in the bagder search key this would be more performant in
 							// cases where the ID exists in many datasets. Even better if we can have an API function version that allows
 							// reuse of a common read transaction.
-							mainEntity, err4 := multiSource.Store.GetEntityWithInternalID(e, targetDs)
+							mainEntity, err4 := multiSource.Store.GetEntityWithInternalID(e, targetDs, true)
 							if err4 != nil {
 								return fmt.Errorf("could not load entity %+v from dataset %v: %w", e, multiSource.DatasetName, err4)
 							}
