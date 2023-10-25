@@ -659,7 +659,7 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 				if !e.IsDeleted {
 					if !mergePartials {
 						// add dataset to entity
-						ds, ok := s.datasetsByInternalID.Load(currentDatasetID)
+						ds, ok := s.datasetsByInternalID.Load(previousDatasetID)
 						if ok {
 							e.Properties["http://data.mimiro.io/core/datasetname"] = (ds.(*Dataset)).ID
 						} else {
@@ -692,6 +692,16 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 			e.References = make(map[string]interface{})
 		}
 		if !e.IsDeleted {
+			if !mergePartials {
+				// add dataset to entity
+				ds, ok := s.datasetsByInternalID.Load(previousDatasetID)
+				if ok {
+					e.Properties["http://data.mimiro.io/core/datasetname"] = (ds.(*Dataset)).ID
+				} else {
+					return nil, errors.New("dataset not found")
+				}
+			}
+
 			partials = append(partials, e)
 		} else {
 			hasDeleted = true
