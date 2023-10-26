@@ -86,7 +86,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			[]string{"http://data.mimiro.io/people/person-1"},
 			peopleNamespacePrefix+":Friend",
 			false,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(2))
@@ -96,7 +96,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			[]string{"http://data.mimiro.io/people/person-2"},
 			peopleNamespacePrefix+":Friend",
 			true,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(1))
@@ -116,7 +116,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			[]string{"http://data.mimiro.io/people/person-1"},
 			peopleNamespacePrefix+":Friend",
 			false,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(1))
@@ -125,7 +125,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			[]string{"http://data.mimiro.io/people/person-3"},
 			peopleNamespacePrefix+":Friend",
 			true,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(1))
@@ -134,7 +134,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			[]string{"http://data.mimiro.io/people/person-2"},
 			peopleNamespacePrefix+":Friend",
 			true,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(0))
@@ -161,7 +161,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			[]string{"http://data.mimiro.io/people/person-1"},
 			peopleNamespacePrefix+":Friend",
 			false,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(1))
@@ -184,7 +184,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			[]string{"http://data.mimiro.io/people/person-1"},
 			peopleNamespacePrefix+":Friend",
 			false,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(0))
@@ -218,7 +218,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			[]string{"http://data.mimiro.io/people/person-1"},
 			peopleNamespacePrefix+":Friend",
 			false,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(1))
@@ -230,7 +230,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			[]string{"http://data.mimiro.io/people/person-1"},
 			peopleNamespacePrefix+":Friend",
 			true,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(1))
@@ -254,7 +254,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			[]string{"http://data.mimiro.io/people/person-1"},
 			peopleNamespacePrefix+":Friend",
 			false,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(0))
@@ -264,7 +264,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			[]string{"http://data.mimiro.io/people/person-3"},
 			peopleNamespacePrefix+":Friend",
 			true,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(0))
@@ -274,7 +274,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			[]string{"http://data.mimiro.io/people/person-1"},
 			peopleNamespacePrefix+":Friend",
 			true,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(1))
@@ -317,7 +317,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			[]string{"http://data.mimiro.io/people/person-1"},
 			peopleNamespacePrefix+":Friend",
 			false,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(1))
@@ -329,7 +329,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			[]string{"http://data.mimiro.io/people/person-1"},
 			peopleNamespacePrefix+":Friend",
 			true,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(1))
@@ -355,7 +355,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			[]string{"http://data.mimiro.io/people/person-1"},
 			peopleNamespacePrefix+":Friend",
 			false,
-			nil,
+			nil, true,
 		)
 		// result, err = store.GetManyRelatedEntities( []string{"http://data.mimiro.io/people/person-1"}, "*", false, nil)
 		Expect(err).To(BeNil())
@@ -367,7 +367,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			[]string{"http://data.mimiro.io/people/person-1"},
 			peopleNamespacePrefix+":Friend",
 			true,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(1), "Expected still to find person-2 as reverse friend")
@@ -401,7 +401,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			[]string{"http://data.mimiro.io/people/person-1"},
 			peopleNamespacePrefix+":Friend",
 			false,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(0))
@@ -411,7 +411,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			[]string{"http://data.mimiro.io/people/person-1"},
 			peopleNamespacePrefix+":Friend",
 			true,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(1))
@@ -423,7 +423,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			[]string{"http://data.mimiro.io/people/person-3"},
 			peopleNamespacePrefix+":Friend",
 			true,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(0))
@@ -457,15 +457,15 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 		err := ds.StoreEntities(entities)
 		Expect(err).To(BeNil())
 
-		results, err := store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeURI, false, []string{})
+		results, err := store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeURI, false, []string{}, true)
 		Expect(err).To(BeNil())
 		Expect(len(results)).To(Equal(1))
 
-		invresults, err := store.getRelated("http://data.mimiro.io/model/Person", RdfTypeURI, true, []string{})
+		invresults, err := store.getRelated("http://data.mimiro.io/model/Person", RdfTypeURI, true, []string{}, true)
 		Expect(err).To(BeNil())
 		Expect(len(invresults)).To(Equal(5))
 
-		invresults, err = store.getRelated("http://data.mimiro.io/model/Person", "*", true, []string{})
+		invresults, err = store.getRelated("http://data.mimiro.io/model/Person", "*", true, []string{}, true)
 		Expect(err).To(BeNil())
 		Expect(len(invresults)).To(Equal(5))
 
@@ -483,11 +483,11 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 
 		time0 := time.Now().UnixNano()
 
-		invresults, err = store.getRelated("http://data.mimiro.io/model/Person", RdfTypeURI, true, []string{})
+		invresults, err = store.getRelated("http://data.mimiro.io/model/Person", RdfTypeURI, true, []string{}, true)
 		Expect(err).To(BeNil())
 		Expect(len(invresults)).To(Equal(0))
 
-		results, err = store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeURI, false, []string{})
+		results, err = store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeURI, false, []string{}, true)
 		Expect(err).To(BeNil())
 		Expect(len(results)).To(Equal(0))
 
@@ -504,11 +504,11 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 		err = ds.StoreEntities(entities)
 		Expect(err).To(BeNil())
 
-		invresults, err = store.getRelated("http://data.mimiro.io/model/Person", RdfTypeURI, true, []string{})
+		invresults, err = store.getRelated("http://data.mimiro.io/model/Person", RdfTypeURI, true, []string{}, true)
 		Expect(err).To(BeNil())
 		Expect(len(invresults)).To(Equal(5))
 
-		results, err = store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeURI, false, []string{})
+		results, err = store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeURI, false, []string{}, true)
 		Expect(err).To(BeNil())
 		Expect(len(results)).To(Equal(1))
 
@@ -1090,15 +1090,15 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 		err := ds.StoreEntities(entities)
 		Expect(err).To(BeNil())
 
-		results, err := store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeURI, false, []string{})
+		results, err := store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeURI, false, []string{}, true)
 		Expect(err).To(BeNil())
 		Expect(len(results)).To(Equal(1))
 
-		invresults, err := store.getRelated("http://data.mimiro.io/model/Person", RdfTypeURI, true, []string{})
+		invresults, err := store.getRelated("http://data.mimiro.io/model/Person", RdfTypeURI, true, []string{}, true)
 		Expect(err).To(BeNil())
 		Expect(len(invresults)).To(Equal(5))
 
-		invresults, err = store.getRelated("http://data.mimiro.io/model/Person", "*", true, []string{})
+		invresults, err = store.getRelated("http://data.mimiro.io/model/Person", "*", true, []string{}, true)
 		Expect(err).To(BeNil())
 		Expect(len(invresults)).To(Equal(5))
 
@@ -1114,11 +1114,11 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 		err = ds.StoreEntities(entities)
 		Expect(err).To(BeNil())
 
-		invresults, err = store.getRelated("http://data.mimiro.io/model/Person", RdfTypeURI, true, []string{})
+		invresults, err = store.getRelated("http://data.mimiro.io/model/Person", RdfTypeURI, true, []string{}, true)
 		Expect(err).To(BeNil())
 		Expect(len(invresults)).To(Equal(0))
 
-		results, err = store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeURI, false, []string{})
+		results, err = store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeURI, false, []string{}, true)
 		Expect(err).To(BeNil())
 		Expect(len(results)).To(Equal(0))
 
@@ -1135,11 +1135,11 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 		err = ds.StoreEntities(entities)
 		Expect(err).To(BeNil())
 
-		invresults, err = store.getRelated("http://data.mimiro.io/model/Person", RdfTypeURI, true, []string{})
+		invresults, err = store.getRelated("http://data.mimiro.io/model/Person", RdfTypeURI, true, []string{}, true)
 		Expect(err).To(BeNil())
 		Expect(len(invresults)).To(Equal(5))
 
-		results, err = store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeURI, false, []string{})
+		results, err = store.getRelated("http://data.mimiro.io/people/p-1", RdfTypeURI, false, []string{}, true)
 		Expect(err).To(BeNil())
 		Expect(len(results)).To(Equal(1))
 	})
@@ -1291,7 +1291,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			queryIds,
 			"http://data.mimiro.io/people/worksfor",
 			false,
-			[]string{},
+			[]string{}, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(100))
@@ -1304,7 +1304,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			queryIds,
 			"http://data.mimiro.io/people/worksfor",
 			true,
-			[]string{},
+			[]string{}, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(numOfEmployees * 2))
@@ -1345,7 +1345,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			queryIds,
 			"http://data.mimiro.io/people/worksfor",
 			false,
-			[]string{},
+			[]string{}, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(1))
@@ -1466,7 +1466,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 			[]string{peopleNamespacePrefix + ":person-1"},
 			"http://data.mimiro.io/people/worksfor",
 			false,
-			[]string{},
+			[]string{}, true,
 		)
 		Expect(len(result)).
 			To(Equal(1), "expected 1 relation to be found. both the people and workhistory datasets point to the same company.")
@@ -1484,7 +1484,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 			[]string{peopleNamespacePrefix + ":person-1"},
 			"http://data.mimiro.io/people/worksfor",
 			false,
-			[]string{PEOPLE},
+			[]string{PEOPLE}, true,
 		)
 		Expect(len(result)).To(Equal(1), "expected 1 relation to be found in people dataset (not in workHistory)")
 
@@ -1500,7 +1500,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 			[]string{peopleNamespacePrefix + ":person-1"},
 			"http://data.mimiro.io/people/worksfor",
 			false,
-			[]string{COMPANIES},
+			[]string{COMPANIES}, true,
 		)
 		Expect(len(result)).To(Equal(0), "expected 0 relation to be found (people and history are excluded)")
 	})
@@ -1512,7 +1512,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 			[]string{peopleNamespacePrefix + ":person-1"},
 			"http://data.mimiro.io/people/worksfor",
 			false,
-			[]string{"bogus"},
+			[]string{"bogus"}, true,
 		)
 		Expect(len(result)).To(Equal(1), "expected 1 relation (company-1)")
 
@@ -1529,7 +1529,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 			[]string{peopleNamespacePrefix + ":person-1"},
 			"http://data.mimiro.io/people/worksfor",
 			false,
-			[]string{HISTORY},
+			[]string{HISTORY}, true,
 		)
 		Expect(len(result)).To(Equal(1), "expected 1 relation to be found in people dataset (not in workHistory)")
 
@@ -1545,7 +1545,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 			[]string{companyNamespacePrefix + ":company-1"},
 			"http://data.mimiro.io/people/worksfor",
 			true,
-			[]string{},
+			[]string{}, true,
 		)
 		Expect(len(result)).
 			To(Equal(3), "there are 6 relations, 3 in dataset people and 3 owned by history. all relations come from total of 3 people")
@@ -1569,7 +1569,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 			[]string{companyNamespacePrefix + ":company-1"},
 			"http://data.mimiro.io/people/worksfor",
 			true,
-			[]string{PEOPLE},
+			[]string{PEOPLE}, true,
 		)
 		Expect(len(result)).To(Equal(3), "expected 3 relations to be found in people dataset (not in workHistory)")
 
@@ -1589,7 +1589,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 			[]string{companyNamespacePrefix + ":company-1"},
 			"http://data.mimiro.io/people/worksfor",
 			true,
-			[]string{COMPANIES},
+			[]string{COMPANIES}, true,
 		)
 		Expect(len(result)).To(Equal(0))
 	})
@@ -1601,7 +1601,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 			[]string{peopleNamespacePrefix + ":person-4"},
 			"http://data.mimiro.io/people/workedfor",
 			false,
-			[]string{},
+			[]string{}, true,
 		)
 		Expect(len(result)).To(Equal(2), "expected 2 relations to be found in history dataset")
 
@@ -1619,7 +1619,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 			[]string{peopleNamespacePrefix + ":person-4"},
 			"http://data.mimiro.io/people/workedfor",
 			false,
-			[]string{HISTORY},
+			[]string{HISTORY}, true,
 		)
 		Expect(len(result)).To(Equal(2), "expected 2 relations to be found in history dataset")
 
@@ -1637,7 +1637,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 			[]string{companyNamespacePrefix + ":company-2"},
 			"http://data.mimiro.io/people/workedfor",
 			true,
-			[]string{},
+			[]string{}, true,
 		)
 		Expect(len(result)).To(Equal(2), "expected 2 people to be found from history dataset")
 
@@ -1668,7 +1668,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 				[]string{companyNamespacePrefix + ":company-2"},
 				"http://data.mimiro.io/people/workedfor",
 				true,
-				[]string{HISTORY},
+				[]string{HISTORY}, true,
 			)
 			Expect(len(result)).To(Equal(2), "expected 2 people to be found from history dataset")
 
@@ -1693,7 +1693,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 			[]string{companyNamespacePrefix + ":company-2"},
 			"http://data.mimiro.io/people/workedfor",
 			true,
-			[]string{PEOPLE, COMPANIES},
+			[]string{PEOPLE, COMPANIES}, true,
 		)
 		Expect(len(result)).To(Equal(0))
 	})
@@ -1752,21 +1752,21 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 		})
 
 		// first no datasets restriction, check that props from both employee and people dataset are merged
-		result, err := store.GetEntity(peopleNamespacePrefix+":person-1", []string{})
+		result, err := store.GetEntity(peopleNamespacePrefix+":person-1", []string{}, true)
 		Expect(err).To(BeNil())
 		Expect(result.Properties[employeeNamespacePrefix+":Title"]).To(Equal("President"),
 			"expected to merge property employees:Title into result with value 'President'")
 		Expect(result.Properties[peopleNamespacePrefix+":Name"]).To(Equal("Lisa"))
 
 		// now, restrict on dataset "people"
-		result, _ = store.GetEntity(peopleNamespacePrefix+":person-2", []string{PEOPLE})
+		result, _ = store.GetEntity(peopleNamespacePrefix+":person-2", []string{PEOPLE}, true)
 		// we should not find the Title from the employees dataset
 		Expect(result.Properties[employeeNamespacePrefix+":Title"]).To(BeNil())
 		// people:Name should be found though
 		Expect(result.Properties[peopleNamespacePrefix+":Name"]).To(Equal("Bob"))
 
 		// now, restrict on dataset "employees". now Name should be gone but title should be found
-		result, _ = store.GetEntity(peopleNamespacePrefix+":person-2", []string{EMPLOYEES})
+		result, _ = store.GetEntity(peopleNamespacePrefix+":person-2", []string{EMPLOYEES}, true)
 		Expect(result.Properties[employeeNamespacePrefix+":Title"]).To(Equal("Vice President"),
 			"expected to merge property employees:Title into result with value 'Vice President'")
 		Expect(result.Properties[peopleNamespacePrefix+":Name"]).To(BeNil())
@@ -1803,7 +1803,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 
 		// check counts after txn
 		datasets := []string{"core.Dataset"}
-		dsEntity, err := store.GetEntity(fmt.Sprintf("%s:%s", dsInfo.DatasetPrefix, "people"), datasets)
+		dsEntity, err := store.GetEntity(fmt.Sprintf("%s:%s", dsInfo.DatasetPrefix, "people"), datasets, true)
 		Expect(err).To(BeNil())
 
 		if dsEntity != nil {
@@ -1813,7 +1813,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 		}
 
 		// check that the item counts have been updated	for places
-		dsEntity, err = store.GetEntity(fmt.Sprintf("%s:%s", dsInfo.DatasetPrefix, "places"), datasets)
+		dsEntity, err = store.GetEntity(fmt.Sprintf("%s:%s", dsInfo.DatasetPrefix, "places"), datasets, true)
 		Expect(err).To(BeNil())
 
 		if dsEntity != nil {
@@ -1831,7 +1831,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 
 		// check counts after txn
 		datasets = []string{"core.Dataset"}
-		dsEntity, err = store.GetEntity(fmt.Sprintf("%s:%s", dsInfo.DatasetPrefix, people.ID), datasets)
+		dsEntity, err = store.GetEntity(fmt.Sprintf("%s:%s", dsInfo.DatasetPrefix, people.ID), datasets, true)
 		Expect(err).To(BeNil())
 
 		if dsEntity != nil {
@@ -1841,7 +1841,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 		}
 
 		// check that the item counts have been updated	for places
-		dsEntity, err = store.GetEntity(fmt.Sprintf("%s:%s", dsInfo.DatasetPrefix, "places"), datasets)
+		dsEntity, err = store.GetEntity(fmt.Sprintf("%s:%s", dsInfo.DatasetPrefix, "places"), datasets, true)
 		Expect(err).To(BeNil())
 
 		if dsEntity != nil {
@@ -1873,7 +1873,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 		Expect(err).To(BeNil(), "StoreEntities failed unexpectedly")
 
 		// get entity
-		e, err := store.GetEntity(peopleNamespacePrefix+":p1", nil)
+		e, err := store.GetEntity(peopleNamespacePrefix+":p1", nil, true)
 		Expect(err).To(BeNil(), "GetEntity failed unexpectedly")
 		Expect(e.IsDeleted).To(BeFalse())
 
@@ -1885,7 +1885,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 		err = ds.StoreEntities(entities)
 		Expect(err).To(BeNil(), "StoreEntities failed unexpectedly")
 
-		e, err = store.GetEntity("http://data.mimiro.io/people/p1", nil)
+		e, err = store.GetEntity("http://data.mimiro.io/people/p1", nil, true)
 		Expect(err).To(BeNil(), "GetEntity failed unexpectedly")
 		Expect(e.IsDeleted).To(BeTrue())
 	})

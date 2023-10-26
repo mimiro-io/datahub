@@ -791,6 +791,41 @@ var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
 			Expect(rMap[1]["id"]).To(Equal("ns3:16"))
 			Expect(rMap[1]["recorded"]).NotTo(BeZero())
 		})
+		It("can find outgoing relations from startUri and see dataset", func() {
+			payload := strings.NewReader(bananaRelations(
+				bananaRel{fromBanana: 1, toBananas: []int{2, 3}},
+				bananaRel{fromBanana: 2, toBananas: []int{3, 4, 5, 6, 7}},
+			))
+			res, err := http.Post(dsURL+"/entities", "application/json", payload)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+
+			query := map[string]any{"startingEntities": []string{"ns3:2"}, "predicate": "*", "noPartialMerging": true}
+			queryBytes, _ := json.Marshal(query)
+			res, err = http.Post(queryURL, "application/javascript", bytes.NewReader(queryBytes))
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			body, _ := io.ReadAll(res.Body)
+			var rArr []any
+			err = json.Unmarshal(body, &rArr)
+			Expect(err).To(BeNil())
+			Expect(rArr).NotTo(BeZero())
+			result := rArr[1].([]any)
+			Expect(len(result)).To(Equal(5))
+			fmt.Println(string(body))
+			Expect(result[4].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:3"))
+			Expect(result[4].([]any)[2].(map[string]any)["props"].(map[string]any)["http://data.mimiro.io/core/partials"]).To(HaveLen(1))
+			Expect(result[4].([]any)[2].(map[string]any)["props"].(map[string]any)["http://data.mimiro.io/core/partials"]).To(HaveLen(1))
+			Expect(result[4].([]any)[2].(map[string]any)["props"].(map[string]any)["http://data.mimiro.io/core/partials"].([]any)[0].(map[string]any)["props"].(map[string]any)["http://data.mimiro.io/core/datasetname"]).To(Equal("bananas"))
+
+			Expect(result[3].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:4"))
+			Expect(result[2].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:5"))
+			Expect(result[1].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:6"))
+			Expect(result[0].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:7"))
+		})
+
 		It("can find outgoing relations from startUri", func() {
 			payload := strings.NewReader(bananaRelations(
 				bananaRel{fromBanana: 1, toBananas: []int{2, 3}},

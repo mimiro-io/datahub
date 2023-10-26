@@ -49,6 +49,7 @@ type qresult struct {
 type Store struct {
 	database             *badger.DB
 	datasets             *sync.Map              // concurrent map of datasets
+	datasetsByInternalID *sync.Map              // concurrent map of datasets
 	deletedDatasets      map[uint32]bool        // list of datasets to be garbage collected
 	storeLocation        string                 // local location of data folder
 	nextDatasetID        uint32                 // the next internal id for a dataset
@@ -61,8 +62,8 @@ type Store struct {
 	fullsyncLeaseTimeout time.Duration
 	blockCacheSize       int64
 	valueLogFileSize     int64
-	maxCompactionLevels int
-	SlowLogThreshold    time.Duration
+	maxCompactionLevels  int
+	SlowLogThreshold     time.Duration
 }
 
 type BadgerLogger struct { // we use this to implement the Badger Logger interface
@@ -83,6 +84,7 @@ func NewStore(lc fx.Lifecycle, env *conf.Env, statsdClient statsd.ClientInterfac
 	}
 	store := &Store{
 		datasets:             &sync.Map{},
+		datasetsByInternalID: &sync.Map{},
 		deletedDatasets:      make(map[uint32]bool),
 		storeLocation:        env.StoreLocation,
 		logger:               env.Logger.Named("store"),
@@ -454,6 +456,7 @@ func (s *Store) loadDatasets() error {
 		ds := i.(*Dataset)
 		ds.store = s
 		s.datasets.Store(ds.ID, ds)
+		s.datasetsByInternalID.Store(ds.InternalID, ds)
 		return nil
 	})
 }
@@ -538,11 +541,25 @@ func (s *Store) mergePartials(partials []*Entity) *Entity {
 	return nil
 }
 
+func (s *Store) createMultiOriginEntity(partials []*Entity) *Entity {
+	result := &Entity{}
+	result.ID = partials[0].ID
+	result.Properties = make(map[string]interface{})
+	propKey := "http://data.mimiro.io/core/partials"
+	result.Properties[propKey] = make([]interface{}, 0)
+
+	for _, partial := range partials {
+		result.Properties[propKey] = append(result.Properties[propKey].([]interface{}), partial)
+	}
+
+	return result
+}
+
 func (s *Store) IsCurie(uri string) bool {
 	return strings.HasPrefix(uri, "ns")
 }
 
-func (s *Store) GetEntity(uri string, datasets []string) (*Entity, error) {
+func (s *Store) GetEntity(uri string, datasets []string, mergePartials bool) (*Entity, error) {
 	var curie string
 	var err error
 	if strings.HasPrefix(uri, "ns") {
@@ -564,7 +581,7 @@ func (s *Store) GetEntity(uri string, datasets []string) (*Entity, error) {
 		return nil, nil // todo: maybe an empty entity
 	}
 	scope := s.DatasetsToInternalIDs(datasets)
-	entity, err := s.GetEntityWithInternalID(internalID, scope)
+	entity, err := s.GetEntityWithInternalID(internalID, scope, mergePartials)
 	if err != nil {
 		return nil, err
 	}
@@ -575,6 +592,7 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 	internalID uint64,
 	at int64,
 	targetDatasetIds []uint32,
+	mergePartials bool,
 ) (*Entity, error) {
 	/*
 		binary.BigEndian.PutUint16(entityIdBuffer, ENTITY_ID_TO_JSON_INDEX_ID)
@@ -617,9 +635,7 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 
 		// check if dataset has been deleted, or must be excluded
 		datasetDeleted := s.deletedDatasets[currentDatasetID]
-		datasetIncluded := len(
-			targetDatasetIds,
-		) == 0 // no specified datasets means no restriction - all datasets are allowed
+		datasetIncluded := len(targetDatasetIds) == 0 // no specified datasets means no restriction - all datasets are allowed
 		if !datasetIncluded {
 			for _, id := range targetDatasetIds {
 				if id == currentDatasetID {
@@ -642,6 +658,15 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 					return nil, err
 				}
 				if !e.IsDeleted {
+					if !mergePartials {
+						// add dataset to entity
+						ds, ok := s.datasetsByInternalID.Load(previousDatasetID)
+						if ok {
+							e.Properties["http://data.mimiro.io/core/datasetname"] = (ds.(*Dataset)).ID
+						} else {
+							return nil, errors.New("dataset not found")
+						}
+					}
 					partials = append(partials, e)
 				} else {
 					hasDeleted = true
@@ -668,34 +693,49 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 			e.References = make(map[string]interface{})
 		}
 		if !e.IsDeleted {
+			if !mergePartials {
+				// add dataset to entity
+				ds, ok := s.datasetsByInternalID.Load(previousDatasetID)
+				if ok {
+					e.Properties["http://data.mimiro.io/core/datasetname"] = (ds.(*Dataset)).ID
+				} else {
+					return nil, errors.New("dataset not found")
+				}
+			}
+
 			partials = append(partials, e)
 		} else {
 			hasDeleted = true
 		}
 	}
 	// merge partials
-	mergedEntity := s.mergePartials(partials)
+	var resultEntity *Entity
+	if mergePartials {
+		resultEntity = s.mergePartials(partials)
+	} else {
+		resultEntity = s.createMultiOriginEntity(partials)
+	}
 
 	// if no entity for this id then return the empty object
-	if mergedEntity == nil {
-		mergedEntity = &Entity{}
-		mergedEntity.Properties = make(map[string]interface{})
-		mergedEntity.References = make(map[string]interface{})
+	if resultEntity == nil {
+		resultEntity = &Entity{}
+		resultEntity.Properties = make(map[string]interface{})
+		resultEntity.References = make(map[string]interface{})
 
-		mergedEntity.InternalID = internalID
-		mergedEntity.IsDeleted = hasDeleted
+		resultEntity.InternalID = internalID
+		resultEntity.IsDeleted = hasDeleted
 		uri, err := s.getURIForID(internalID)
 		if err != nil {
 			return nil, err
 		}
-		mergedEntity.ID = uri
+		resultEntity.ID = uri
 	}
 
-	return mergedEntity, nil
+	return resultEntity, nil
 }
 
-func (s *Store) GetEntityWithInternalID(internalID uint64, targetDatasetIds []uint32) (*Entity, error) {
-	return s.GetEntityAtPointInTimeWithInternalID(internalID, time.Now().UnixNano(), targetDatasetIds)
+func (s *Store) GetEntityWithInternalID(internalID uint64, targetDatasetIds []uint32, mergePartials bool) (*Entity, error) {
+	return s.GetEntityAtPointInTimeWithInternalID(internalID, time.Now().UnixNano(), targetDatasetIds, mergePartials)
 }
 
 type RelatedEntityResult struct {
@@ -726,8 +766,8 @@ func (s *Store) GetManyRelatedEntities(
 	predicate string,
 	inverse bool,
 	datasets []string,
-) ([][]any, error) {
-	res, err := s.GetManyRelatedEntitiesBatch(startPoints, predicate, inverse, datasets, 0)
+	mergePartials bool) ([][]any, error) {
+	res, err := s.GetManyRelatedEntitiesBatch(startPoints, predicate, inverse, datasets, 0, mergePartials)
 	if err != nil {
 		return nil, err
 	}
@@ -753,14 +793,13 @@ func (s *Store) GetManyRelatedEntitiesBatch(
 	predicate string,
 	inverse bool,
 	datasets []string,
-	limit int,
-) (RelatedEntitiesQueryResult, error) {
+	limit int, mergePartials bool) (RelatedEntitiesQueryResult, error) {
 	queryTime := time.Now().UnixNano()
 	from, err := s.ToRelatedFrom(startPoints, predicate, inverse, datasets, queryTime)
 	if err != nil {
 		return RelatedEntitiesQueryResult{}, err
 	}
-	return s.GetManyRelatedEntitiesAtTime(from, limit)
+	return s.GetManyRelatedEntitiesAtTime(from, limit, mergePartials)
 }
 
 func (s *Store) ToRelatedFrom(
@@ -849,13 +888,13 @@ func (s *Store) GetPredicateID(predicate string, txn *badger.Txn) (uint64, error
 	return pid, err
 }
 
-func (s *Store) GetManyRelatedEntitiesAtTime(from []*RelatedFrom, limit int) (RelatedEntitiesQueryResult, error) {
+func (s *Store) GetManyRelatedEntitiesAtTime(from []*RelatedFrom, limit int, mergePartials bool) (RelatedEntitiesQueryResult, error) {
 	result := RelatedEntitiesQueryResult{}
 	unlimited := limit == 0
 	var relatedFroms []*RelatedFrom
 	for _, startPoint := range from {
 		if (limit > 0) || unlimited {
-			relatedEntities, err := s.getRelatedEntitiesAtTime(startPoint, limit)
+			relatedEntities, err := s.getRelatedEntitiesAtTime(startPoint, limit, mergePartials)
 			if err != nil {
 				return RelatedEntitiesQueryResult{}, err
 			}
@@ -872,7 +911,7 @@ func (s *Store) GetManyRelatedEntitiesAtTime(from []*RelatedFrom, limit int) (Re
 	return result, nil
 }
 
-func (s *Store) getRelatedEntitiesAtTime(from *RelatedFrom, limit int) (RelatedEntitiesResult, error) {
+func (s *Store) getRelatedEntitiesAtTime(from *RelatedFrom, limit int, mergePartials bool) (RelatedEntitiesResult, error) {
 	relations, cont, err := s.GetRelatedAtTime(from, limit)
 	if err != nil {
 		return RelatedEntitiesResult{}, err
@@ -888,7 +927,7 @@ func (s *Store) getRelatedEntitiesAtTime(from *RelatedFrom, limit int) (RelatedE
 			return RelatedEntitiesResult{}, err
 		}
 
-		relatedEntity, err := s.GetEntityWithInternalID(r.EntityID, from.Datasets)
+		relatedEntity, err := s.GetEntityWithInternalID(r.EntityID, from.Datasets, mergePartials)
 		if err != nil {
 			return RelatedEntitiesResult{}, err
 		}
@@ -923,9 +962,8 @@ func (s *Store) getRelated(
 	startPoint string,
 	predicate string,
 	inverse bool,
-	datasets []string,
-) ([]RelatedEntityResult, error) {
-	res, err := s.GetManyRelatedEntitiesBatch([]string{startPoint}, predicate, inverse, datasets, 0)
+	datasets []string, mergePartials bool) ([]RelatedEntityResult, error) {
+	res, err := s.GetManyRelatedEntitiesBatch([]string{startPoint}, predicate, inverse, datasets, 0, mergePartials)
 	return res.Relations, err
 }
 

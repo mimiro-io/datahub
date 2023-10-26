@@ -143,7 +143,7 @@ var _ = ginkgo.Describe("The GarbageCollector", func() {
 			[]string{"http://data.mimiro.io/people/person-1"},
 			peopleNamespacePrefix+":Friend",
 			false,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(1))
@@ -155,7 +155,7 @@ var _ = ginkgo.Describe("The GarbageCollector", func() {
 			[]string{"http://data.mimiro.io/people/person-1"},
 			peopleNamespacePrefix+":Friend",
 			true,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(1))
@@ -181,7 +181,7 @@ var _ = ginkgo.Describe("The GarbageCollector", func() {
 			[]string{"http://data.mimiro.io/people/person-1"},
 			peopleNamespacePrefix+":Friend",
 			false,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(1), "Expected still to find person-3 as a friend")
@@ -192,7 +192,7 @@ var _ = ginkgo.Describe("The GarbageCollector", func() {
 			[]string{"http://data.mimiro.io/people/person-1"},
 			peopleNamespacePrefix+":Friend",
 			true,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(1), "Expected still to find person-2 as reverse friend")
@@ -210,7 +210,7 @@ var _ = ginkgo.Describe("The GarbageCollector", func() {
 			[]string{"http://data.mimiro.io/people/person-1"},
 			"*",
 			false,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(1))
@@ -221,7 +221,7 @@ var _ = ginkgo.Describe("The GarbageCollector", func() {
 			[]string{"http://data.mimiro.io/people/person-2"},
 			"*",
 			false,
-			nil,
+			nil, true,
 		)
 		Expect(err).To(BeNil())
 		Expect(len(result)).To(Equal(1))

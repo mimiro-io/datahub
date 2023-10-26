@@ -768,6 +768,7 @@ func (ds *Dataset) updateDataset(newItemCount int64, entities []*Entity) error {
 						return err
 					}
 					ds.store.datasets.Store(dataset.ID, dataset)
+					ds.store.datasetsByInternalID.Store(dataset.InternalID, dataset)
 				}
 			}
 		}
@@ -779,7 +780,7 @@ func (ds *Dataset) updateDataset(newItemCount int64, entities []*Entity) error {
 		// limit scope to core.Dataset, to avoid unlikely but possible
 		// bleeding in of properties from other datasets (partial merges)
 		datasets := []string{"core.Dataset"}
-		dsEntity, err := ds.store.GetEntity(fmt.Sprintf("%s:%s", dsInfo.DatasetPrefix, ds.ID), datasets)
+		dsEntity, err := ds.store.GetEntity(fmt.Sprintf("%s:%s", dsInfo.DatasetPrefix, ds.ID), datasets, true)
 		if err != nil {
 			return err
 		}

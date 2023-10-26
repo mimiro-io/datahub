@@ -139,6 +139,7 @@ func (dsm *DsManager) CreateDataset(name string, createDatasetConfig *CreateData
 	}
 
 	dsm.store.datasets.Store(name, ds)
+	dsm.store.datasetsByInternalID.Store(ds.InternalID, ds)
 
 	// need to add the event publisher topic
 	dsm.logger.Infof("Registering dataset." + name)
@@ -197,6 +198,7 @@ func (dsm *DsManager) UpdateDataset(name string, config *UpdateDatasetConfig) (*
 		// update in local cache
 		dsm.store.datasets.Delete(name)
 		dsm.store.datasets.Store(newName, ds)
+		dsm.store.datasetsByInternalID.Store(ds.InternalID, ds)
 
 		// update eventbus
 		dsm.eb.UnregisterTopic(name)
@@ -210,7 +212,7 @@ func (dsm *DsManager) UpdateDataset(name string, config *UpdateDatasetConfig) (*
 			return nil, err
 		}
 
-		entity, err := dsm.store.GetEntity(dsInfo.DatasetPrefix+":"+name, []string{datasetCore})
+		entity, err := dsm.store.GetEntity(dsInfo.DatasetPrefix+":"+name, []string{datasetCore}, true)
 		if err != nil {
 			return nil, err
 		}
@@ -250,6 +252,7 @@ func (dsm *DsManager) DeleteDataset(name string) error {
 
 	// delete from local cache
 	dsm.store.datasets.Delete(name)
+	dsm.store.datasetsByInternalID.Delete(existingDataset.InternalID)
 	key := existingDataset.getStorageKey()
 	err := dsm.store.deleteValue(key)
 	if err != nil {
@@ -273,7 +276,7 @@ func (dsm *DsManager) DeleteDataset(name string) error {
 	dsm.eb.UnregisterTopic(name) // unregister event-handler on this topic. Note that subscriptions are left.
 
 	// also delete the associated entity
-	entity, err2 := dsm.store.GetEntity(dsm.NewDatasetEntity(name, nil, nil).ID, []string{datasetCore})
+	entity, err2 := dsm.store.GetEntity(dsm.NewDatasetEntity(name, nil, nil).ID, []string{datasetCore}, true)
 	if err2 != nil {
 		return err2
 	}

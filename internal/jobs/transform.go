@@ -401,7 +401,7 @@ func (javascriptTransform *JavascriptTransform) Query(
 	datasets []string,
 ) [][]interface{} {
 	ts := time.Now()
-	results, err := javascriptTransform.Store.GetManyRelatedEntities(startingEntities, predicate, inverse, datasets)
+	results, err := javascriptTransform.Store.GetManyRelatedEntities(startingEntities, predicate, inverse, datasets, true)
 	_ = javascriptTransform.statsDClient.Timing("transform.Query.time",
 		time.Since(ts), javascriptTransform.statsDTags, 1)
 	if err != nil {
@@ -453,7 +453,7 @@ func (javascriptTransform *JavascriptTransform) PagedQuery(
 		}
 
 		ts := time.Now()
-		results, err := javascriptTransform.Store.GetManyRelatedEntitiesAtTime(conts, pageSize)
+		results, err := javascriptTransform.Store.GetManyRelatedEntitiesAtTime(conts, pageSize, true)
 		_ = javascriptTransform.statsDClient.Timing(
 			"transform.Query.time", time.Since(ts), javascriptTransform.statsDTags, 1)
 
@@ -483,7 +483,7 @@ func (javascriptTransform *JavascriptTransform) PagedQuery(
 
 func (javascriptTransform *JavascriptTransform) ByID(entityID string, datasets []string) *server.Entity {
 	ts := time.Now()
-	entity, err := javascriptTransform.Store.GetEntity(entityID, datasets)
+	entity, err := javascriptTransform.Store.GetEntity(entityID, datasets, true)
 	_ = javascriptTransform.statsDClient.Timing("transform.ById.time",
 		time.Since(ts), javascriptTransform.statsDTags, 1)
 	if err != nil {
