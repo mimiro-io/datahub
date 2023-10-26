@@ -372,6 +372,8 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 			queryResult, err := store.GetManyRelatedEntitiesBatch(start, "*", true, nil, 0, false)
 			Expect(err).To(BeNil())
 			Expect(queryResult.Relations).To(HaveLen(1))
+			Expect(queryResult.Relations[0].RelatedEntity.References).ToNot(BeNil())
+			Expect(queryResult.Relations[0].RelatedEntity.References).To(HaveLen(0))
 			Expect(queryResult.Relations[0].RelatedEntity.Properties["http://data.mimiro.io/core/partials"]).To(HaveLen(2))
 			Expect(queryResult.Relations[0].RelatedEntity.Properties["http://data.mimiro.io/core/partials"].([]any)[0].(*Entity).Properties["http://data.mimiro.io/core/datasetname"]).To(Equal("friends"))
 			Expect(queryResult.Relations[0].RelatedEntity.Properties["http://data.mimiro.io/core/partials"].([]any)[1].(*Entity).Properties["http://data.mimiro.io/core/datasetname"]).To(Equal("family"))
