@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/rsa"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -120,6 +121,9 @@ func (config *JwtConfig) ValidateToken(auth string) (*jwt.Token, error) {
 		return config.NodePublicKey, nil
 	})
 	if err != nil {
+		err = fmt.Errorf("NodeSec: %w", err)
+	}
+	if err != nil && config.Wellknown != "" && config.Issuer != nil && config.Audience != nil {
 		token, err = jwt.ParseWithClaims(auth, &security.CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 			set, err := config.Cache.Get(context.Background(), config.Wellknown)
 			if err != nil {
@@ -154,6 +158,9 @@ func (config *JwtConfig) ValidateToken(auth string) (*jwt.Token, error) {
 				return nil, errors.New("unknown type in well-known cache")
 			}
 		})
+		if err != nil {
+			err = fmt.Errorf("Oauth: %w", err)
+		}
 	}
 	if err != nil {
 		return nil, err

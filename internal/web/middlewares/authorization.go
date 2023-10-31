@@ -16,57 +16,13 @@ package middlewares
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/juliangruber/go-intersect"
 	"github.com/labstack/echo/v4"
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/security"
 )
-
-func JwtAuthorizer(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			if c.Get("user") == nil { // user never got set, oops
-				return echo.NewHTTPError(http.StatusForbidden, "user not set")
-			}
-			token := c.Get("user").(*jwt.Token)
-
-			claims := token.Claims.(*security.CustomClaims)
-			if claims.Gty == "client-credentials" ||
-				claims.Subject == claims.ClientID { // this is a machine or an application token
-				var claimScopes []string
-				if len(claims.Scopes()) > 0 {
-					claimScopes = strings.Split(claims.Scopes()[0], " ")
-				}
-				res := intersect.Simple(claimScopes, scopes)
-				if len(res) == 0 { // no intersection
-					logger.Debugw("User attempted login with missing or wrong scope",
-						"subject", token.Claims.(*security.CustomClaims).Subject,
-						"scopes", claimScopes,
-						"userScopes", scopes)
-					return echo.NewHTTPError(http.StatusForbidden, "user attempted login with missing or wrong scope")
-
-				}
-			} else {
-				// this is a user
-				if !claims.Adm { // this will only be set for system admins, we only support mimiro Adm at the moment
-					// if not, we need to see if the url requested contains the user id
-					subject := claims.Subject
-					// it needs the subject in the url
-					uri := c.Request().RequestURI
-					if !strings.Contains(uri, subject) { // not present, so forbidden
-						return echo.NewHTTPError(http.StatusForbidden, "user has no access to path")
-					}
-				}
-			}
-
-			return next(c)
-		}
-	}
-}
 
 func LocalAuthorizer(core *security.ServiceCore) func(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {
 	return func(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {

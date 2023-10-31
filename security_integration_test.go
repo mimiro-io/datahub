@@ -17,6 +17,7 @@ package datahub_test
 import (
 	"bytes"
 	"context"
+	"crypto/rsa"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -39,11 +40,8 @@ func TestFromOutside(t *testing.T) {
 	RunSpecs(t, "Integration Suite")
 }
 
-var _ = Describe("The dataset endpoint", Ordered, func() {
-	var app *fx.App
-
-	// privateKey and well-known.json are generated from https://mkjwk.org/
-	privateKey := `-----BEGIN PRIVATE KEY-----
+// privateKey and well-known.json are generated from https://mkjwk.org/
+var privateKey = `-----BEGIN PRIVATE KEY-----
 MIIBVgIBADANBgkqhkiG9w0BAQEFAASCAUAwggE8AgEAAkEAgp2HWNZwdVzEflWx
 jK8hddWr2x+IKazSpMMfLg8oDQk+kYI6/ChNS4mdHWD58tQzI1FimW5z1lfPoSvc
 I5LzCwIDAQABAkBABnH7BRqZHQEgoGbo/EvdlACq57j6HMIgi5j0He/W+1SbAsoc
@@ -54,8 +52,22 @@ YWVry5vfJOLOwVbOHGjUgusx1eFcB+ECIQCyMIG0HM3l+maWePciN+ucgAhNLiiY
 9LvRBDUAB4Eoqw==
 -----END PRIVATE KEY-----`
 
-	// to do negative testing
-	invalidPrivateKey := `-----BEGIN PRIVATE KEY-----
+//	var publicKey = `-----BEGIN PUBLIC KEY-----
+//MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAIKdh1jWcHVcxH5VsYyvIXXVq9sfiCms
+//0qTDHy4PKA0JPpGCOvwoTUuJnR1g+fLUMyNRYpluc9ZXz6Er3COS8wsCAwEAAQ==
+//-----END PUBLIC KEY-----`
+
+var wellKnown = `{"keys":[{
+    "kty": "RSA",
+    "e": "AQAB",
+    "use": "sig",
+    "kid": "letmein",
+    "alg": "RS256",
+    "n": "gp2HWNZwdVzEflWxjK8hddWr2x-IKazSpMMfLg8oDQk-kYI6_ChNS4mdHWD58tQzI1FimW5z1lfPoSvcI5LzCw"
+}]}`
+
+// to do negative testing
+var invalidPrivateKey = `-----BEGIN PRIVATE KEY-----
 MIIBVAIBADANBgkqhkiG9w0BAQEFAASCAT4wggE6AgEAAkEAghnDh8yBi6fUe0aZ
 WDwF/PQUsya9IcuUmRmLbDiNTg/RyUOwrD9jn7cgK3KmOVkZExH3p0naYtfZWAA3
 T74leQIDAQABAkBtkHTysG+IxVZUWyhY/nOsi4HDPiSZiXEjXjfkc9vMmKKYD5i4
@@ -66,10 +78,8 @@ owIgZbMGH5lX0wsuOd5GMEhfWHZSz+HAUAfwxg+UW7n44fUCIQCn6DfffDlyv20a
 yLOZNSc/qIQ=
 -----END PRIVATE KEY-----`
 
-	//	publicKey := `-----BEGIN PUBLIC KEY-----
-	//MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAIKdh1jWcHVcxH5VsYyvIXXVq9sfiCms
-	//0qTDHy4PKA0JPpGCOvwoTUuJnR1g+fLUMyNRYpluc9ZXz6Er3COS8wsCAwEAAQ==
-	//-----END PUBLIC KEY-----`
+var _ = Describe("The dataset endpoint", Ordered, func() {
+	var app *fx.App
 
 	location := "./node_security_integration_test"
 
@@ -105,14 +115,7 @@ yLOZNSc/qIQ=
 		os.Stderr = oldErr
 
 		// start an external token validation endpoint
-		os.WriteFile(location+"/well-known.json", []byte(`{"keys":[{
-    "kty": "RSA",
-    "e": "AQAB",
-    "use": "sig",
-    "kid": "letmein",
-    "alg": "RS256",
-    "n": "gp2HWNZwdVzEflWxjK8hddWr2x-IKazSpMMfLg8oDQk-kYI6_ChNS4mdHWD58tQzI1FimW5z1lfPoSvcI5LzCw"
-}]}`), 0644)
+		os.WriteFile(location+"/well-known.json", []byte(wellKnown), 0644)
 
 		mux := http.NewServeMux()
 		mux.Handle("/", http.FileServer(http.Dir(location)))
@@ -144,7 +147,7 @@ yLOZNSc/qIQ=
 	})
 
 	It("Should authenticate with admin credentials", func(_ SpecContext) {
-		token := getAdminToken(datahubURL)
+		token := getAdminToken(datahubURL, "admin", "admin")
 
 		// check JWT valid for endpoint access (also tests the admin role)
 		reqURL := datahubURL + "datasets"
@@ -162,7 +165,7 @@ yLOZNSc/qIQ=
 	}, SpecTimeout(15*time.Minute))
 
 	It("Should support admin control over data structures", func(_ SpecContext) {
-		token := getAdminToken(datahubURL)
+		token := getAdminToken(datahubURL, "admin", "admin")
 		// check JWT valid for endpoint access (also tests the admin role)
 		reqURL := datahubURL + "datasets"
 		client := &http.Client{}
@@ -333,32 +336,10 @@ yLOZNSc/qIQ=
 		Expect(len(deletedeclientacls)).To(Equal(0))
 	}, SpecTimeout(15*time.Minute))
 	It("Should register client and allow access", func(_ SpecContext) {
-		token := getAdminToken(datahubURL)
+		token := getAdminToken(datahubURL, "admin", "admin")
 		// check JWT valid for endpoint access (also tests the admin role)
 
-		// register new client
-		clientInfo := &security.ClientInfo{}
-		clientInfo.ClientID = "client1"
-		clientPrivateKey, publicKey := security.GenerateRsaKeyPair()
-		publicKeyPem, err := security.ExportRsaPublicKeyAsPem(publicKey)
-		Expect(err).To(BeNil())
-		clientInfo.PublicKey = []byte(publicKeyPem)
-
-		clientJSON, err := json.Marshal(clientInfo)
-		Expect(err).To(BeNil())
-
-		reqURL := datahubURL + "security/clients"
-		client := &http.Client{}
-		req, _ := http.NewRequest("POST", reqURL, bytes.NewBuffer(clientJSON))
-		req.Header = http.Header{
-			"Content-Type":  []string{"application/json"},
-			"Authorization": []string{"Bearer " + token},
-		}
-
-		res, err := client.Do(req)
-		Expect(err).To(BeNil())
-		Expect(res).NotTo(BeNil())
-		Expect(res.StatusCode).To(Equal(200))
+		clientPrivateKey := registerNodeSecClient(datahubURL, token, "client1")
 
 		// register client acls
 		acls := make([]*security.AccessControl, 0)
@@ -369,40 +350,21 @@ yLOZNSc/qIQ=
 		aclJSON, err := json.Marshal(acls)
 		Expect(err).To(BeNil())
 
-		reqURL = datahubURL + "security/clients/client1/acl"
-		client = &http.Client{}
-		req, _ = http.NewRequest("POST", reqURL, bytes.NewBuffer(aclJSON))
+		reqURL := datahubURL + "security/clients/client1/acl"
+		client := &http.Client{}
+		req, _ := http.NewRequest("POST", reqURL, bytes.NewBuffer(aclJSON))
 		req.Header = http.Header{
 			"Content-Type":  []string{"application/json"},
 			"Authorization": []string{"Bearer " + token},
 		}
 
-		res, err = client.Do(req)
+		res, err := client.Do(req)
 		Expect(err).To(BeNil())
 		Expect(res).NotTo(BeNil())
 		Expect(res.StatusCode).To(Equal(200))
 
 		// get jwt for client
-		data1 := url.Values{}
-		data1.Set("grant_type", "client_credentials")
-		data1.Set("client_assertion_type", "urn:ietf:params:oauth:grant-type:jwt-bearer")
-
-		pem, err := security.CreateJWTForTokenRequest("client1", "node1", clientPrivateKey)
-		Expect(err).To(BeNil())
-		data1.Set("client_assertion", pem)
-
-		reqURL = datahubURL + "security/token"
-		res, err = http.PostForm(reqURL, data1)
-		Expect(err).To(BeNil())
-		Expect(res).NotTo(BeZero())
-		Expect(res.StatusCode).To(Equal(200))
-
-		decoder := json.NewDecoder(res.Body)
-		response := make(map[string]interface{})
-		err = decoder.Decode(&response)
-		Expect(err).To(BeNil())
-		clientToken := response["access_token"].(string)
-		Expect(clientToken).NotTo(BeNil())
+		clientToken := createNodeSecToken(datahubURL, "client1", "node1", clientPrivateKey)
 
 		// use token to list datasets
 		reqURL = datahubURL + "datasets"
@@ -444,7 +406,7 @@ yLOZNSc/qIQ=
 	}, SpecTimeout(15*time.Minute))
 
 	It("Should allow access to self via job and node jwt provider", func(_ SpecContext) {
-		token := getAdminToken(datahubURL)
+		token := getAdminToken(datahubURL, "admin", "admin")
 		// check JWT valid for endpoint access (also tests the admin role)
 		reqURL := datahubURL + "datasets"
 		client := &http.Client{}
@@ -608,50 +570,20 @@ yLOZNSc/qIQ=
 
 	It("Should support access via external jwt validator", func() {
 		// give "bob" access to datasets
-		aclJSON, err := json.Marshal([]*security.AccessControl{{
-			Action: "write", Resource: "/datasets*",
-		}})
-		Expect(err).To(BeNil())
-
-		adminToken := getAdminToken(datahubURL)
-		reqURL := datahubURL + "security/clients/bob/acl"
-		req, _ := http.NewRequest("POST", reqURL, bytes.NewBuffer(aclJSON))
-		req.Header = http.Header{
-			"Content-Type":  []string{"application/json"},
-			"Authorization": []string{"Bearer " + adminToken},
-		}
-
-		res, err := http.DefaultClient.Do(req)
-		Expect(err).To(BeNil())
-		Expect(res).NotTo(BeNil())
-		Expect(res.StatusCode).To(Equal(200))
-
-		privateKey, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(privateKey))
+		giveBobACLForDatasets(datahubURL, "admin", "admin")
 
 		// make an external JWT for bob
-		claims := security.CustomClaims{}
-		claims.Roles = []string{"client"}
-		claims.RegisteredClaims = jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 15)),
-			Issuer:    "test_issuer",                     // must match TOKEN_ISSUER
-			Audience:  jwt.ClaimStrings{"test_audience"}, //must match TOKEN_AUDIENCE
-			Subject:   "bob",
-		}
-
-		token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-		token.Header["kid"] = "letmein"
-		externalToken, err := token.SignedString(privateKey)
-
+		externalToken, err := createOauthJwtToken(privateKey, "bob", "test_issuer", "test_audience")
 		Expect(err).To(BeNil())
 		// use token to list datasets
-		reqURL = datahubURL + "datasets"
-		req, _ = http.NewRequest("GET", reqURL, nil)
+		reqURL := datahubURL + "datasets"
+		req, _ := http.NewRequest("GET", reqURL, nil)
 		req.Header = http.Header{
 			"Content-Type":  []string{"application/json"},
 			"Authorization": []string{"Bearer " + externalToken},
 		}
 
-		res, err = (&http.Client{}).Do(req)
+		res, err := (&http.Client{}).Do(req)
 		Expect(err).To(BeNil())
 		Expect(res).NotTo(BeNil())
 		Expect(res.StatusCode).To(Equal(200))
@@ -665,57 +597,26 @@ yLOZNSc/qIQ=
 	})
 
 	It("Should deny access via external jwt validator if invalid token", func() {
-		// give "bob" access to datasets
-		aclJSON, err := json.Marshal([]*security.AccessControl{{
-			Action: "write", Resource: "/datasets*",
-		}})
+		giveBobACLForDatasets(datahubURL, "admin", "admin")
+
+		externalToken, err := createOauthJwtToken(invalidPrivateKey, "bob", "test_issuer", "test_audience")
 		Expect(err).To(BeNil())
 
-		adminToken := getAdminToken(datahubURL)
-		reqURL := datahubURL + "security/clients/bob/acl"
-		req, _ := http.NewRequest("POST", reqURL, bytes.NewBuffer(aclJSON))
-		req.Header = http.Header{
-			"Content-Type":  []string{"application/json"},
-			"Authorization": []string{"Bearer " + adminToken},
-		}
-
-		res, err := http.DefaultClient.Do(req)
-		Expect(err).To(BeNil())
-		Expect(res).NotTo(BeNil())
-		Expect(res.StatusCode).To(Equal(200))
-
-		privateKey, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(invalidPrivateKey))
-
-		// make an external JWT for bob
-		claims := security.CustomClaims{}
-		claims.Roles = []string{"client"}
-		claims.RegisteredClaims = jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 15)),
-			Issuer:    "test_issuer",                     // must match TOKEN_ISSUER
-			Audience:  jwt.ClaimStrings{"test_audience"}, //must match TOKEN_AUDIENCE
-			Subject:   "bob",
-		}
-
-		token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-		token.Header["kid"] = "letmein"
-		externalToken, err := token.SignedString(privateKey)
-
-		Expect(err).To(BeNil())
 		// use token to list datasets
-		reqURL = datahubURL + "datasets"
-		req, _ = http.NewRequest("GET", reqURL, nil)
+		reqURL := datahubURL + "datasets"
+		req, _ := http.NewRequest("GET", reqURL, nil)
 		req.Header = http.Header{
 			"Content-Type":  []string{"application/json"},
 			"Authorization": []string{"Bearer " + externalToken},
 		}
 
-		res, err = (&http.Client{}).Do(req)
+		res, err := (&http.Client{}).Do(req)
 		Expect(err).To(BeNil())
 		Expect(res).NotTo(BeNil())
 		Expect(res.StatusCode).To(Equal(401))
 
 		jsonraw, _ := io.ReadAll(res.Body)
-		Expect(string(jsonraw)).To(Equal("{\"message\":\"crypto/rsa: verification error\"}\n"))
+		Expect(string(jsonraw)).To(Equal("{\"message\":\"Oauth: crypto/rsa: verification error\"}\n"))
 	})
 
 	/*
@@ -745,12 +646,106 @@ yLOZNSc/qIQ=
 	*/
 })
 
-func getAdminToken(datahubURL string) string {
+func registerNodeSecClient(datahubURL string, adminToken string, subject string) *rsa.PrivateKey {
+	// register new client
+	clientInfo := &security.ClientInfo{}
+	clientInfo.ClientID = subject
+	clientPrivateKey, publicKey := security.GenerateRsaKeyPair()
+	publicKeyPem, err := security.ExportRsaPublicKeyAsPem(publicKey)
+	Expect(err).To(BeNil())
+	clientInfo.PublicKey = []byte(publicKeyPem)
+
+	clientJSON, err := json.Marshal(clientInfo)
+	Expect(err).To(BeNil())
+
+	reqURL := datahubURL + "security/clients"
+	client := &http.Client{}
+	req, _ := http.NewRequest("POST", reqURL, bytes.NewBuffer(clientJSON))
+	req.Header = http.Header{
+		"Content-Type":  []string{"application/json"},
+		"Authorization": []string{"Bearer " + adminToken},
+	}
+
+	res, err := client.Do(req)
+	Expect(err).To(BeNil())
+	Expect(res).NotTo(BeNil())
+	Expect(res.StatusCode).To(Equal(200))
+
+	return clientPrivateKey
+}
+
+func createNodeSecToken(datahubURL string, subject string, audience string, clientPrivateKey *rsa.PrivateKey) string {
+	GinkgoHelper()
+	data1 := url.Values{}
+	data1.Set("grant_type", "client_credentials")
+	data1.Set("client_assertion_type", "urn:ietf:params:oauth:grant-type:jwt-bearer")
+
+	pem, err := security.CreateJWTForTokenRequest(subject, audience, clientPrivateKey)
+	Expect(err).To(BeNil())
+	data1.Set("client_assertion", pem)
+
+	reqURL := datahubURL + "security/token"
+	res, err := http.PostForm(reqURL, data1)
+	Expect(err).To(BeNil())
+	Expect(res).NotTo(BeZero())
+	Expect(res.StatusCode).To(Equal(200))
+
+	decoder := json.NewDecoder(res.Body)
+	response := make(map[string]interface{})
+	err = decoder.Decode(&response)
+	Expect(err).To(BeNil())
+	clientToken := response["access_token"].(string)
+	Expect(clientToken).NotTo(BeNil())
+	return clientToken
+}
+
+func giveBobACLForDatasets(datahubURL string, user string, pwd string) {
+	GinkgoHelper()
+	// give "bob" access to datasets
+	aclJSON, err := json.Marshal([]*security.AccessControl{{
+		Action: "write", Resource: "/datasets*",
+	}})
+	Expect(err).To(BeNil())
+
+	adminToken := getAdminToken(datahubURL, user, pwd)
+	reqURL := datahubURL + "security/clients/bob/acl"
+	req, _ := http.NewRequest("POST", reqURL, bytes.NewBuffer(aclJSON))
+	req.Header = http.Header{
+		"Content-Type":  []string{"application/json"},
+		"Authorization": []string{"Bearer " + adminToken},
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	Expect(err).To(BeNil())
+	Expect(res).NotTo(BeNil())
+	Expect(res.StatusCode).To(Equal(200))
+}
+
+func createOauthJwtToken(privateKeyPEM string, subject string, issuer string, audience string) (string, error) {
+	privateKeyFromPEM, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(privateKeyPEM))
+
+	// make an external JWT for bob
+	claims := security.CustomClaims{}
+	claims.Roles = []string{"client"}
+	claims.RegisteredClaims = jwt.RegisteredClaims{
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 15)),
+		Issuer:    issuer,                     // must match TOKEN_ISSUER
+		Audience:  jwt.ClaimStrings{audience}, //must match TOKEN_AUDIENCE
+		Subject:   subject,
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	token.Header["kid"] = "letmein"
+	externalToken, err := token.SignedString(privateKeyFromPEM)
+	return externalToken, err
+}
+
+func getAdminToken(datahubURL string, user string, pwd string) string {
 	GinkgoHelper()
 	data := url.Values{}
 	data.Set("grant_type", "client_credentials")
-	data.Set("client_id", "admin")
-	data.Set("client_secret", "admin")
+	data.Set("client_id", user)
+	data.Set("client_secret", pwd)
 
 	reqURL := datahubURL + "security/token"
 	res, err := http.PostForm(reqURL, data)
