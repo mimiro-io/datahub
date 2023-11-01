@@ -16,6 +16,7 @@ package web
 
 import (
 	"context"
+	"net/http"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -95,28 +96,43 @@ type AuthorizerConfig struct {
 
 func NewAuthorizer(env *conf.Env, logger *zap.SugaredLogger, core *security.ServiceCore) *AuthorizerConfig {
 	log := logger.Named("authorizer")
-	var mws func(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc
 
 	switch env.Auth.Middleware {
-	case "local":
-		log.Infof("Adding node security Authorizer")
+	case "local", "opa", "on":
 		if env.AdminUserName == "" || env.AdminPassword == "" {
-			log.Warnf("Admin password or username not set")
+			log.Panicf("Admin password or username not set")
 		} else {
-			mws = middlewares.LocalAuthorizer(core)
+			log.Infof("Adding node security Authorizer")
+			acl := middlewares.LocalAuthorizer(core)
+			log.Infof("Adding OPA Authorizer")
+			opa := middlewares.OpaAuthorizer
+			return &AuthorizerConfig{authorizer: func(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {
+				return func(next echo.HandlerFunc) echo.HandlerFunc {
+					return func(c echo.Context) error {
+						// apply both authorizers, if any of them returns nil, we are good and can let the request through
+						err1 := opa(log, scopes...)(next)(c)
+						if err1 != nil {
+							err2 := acl(log, scopes...)(next)(c)
+							if err2 != nil {
+								return echo.NewHTTPError(http.StatusForbidden, "user does not have permission")
+							}
+						}
+						return nil
+					}
+				}
+			},
+			}
 		}
 	case "noop":
+		fallthrough
+	default:
 		log.Infof("WARNING: Adding NoOp Authorizer")
-		mws = middlewares.NoOpAuthorizer
-	case "auth0", "jwt":
-		log.Infof("Adding JWT Authorizer")
-		mws = middlewares.JwtAuthorizer
-	case "opa":
-		log.Infof("Adding OPA Authorizer")
-		mws = middlewares.OpaAuthorizer
+		return &AuthorizerConfig{
+			middlewares.NoOpAuthorizer,
+		}
 	}
+	return &AuthorizerConfig{}
 
-	return &AuthorizerConfig{authorizer: mws}
 }
 
 func (middleware *Middleware) configure(e *echo.Echo) {
@@ -139,11 +155,11 @@ func setupJWT(env *conf.Env, core *security.ServiceCore, skipper func(c echo.Con
 		Wellknown: env.Auth.WellKnown,
 	}
 
-	// if node security is enabled
-	if env.Auth.Middleware == "local" {
+	// if security is enabled
+	if env.Auth.Middleware == "local" || env.Auth.Middleware == "opa" || env.Auth.Middleware == "on" {
 		config.NodePublicKey = core.NodeInfo.KeyPairs[0].PublicKey
-		config.Issuer = []string{"node:" + core.NodeInfo.NodeID}
-		config.Audience = []string{"node:" + core.NodeInfo.NodeID}
+		config.NodeIssuer = []string{"node:" + core.NodeInfo.NodeID}
+		config.NodeAudience = []string{"node:" + core.NodeInfo.NodeID}
 	}
 
 	return middlewares.JWTHandler(config)

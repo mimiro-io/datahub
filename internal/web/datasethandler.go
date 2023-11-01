@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -81,47 +82,51 @@ func NewDatasetHandler(
 
 // datasetList
 func (handler *datasetHandler) datasetList(c echo.Context) error {
-	// this is only set by OPA auth
-	// if not set and local auth is enabled then use that
-	accessible := c.Get("datasets")
 	var err error
 
 	datasets := make([]server.DatasetName, 0)
 
-	if accessible == nil {
-		datasets = handler.datasetManager.GetDatasetNames()
-		if handler.tokenProviders.ServiceCore.IsLocalAuthEnabled {
-			user := c.Get("user")
-			token := user.(*jwt.Token)
-			claims := token.Claims.(*security.CustomClaims)
-			roles := claims.Roles
-			isAdmin := false
+	datasets = handler.datasetManager.GetDatasetNames()
 
-			for _, role := range roles {
-				if role == "admin" {
-					isAdmin = true
-					break
-				}
-			}
+	user := c.Get("user")
+	if user != nil {
+		// check node security ACL
+		token := user.(*jwt.Token)
+		claims := token.Claims.(*security.CustomClaims)
+		roles := claims.Roles
+		isAdmin := false
 
-			if !isAdmin {
-				datasets, err = handler.tokenProviders.ServiceCore.FilterDatasets(datasets, claims.Subject)
-				if err != nil {
-					return err
-				}
+		for _, role := range roles {
+			if role == "admin" {
+				isAdmin = true
+				break
 			}
 		}
-	} else {
-		whitelist := accessible.([]string)
-		if len(whitelist) > 0 { // an empty list here doesn't need to do anything
-			if whitelist[0] == "*" { // this is a catch all, the user has access to all datasets
-				datasets = handler.datasetManager.GetDatasetNames()
-			} else { // we need to do some filtering
-				datasets = whitelistDatasets(handler.datasetManager.GetDatasetNames(), whitelist)
+
+		if !isAdmin {
+			datasets, err = handler.tokenProviders.ServiceCore.FilterDatasets(datasets, claims.Subject)
+			if err != nil {
+				return err
+			}
+			// also check OPA
+			// this is only set by OPA auth
+			accessible := c.Get("datasets")
+			if accessible != nil {
+				whitelist := accessible.([]string)
+				if len(whitelist) > 0 { // an empty list here doesn't need to do anything
+					if whitelist[0] == "*" { // this is a catch all, the user has access to all datasets
+						datasets = append(datasets, handler.datasetManager.GetDatasetNames()...)
+					} else { // we need to do some filtering
+						datasets = append(datasets, whitelistDatasets(handler.datasetManager.GetDatasetNames(), whitelist)...)
+					}
+				}
 			}
 		}
 	}
 
+	sort.Slice(datasets, func(i, j int) bool {
+		return datasets[i].Name < datasets[j].Name
+	})
 	return c.JSON(http.StatusOK, datasets)
 }
 

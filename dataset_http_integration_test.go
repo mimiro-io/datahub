@@ -814,7 +814,7 @@ var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
 			Expect(rArr).NotTo(BeZero())
 			result := rArr[1].([]any)
 			Expect(len(result)).To(Equal(5))
-			fmt.Println(string(body))
+			//fmt.Println(string(body))
 			Expect(result[4].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:3"))
 			Expect(result[4].([]any)[2].(map[string]any)["props"].(map[string]any)["http://data.mimiro.io/core/partials"]).To(HaveLen(1))
 			Expect(result[4].([]any)[2].(map[string]any)["props"].(map[string]any)["http://data.mimiro.io/core/partials"]).To(HaveLen(1))
