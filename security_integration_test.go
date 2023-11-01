@@ -570,7 +570,7 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 
 	It("Should support access via external jwt validator", func() {
 		// give "bob" access to datasets
-		giveBobACLForDatasets(datahubURL, "admin", "admin")
+		giveBobACLForPaths(datahubURL, "admin", "admin", "/datasets*")
 
 		// make an external JWT for bob
 		externalToken, err := createOauthJwtToken(privateKey, "bob", "test_issuer", "test_audience")
@@ -597,7 +597,7 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 	})
 
 	It("Should deny access via external jwt validator if invalid token", func() {
-		giveBobACLForDatasets(datahubURL, "admin", "admin")
+		giveBobACLForPaths(datahubURL, "admin", "admin", "/datasets*")
 
 		externalToken, err := createOauthJwtToken(invalidPrivateKey, "bob", "test_issuer", "test_audience")
 		Expect(err).To(BeNil())
@@ -699,12 +699,14 @@ func createNodeSecToken(datahubURL string, subject string, audience string, clie
 	return clientToken
 }
 
-func giveBobACLForDatasets(datahubURL string, user string, pwd string) {
+func giveBobACLForPaths(datahubURL string, user string, pwd string, paths ...string) {
 	GinkgoHelper()
 	// give "bob" access to datasets
-	aclJSON, err := json.Marshal([]*security.AccessControl{{
-		Action: "write", Resource: "/datasets*",
-	}})
+	acls := []*security.AccessControl{}
+	for _, path := range paths {
+		acls = append(acls, &security.AccessControl{Action: "write", Resource: path})
+	}
+	aclJSON, err := json.Marshal(acls)
 	Expect(err).To(BeNil())
 
 	adminToken := getAdminToken(datahubURL, user, pwd)

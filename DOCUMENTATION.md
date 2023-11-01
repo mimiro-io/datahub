@@ -1805,17 +1805,15 @@ Can be used to override Badger's default 7 LSM levels. When more that 1.1TB disk
 
 #### Securing the Data Hub
 
-There are four main security models for the data hub.
+There are two main security models for the data hub.
 
 1. No security / API gateway seured. All calls are allowed at the data hub API level. This mode can be used either when developing or when the data hub API is protected behind an API gateway that implements secure access.
 
 2. Data Hub Security. This involves a datahub allowing for the registration of clients and a public key. The client (often in this model another datahub) retrieves a JWT access token by sending a request (signed with a private key) to authenticate.
 
-3. OPA. OPA is used to authorizate requests, but authentication is still perfomed by external provider. See below.
+In secured mode, it is also possile to configure an OPA endpoint. OPA is used to authorize requests. Authorization is then based on a union of datahub ACL rules and OPA policy rules for the current user.
 
-4. External Provider is used to validate JWT tokens. This is an OAuth2 provider.
-
-Typically, either 1, 2 or 3&4 in combination are employed to secure a data hub instance.
+Additionally, an external authentication provider can be configured to validate JWT tokens. This has to be an OAuth2 provider. The datahub will then validate JWT tokens against both the built-in provider and the external provider.
 
 The following environment variables can be set to configure the data hub security.
 
@@ -1825,11 +1823,11 @@ NODE_ID is used to give a unique identifier to a running data hub instance. It i
 
 `ADMIN_USERNAME=`
 
-To boot strap the administration and secure access via client certificates a root admin user is requried. The credentials for this are passed in at start up as environment variables. Depending on the setup these values can come from secrets managers such as SSM. If these values are not set then there is NO amdin login. e.g. "" is not a value admin user or password.
+To boot strap the administration and secure access via client certificates a root admin user is requried. The credentials for this are passed in at start up as environment variables. Depending on the setup these values should come from secrets managers. Required for secured mode.
 
 `ADMIN_PASSWORD=`
 
-This is the password value for the admin user. If left unset no admin access is enabled. It is highly recommended to ensure that this password is very secure.
+This is the password value for the admin user. Required in secured mode. It is highly recommended to ensure that this password is very secure.
 
 `ADMIN_LOCAL_ONLY=false`
 
@@ -1837,40 +1835,30 @@ If set to true admin access is only available from the local machine / container
 
 `AUTHORIZATION_MIDDLEWARE=noop`
 
-By configuring what AUTHORIZATION_MIDDLEWARE to use, you can configure how you want to log into the Datahub. At this moment, there is 3 supported middlewares:
+By configuring what AUTHORIZATION_MIDDLEWARE to use, secure mode is toggled on or off. The following values are supported:
 
--   noop - this completely turns Authorization and Authentication off. Use for testing only!
--   jwt - this validates JWT tokens. It uses jwt scopes for authorization. See more complete description below.
--   opa - this validates JWT tokens, but uses an OPA server to authorization. See more complete description below.
--   local - indicates that this datahub can issue and validate JWT tokens and uses configured client ACL for authorisation.
+-   noop - this completely turns Authorization and Authentication off. Use for testing only! Not setting this variable is equivalent to setting it to noop.
+-   on - this validates JWT tokens, and uses the Datahub client ACL for authorization.
+-   opa - deprecated. replaced by "on"
+-   local - deprecated. replaced by "on"
 
-`TOKEN_WELL_KNOWN=https://auth.mimiro.io/jwks/.well-known/jwks.json`
+`TOKEN_WELL_KNOWN=https://some-service/.well-known/jwks.json`
 
-This points to the well-known endpoint for validation of your JWT token. Only tokens with RS256 and remote validation is currently supported. Your oauth2 provider should also give you a well-known endpoint.
+This points to an external well-known endpoint for validation of your JWT token.
 
-If you are using Mimiro for Authentication, then contact Mimiro for the correct settings.
+`TOKEN_AUDIENCE=https://token.audience`
 
-`TOKEN_AUDIENCE=https://api.mimiro.io`
+This is the audience the external token is valid for. Make sure the external Oauth2 service creates bearer tokens
+for this audience.
 
-This is the audience the token is valid for. The audience must be present on your jwt token.
+`TOKEN_ISSUER=https://token.issuer`
 
-If you are using Mimiro for Authentication, then contact Mimiro for the correct settings.
-
-`TOKEN_ISSUER=https://api.mimiro.io`
-
-This is the issuer of your tokens. Issuer must be present in the token to be valid.
-
-If you are using Mimiro for Authentication, then contact Mimiro for the correct settings.
+This is the issuer the external token is created with. Make sure the external Oauth2 service creates bearer tokens
+with this issuer.
 
 `OPA_ENDPOINT=`
 
 If you are using OPA service, this must point to where your OPA service endpoint is located.
-
-`SECRETS_MANAGER=noop`
-
-Datahub supports an optional Secrets Manager to read secrets from. If this is present, it will read all walues present in the secret location, and apply those on top of the existing env variables, thereby overwriting the already existing values.
-
-The valid options are "noop" (turn it off), and "ssm" (AWS Secrets Manager). It is very likelly that this needs to be extended to support your environment. Setting the the variable empty is equivalent to setting it to "noop".
 
 #### Contacting datalayers
 

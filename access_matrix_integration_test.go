@@ -2,6 +2,7 @@ package datahub_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -46,18 +47,19 @@ type (
 )
 
 var (
-	Datasets200       = testOutcome{status: 200, body: `[{"Name":"core.Dataset"}]`}
-	Jobs200           = testOutcome{status: 200, body: "[]"}
-	MissingJwt401     = testOutcome{status: 401, body: "missing or malformed jwt"}
-	SignatureWrong401 = testOutcome{status: 401, body: "crypto/rsa: verification error"}
-	NoAccess403       = testOutcome{status: 403, body: "user does not have permission"}
-	ServerPanic       = testOutcome{status: -1, body: "panic"}
+	Datasets200              = testOutcome{status: 200, body: `[{"Name":"core.Dataset"},{"Name":"people"},{"Name":"places"}]`}
+	Jobs200                  = testOutcome{status: 200, body: "[]"}
+	MissingJwt401            = testOutcome{status: 401, body: `{"message":"code=400, message=missing or malformed jwt"}`}
+	SignatureWrongNodeSec401 = testOutcome{status: 401, body: `{"message":"NodeSec: crypto/rsa: verification error"}`}
+	SignatureWrongOauth401   = testOutcome{status: 401, body: `{"message":"Oauth: crypto/rsa: verification error"}`}
+	NoAccess403              = testOutcome{status: 403, body: `{"message":"user does not have permission"}`}
+	ServerPanic              = testOutcome{status: -1, body: "panic"}
 )
 
 const (
 	location         string = "./access_matrix_integration_test_store"
 	oauthLocation    string = "./access_matrix_integration_test_oauth_store"
-	securityLocation string = "./access_matrix_integration_test_security_store"
+	securityLocation string = "./access_matrix_integration_test_store"
 
 	adminPwd       tokenSource = iota
 	nodeSecValid   tokenSource = iota
@@ -69,6 +71,8 @@ const (
 var (
 	localCases = securedCases("local")
 	opaCases   = securedCases("opa")
+	onCases    = securedCases("on")
+	added      = false
 )
 
 func securedCases(authorizer string) []TableEntry {
@@ -106,7 +110,7 @@ func securedCases(authorizer string) []TableEntry {
 			requestDetails{path: "/datasets", tokenFrom: oauthValid, user: "bob"},
 			userConfig{},
 			enviromentConfig{AUTHORIZATION_MIDDLEWARE: authorizer, ADMIN_USERNAME: "foo", ADMIN_PASSWORD: "bar"},
-			SignatureWrong401,
+			SignatureWrongNodeSec401,
 		), // response from nodesec. the token would be valid in oauth but datahub does not check there since config missing
 		Entry(
 			"With AUTHORIZATION_MIDDLEWARE="+authorizer+", invalid signature",
@@ -120,7 +124,7 @@ func securedCases(authorizer string) []TableEntry {
 				TOKEN_AUDIENCE:           "http://localhost:24978",
 				TOKEN_WELL_KNOWN:         "http://localhost:14446/well-known.json",
 			},
-			SignatureWrong401,
+			SignatureWrongOauth401,
 		), // response from oauth
 		Entry(
 			"With AUTHORIZATION_MIDDLEWARE="+authorizer+", admin access",
@@ -197,10 +201,10 @@ func securedCases(authorizer string) []TableEntry {
 		),
 		Entry(
 			"With AUTHORIZATION_MIDDLEWARE="+authorizer+", valid oauth, valid path acl",
-			requestDetails{path: "/datasets", tokenFrom: oauthValid, user: "bob"}, // unauthorized path
+			requestDetails{path: "/datasets", tokenFrom: oauthValid, user: "bob"},
 			userConfig{
 				AuthorizationACL: true,
-			}, // give acl for datasets to bob, not for jobs
+			}, // give acl for datasets listing and dataset:places to bob
 			enviromentConfig{
 				AUTHORIZATION_MIDDLEWARE: authorizer,
 				ADMIN_USERNAME:           "foo",
@@ -209,7 +213,7 @@ func securedCases(authorizer string) []TableEntry {
 				TOKEN_AUDIENCE:           "http://localhost:24978",
 				TOKEN_WELL_KNOWN:         "http://localhost:14446/well-known.json",
 			},
-			Datasets200,
+			testOutcome{status: 200, body: `[{"Name":"places"}]`},
 		),
 		Entry(
 			"With AUTHORIZATION_MIDDLEWARE="+authorizer+", valid oauth, valid path opa",
@@ -225,6 +229,36 @@ func securedCases(authorizer string) []TableEntry {
 				OPA_ENDPOINT:             "http://localhost:14446/",
 			},
 			Jobs200,
+		),
+		Entry(
+			"With AUTHORIZATION_MIDDLEWARE="+authorizer+", valid oauth, valid path opa 2",
+			requestDetails{path: "/datasets", tokenFrom: oauthValid, user: "bob"},
+			userConfig{AuthorizationOpa: true}, // let OPA allow datasets listing, and adding people access
+			enviromentConfig{
+				AUTHORIZATION_MIDDLEWARE: authorizer,
+				ADMIN_USERNAME:           "foo",
+				ADMIN_PASSWORD:           "bar",
+				TOKEN_ISSUER:             "http://localhost:14447",
+				TOKEN_AUDIENCE:           "http://localhost:24978",
+				TOKEN_WELL_KNOWN:         "http://localhost:14446/well-known.json",
+				OPA_ENDPOINT:             "http://localhost:14446/",
+			},
+			testOutcome{status: 200, body: `[{"Name":"people"}]`},
+		),
+		Entry(
+			"With AUTHORIZATION_MIDDLEWARE="+authorizer+", valid oauth, valid path opa and acl",
+			requestDetails{path: "/datasets", tokenFrom: oauthValid, user: "bob"},
+			userConfig{AuthorizationOpa: true, AuthorizationACL: true},
+			enviromentConfig{
+				AUTHORIZATION_MIDDLEWARE: authorizer,
+				ADMIN_USERNAME:           "foo",
+				ADMIN_PASSWORD:           "bar",
+				TOKEN_ISSUER:             "http://localhost:14447",
+				TOKEN_AUDIENCE:           "http://localhost:24978",
+				TOKEN_WELL_KNOWN:         "http://localhost:14446/well-known.json",
+				OPA_ENDPOINT:             "http://localhost:14446/",
+			},
+			testOutcome{status: 200, body: `[{"Name":"people"},{"Name":"places"}]`},
 		),
 
 		Entry(
@@ -286,7 +320,7 @@ func securedCases(authorizer string) []TableEntry {
 				TOKEN_AUDIENCE:           "http://localhost:24978",
 				TOKEN_WELL_KNOWN:         "http://localhost:14446/well-known.json",
 			},
-			Datasets200,
+			testOutcome{status: 200, body: `[{"Name":"places"}]`},
 		),
 		Entry(
 			"With AUTHORIZATION_MIDDLEWARE="+authorizer+", valid nodeSec, valid path opa",
@@ -302,6 +336,35 @@ func securedCases(authorizer string) []TableEntry {
 				OPA_ENDPOINT:             "http://localhost:14446/",
 			},
 			Jobs200,
+		), Entry(
+			"With AUTHORIZATION_MIDDLEWARE="+authorizer+", valid nodeSec, valid path opa 2",
+			requestDetails{path: "/datasets", tokenFrom: nodeSecValid, user: "bob"},
+			userConfig{AuthorizationOpa: true}, // let OPA allow datasets listing, and adding people access
+			enviromentConfig{
+				AUTHORIZATION_MIDDLEWARE: authorizer,
+				ADMIN_USERNAME:           "foo",
+				ADMIN_PASSWORD:           "bar",
+				TOKEN_ISSUER:             "http://localhost:14447",
+				TOKEN_AUDIENCE:           "http://localhost:24978",
+				TOKEN_WELL_KNOWN:         "http://localhost:14446/well-known.json",
+				OPA_ENDPOINT:             "http://localhost:14446/",
+			},
+			testOutcome{status: 200, body: `[{"Name":"people"}]`},
+		),
+		Entry(
+			"With AUTHORIZATION_MIDDLEWARE="+authorizer+", valid nodeSec, valid path opa and acl",
+			requestDetails{path: "/datasets", tokenFrom: nodeSecValid, user: "bob"},
+			userConfig{AuthorizationOpa: true, AuthorizationACL: true},
+			enviromentConfig{
+				AUTHORIZATION_MIDDLEWARE: authorizer,
+				ADMIN_USERNAME:           "foo",
+				ADMIN_PASSWORD:           "bar",
+				TOKEN_ISSUER:             "http://localhost:14447",
+				TOKEN_AUDIENCE:           "http://localhost:24978",
+				TOKEN_WELL_KNOWN:         "http://localhost:14446/well-known.json",
+				OPA_ENDPOINT:             "http://localhost:14446/",
+			},
+			testOutcome{status: 200, body: `[{"Name":"people"},{"Name":"places"}]`},
 		),
 	}
 }
@@ -335,6 +398,8 @@ var (
 			ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 			err := wellKnownServer.Shutdown(ctx)
 			os.RemoveAll(oauthLocation)
+			os.Remove(location)
+			os.RemoveAll(securityLocation)
 			Expect(err).To(BeNil())
 			defer cancel()
 		})
@@ -374,9 +439,10 @@ var (
 				Jobs200,
 			),
 
-			// both opa and local values "turn on" the authorization middleware and implicitly authentication
+			// both on, opa and local values "turn on" the authorization middleware and implicitly authentication
 			localCases,
 			opaCases,
+			onCases,
 		)
 	})
 )
@@ -392,8 +458,8 @@ func describeEntry(r requestDetails, u userConfig, ec enviromentConfig, expected
 }
 
 func execEntry(r requestDetails, u userConfig, ec enviromentConfig, expectedOutcome testOutcome) {
-	_ = os.RemoveAll(location)
-	_ = os.RemoveAll(securityLocation)
+	//_ = os.RemoveAll(location)
+	//_ = os.RemoveAll(securityLocation)
 	_ = os.Setenv("STORE_LOCATION", location)
 	_ = os.Setenv("PROFILE", "test")
 	_ = os.Setenv("SERVER_PORT", "24978")
@@ -410,8 +476,8 @@ func execEntry(r requestDetails, u userConfig, ec enviromentConfig, expectedOutc
 	_ = os.Setenv("OPA_ENDPOINT", ec.OPA_ENDPOINT)
 
 	defer func() {
-		_ = os.RemoveAll(location)
-		_ = os.RemoveAll(securityLocation)
+		//_ = os.RemoveAll(location)
+		//_ = os.RemoveAll(securityLocation)
 		_ = os.Unsetenv("PROFILE")
 		_ = os.Unsetenv("SERVER_PORT")
 		_ = os.Unsetenv("STORE_LOCATION")
@@ -437,8 +503,11 @@ func execEntry(r requestDetails, u userConfig, ec enviromentConfig, expectedOutc
 	}()
 
 	if status > -1 {
+		addDatasets("http://localhost:24978/", ec.ADMIN_USERNAME, ec.ADMIN_PASSWORD)
 		if u.AuthorizationACL {
-			giveBobACLForDatasets("http://localhost:24978/", ec.ADMIN_USERNAME, ec.ADMIN_PASSWORD)
+			giveBobACLForPaths("http://localhost:24978/", ec.ADMIN_USERNAME, ec.ADMIN_PASSWORD, "/datasets", "/datasets/places")
+		} else {
+			giveBobACLForPaths("http://localhost:24978/", ec.ADMIN_USERNAME, ec.ADMIN_PASSWORD)
 		}
 		opaState = u.AuthorizationOpa
 		reqURL := "http://localhost:24978" + r.path
@@ -464,8 +533,16 @@ func execEntry(r requestDetails, u userConfig, ec enviromentConfig, expectedOutc
 			status = response.StatusCode
 			resTxt, err := io.ReadAll(response.Body)
 			Expect(err).To(BeNil())
+
 			Expect(status).To(BeEquivalentTo(expectedOutcome.status))
-			Expect(string(resTxt)).To(ContainSubstring(expectedOutcome.body))
+
+			jsonReceived := map[string]any{}
+			err = json.Unmarshal([]byte(fmt.Sprintf(`{"r":%s}`, resTxt)), &jsonReceived)
+			Expect(err).To(BeNil())
+			jsonExpected := map[string]any{}
+			err = json.Unmarshal([]byte(fmt.Sprintf(`{"r":%s}`, expectedOutcome.body)), &jsonExpected)
+			Expect(err).To(BeNil())
+			Expect(jsonReceived).To(BeEquivalentTo(jsonExpected))
 		}
 		response.Body.Close()
 	}
@@ -474,6 +551,38 @@ func execEntry(r requestDetails, u userConfig, ec enviromentConfig, expectedOutc
 	}
 	cancel()
 	Expect(status).To(BeEquivalentTo(expectedOutcome.status))
+}
+
+func addDatasets(datahubURL string, username string, password string) {
+	GinkgoHelper()
+	if added {
+		return
+	}
+	adminToken := getAdminToken(datahubURL, username, password)
+	reqURL := datahubURL + "datasets/people"
+	req, _ := http.NewRequest("POST", reqURL, nil)
+	req.Header = http.Header{
+		"Content-Type":  []string{"application/json"},
+		"Authorization": []string{"Bearer " + adminToken},
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	Expect(err).To(BeNil())
+	Expect(res).NotTo(BeNil())
+	Expect(res.StatusCode).To(Equal(200))
+
+	reqURL = datahubURL + "datasets/places"
+	req, _ = http.NewRequest("POST", reqURL, nil)
+	req.Header = http.Header{
+		"Content-Type":  []string{"application/json"},
+		"Authorization": []string{"Bearer " + adminToken},
+	}
+
+	res, err = http.DefaultClient.Do(req)
+	Expect(err).To(BeNil())
+	Expect(res).NotTo(BeNil())
+	Expect(res.StatusCode).To(Equal(200))
+	added = true
 }
 
 func getToken(from tokenSource, ec enviromentConfig, details requestDetails) string {

@@ -98,21 +98,24 @@ func NewAuthorizer(env *conf.Env, logger *zap.SugaredLogger, core *security.Serv
 	log := logger.Named("authorizer")
 
 	switch env.Auth.Middleware {
-	case "local", "opa":
-		log.Infof("Adding node security Authorizer")
+	case "local", "opa", "on":
 		if env.AdminUserName == "" || env.AdminPassword == "" {
 			log.Panicf("Admin password or username not set")
 		} else {
+			log.Infof("Adding node security Authorizer")
 			acl := middlewares.LocalAuthorizer(core)
+			log.Infof("Adding OPA Authorizer")
 			opa := middlewares.OpaAuthorizer
 			return &AuthorizerConfig{authorizer: func(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {
 				return func(next echo.HandlerFunc) echo.HandlerFunc {
 					return func(c echo.Context) error {
 						// apply both authorizers, if any of them returns nil, we are good and can let the request through
-						err1 := acl(log, scopes...)(next)(c)
-						err2 := opa(log, scopes...)(next)(c)
-						if err1 != nil && err2 != nil {
-							return echo.NewHTTPError(http.StatusForbidden, "user does not have permission")
+						err1 := opa(log, scopes...)(next)(c)
+						if err1 != nil {
+							err2 := acl(log, scopes...)(next)(c)
+							if err2 != nil {
+								return echo.NewHTTPError(http.StatusForbidden, "user does not have permission")
+							}
 						}
 						return nil
 					}
@@ -152,8 +155,8 @@ func setupJWT(env *conf.Env, core *security.ServiceCore, skipper func(c echo.Con
 		Wellknown: env.Auth.WellKnown,
 	}
 
-	// if node security is enabled
-	if env.Auth.Middleware == "local" || env.Auth.Middleware == "opa" {
+	// if security is enabled
+	if env.Auth.Middleware == "local" || env.Auth.Middleware == "opa" || env.Auth.Middleware == "on" {
 		config.NodePublicKey = core.NodeInfo.KeyPairs[0].PublicKey
 		config.NodeIssuer = []string{"node:" + core.NodeInfo.NodeID}
 		config.NodeAudience = []string{"node:" + core.NodeInfo.NodeID}

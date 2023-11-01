@@ -113,9 +113,6 @@ type ServiceCore struct {
 
 	// client id keyed list of roles
 	roles sync.Map
-
-	// indicates if local authorisation is enabled
-	IsLocalAuthEnabled bool
 }
 
 func NewServiceCore(env *conf.Env) *ServiceCore {
@@ -125,7 +122,6 @@ func NewServiceCore(env *conf.Env) *ServiceCore {
 	serviceCore.AdminClientSecret = env.AdminPassword
 	nodeInfo := NewNodeInfo(env.NodeID, nil)
 	serviceCore.NodeInfo = nodeInfo
-	serviceCore.IsLocalAuthEnabled = env.Auth.Middleware == "local"
 
 	serviceCore.Init()
 
