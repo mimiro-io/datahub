@@ -1911,14 +1911,14 @@ Assuming there are two data hubs and the goal is to have one data hub be able to
 
 To register clients and ACLs it is first necessary to log into the datahub with the admin permissions.
 
-To login with admin credentials create a new login alias. Notice the type is 'admin'. The clientId and secret should align with the data hub environment variables ADMIN_USER and ADMIN_PASSWORD.
+To login with admin credentials create a new login alias. Notice the type is 'admin'. The clientId and clientSecret should align with the data hub environment variables ADMIN_USERNAME and ADMIN_PASSWORD.
 
 ```
 mim login add
     --alias localadmin \
     --type admin
     --server "https://localhost:8080" \
-    --clientId "ADMIN_USER" \
+    --clientId "ADMIN_USERNAME" \
     --clientSecret "ADMIN_PASSWORD" \
 ```
 
