@@ -366,11 +366,26 @@ func securedCases(authorizer string) []TableEntry {
 			},
 			testOutcome{status: 200, body: `[{"Name":"people"},{"Name":"places"}]`},
 		),
+		Entry(
+			"With AUTHORIZATION_MIDDLEWARE="+authorizer+", valid nodeSec, invalid path opa and acl",
+			requestDetails{path: "/datasets/places/changes", tokenFrom: nodeSecValid, user: "bob"},
+			userConfig{AuthorizationOpa: false, AuthorizationACL: true},
+			enviromentConfig{
+				AUTHORIZATION_MIDDLEWARE: authorizer,
+				ADMIN_USERNAME:           "foo",
+				ADMIN_PASSWORD:           "bar",
+				TOKEN_ISSUER:             "http://localhost:14447",
+				TOKEN_AUDIENCE:           "http://localhost:24978",
+				TOKEN_WELL_KNOWN:         "http://localhost:14446/well-known.json",
+				OPA_ENDPOINT:             "http://localhost:14446/",
+			},
+			NoAccess403,
+		),
 	}
 }
 
 var (
-	opaState = false
+	opaState = new(bool)
 	_        = Describe("Access", Ordered, func() {
 		var wellKnownServer *http.Server
 		BeforeAll(func() {
@@ -381,7 +396,7 @@ var (
 			mux := http.NewServeMux()
 			mux.Handle("/", http.FileServer(http.Dir(oauthLocation)))
 			mux.HandleFunc("/v1/data/datahub/authz/allow", func(w http.ResponseWriter, r *http.Request) {
-				fmt.Fprintf(w, `{"result":%v}`, opaState)
+				fmt.Fprintf(w, `{"result":%v}`, *opaState)
 			})
 			mux.HandleFunc("/v1/data/datahub/authz/datasets", func(w http.ResponseWriter, r *http.Request) {
 				fmt.Fprintf(w, `{"result":["people"]}`)
@@ -509,7 +524,7 @@ func execEntry(r requestDetails, u userConfig, ec enviromentConfig, expectedOutc
 		} else {
 			giveBobACLForPaths("http://localhost:24978/", ec.ADMIN_USERNAME, ec.ADMIN_PASSWORD)
 		}
-		opaState = u.AuthorizationOpa
+		*opaState = u.AuthorizationOpa
 		reqURL := "http://localhost:24978" + r.path
 		req, _ := http.NewRequest("GET", reqURL, nil)
 		if r.tokenFrom > 0 {

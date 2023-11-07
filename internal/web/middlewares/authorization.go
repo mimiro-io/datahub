@@ -54,7 +54,7 @@ func LocalAuthorizer(core *security.ServiceCore) func(logger *zap.SugaredLogger,
 				}
 
 				for _, ac := range acl {
-					if core.CheckGranted(ac, c.Path(), action) {
+					if core.CheckGranted(ac, c.Request().URL.Path, action) {
 						return next(c)
 					}
 				}
