@@ -1950,7 +1950,7 @@ It will show something like:
     }
 }
 ```
-To add ACLS you need to add a json-file from this template:
+To add ACLS a json-file can be created from this template:
 
 ```json
 [
@@ -1961,12 +1961,12 @@ To add ACLS you need to add a json-file from this template:
     }
 ]
 ```
-After you have created this file the first time, upload it.
+After this file has been created it should be uploaded to the datahub.
 ```
 mim acl add <client-id> -f acls.json
 ```
 
-Then you can get, edit and update the ACL for the client:
+Then get, edit and update the ACL for the client:
 
 ```
 mim acl get <client-id> client23-acl.json
