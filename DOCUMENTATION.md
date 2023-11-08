@@ -1918,8 +1918,11 @@ mim login add
     --alias localadmin \
     --type admin
     --server "https://localhost:8080" \
+    -- audience "https://localhost:8080" \
+    -- authorizer "https://auth.localhost:8081" \
     --clientId "ADMIN_USERNAME" \
     --clientSecret "ADMIN_PASSWORD" \
+
 ```
 
 Then get the client id and public key from the data hub that will be connecting to this datahub. The client-id is the NODE_ID of the data hub that will be a client. The public key can be found based on the SECURITY_STORAGE_LOCATION environment variable of the client data hub. Ensure you only share the public key.
@@ -1947,20 +1950,41 @@ It will show something like:
     }
 }
 ```
+To add ACLS you need to add a json-file from this template:
 
-Then get, edit and update the ACL for the client:
+```json
+[
+    {
+        "Resource":"/datasets/your.Dataset*",
+        "Action":"read",
+        "Deny":false
+    }
+]
+```
+After you have created this file the first time, upload it.
+```
+mim acl add <client-id> -f acls.json
+```
+
+Then you can get, edit and update the ACL for the client:
 
 ```
 mim acl get <client-id> client23-acl.json
 ```
+
+The resource patterns are either exact matches or '*' matches. This will match any subpart of the URL and isnt restricted to path segments. e.g. '/datasets/core.*' can be used to secure all datasets starting with 'core.'. This also mean that access can be granted to only /changes or /entities respectively. 
+Something to have in mind if both endpoints are granted access to with '/datasets/core.Dataset*' there is also potential to grant access to '/datasets/core.DatasetWithAdditionalInfo'. 
 
 To grant full access to the client. Add to the ACL file so it looks like:
 
 ```json
 [{ "Resource": "/*", "Action": "write", "Deny": false }]
 ```
+Other options can look like this
 
-The resource patterns are either exact matches or '_' matches. This will match any subpart of the URL and isnt restricted to path segments. e.g. ´/datasets/core._' can be used to secure all datasets starting with 'core.'.
+```json
+[{"Resource": "/datasets/core.*", "Action": "read", "Deny": false },{"Resource": "/datasets/test.Users*", "Action": "read", "Deny": false }, {"Resource": "/datasets/test.Places/changes", "Action": "read", "Deny": false }]
+```
 
 Then upload the config.
 
@@ -1985,13 +2009,32 @@ a POST to /provider/logins
     "type": "nodebearer",
     "endpoint": {
         "type": "text",
-        "value": "URL-of-datahub/security/token"
+        "value": "URL-of-remote-datahub/security/token"
     },
     "audience": {
         "type": "text",
         "value": "the name (NODE_ID) of the remote datahub you want to read from"
     }
 }
+```
+The name of this provider should be used in the job to specify which one the datahub should use for this job
+
+#### Remote datahub as source config
+```json
+  "source": {
+    "Type": "HttpDatasetSource",
+    "Url": "URL-of-remote-datahub/datasets/some.Dataset/changes",
+    "TokenProvider": "remote-datahub-name-provider"
+  },
+```
+
+#### Remote datahub as sink config
+```json
+  "sink": {
+    "Type": "HttpDatasetSink",
+    "Url": "URL-of-remote-datahub/datasets/some.Dataset/entities",
+    "TokenProvider": "remote-datahub-name-provider"
+  },
 ```
 
 ### Working with security providers
