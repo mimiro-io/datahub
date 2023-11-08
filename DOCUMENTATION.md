@@ -186,7 +186,7 @@ Entities are returned as an array of JSON objects and can also contain a continu
 
 ## Setting public namespaces for a Dataset
 
-By default, the context object in datahub responses lists all available namespace mappings in the datahub. When there is a large number of datasets with many namespaces in the datahub, this can be undesired.
+By default, the context object in data hub responses lists all available namespace mappings in the data hub. When there is a large number of datasets with many namespaces in the data hub, this can be undesired.
 Therefore, it is possible to configure a limited list of namespaces per dataset to be used in response contexts.
 
 ### Creating datasets with public namespaces
@@ -238,7 +238,7 @@ In this example, we add two namespaces as `publicNamespaces` to dataset `namespa
 mim dataset store core.Dataset --filename=update.json
 ```
 
-Now, when we retrieve entities from `namespaces.Test`, datahub will supply only `publicNamespaces` as context
+Now, when we retrieve entities from `namespaces.Test`, data hub will supply only `publicNamespaces` as context
 
 ```
 > mim dataset entities namespaces.Test
@@ -292,7 +292,7 @@ POST /query
 
 To lookup a single entity:
 
--   using `mim`, the datahub CLI
+-   using `mim`, the data hub CLI
     ```shell
     > mim query --id="http://data.mimiro.io/people/homer"
     ```
@@ -307,7 +307,7 @@ To lookup a single entity:
 
 To fetch related entities for a given entity:
 
--   using `mim`, the datahub CLI
+-   using `mim`, the data hub CLI
 
     ```shell
     > mim query --entity="http://data.mimiro.io/people/homer" \
@@ -324,7 +324,7 @@ To fetch related entities for a given entity:
 
 and to get entities referencing a given entity, e.g. all entities of type person.
 
--   using `mim`, the datahub CLI
+-   using `mim`, the data hub CLI
     ```shell
     > mim query --entity="http://data.mimiro.io/schema/person" \
                 --via="http://www.w3.org/1999/02/22-rdf-syntax-ns#type" \
@@ -492,7 +492,7 @@ We are developing and making available data layers for common systems. They are 
 
 ## Jobs
 
-Jobs are used to fetch data from remote datalayers into the datahub, they are used to connect and transform data in the data hub and they are used to send data to remote datalayers.
+Jobs are used to fetch data from remote datalayers into the data hub, they are used to connect and transform data in the data hub and they are used to send data to remote datalayers.
 
 A Job is defined with three components: a source, an optional transform and a sink. Jobs that pull from or push to external datalayers execute on a schedule, jobs that move data between datasets can either be on a schedule or triggered as data arrives in the source dataset.
 
@@ -564,7 +564,7 @@ The default is that all changes of each entity are emitted, so that the whole da
 
 #### Union Dataset Source
 
-A union dataset source can be used to consume multiple datasets in the datahub.
+A union dataset source can be used to consume multiple datasets in the data hub.
 All configured datasets are read sequentially, as if their contents were concatenated.
 
 ```json
@@ -1741,7 +1741,7 @@ mim transform test test.people --file transform1.js
 
 #### Testing a Transform on a given entity
 
-There is also a possibility to test the transform on a known entity in the datahub by running a query and applying the transformation on the returned entity, the command runs the same transform as above but on the entity `http://data.mimiro.io/people/bob`. The data is fetched from the dataset, the script is executed locally, and the output displayed.
+There is also a possibility to test the transform on a known entity in the data hub by running a query and applying the transformation on the returned entity, the command runs the same transform as above but on the entity `http://data.mimiro.io/people/bob`. The data is fetched from the dataset, the script is executed locally, and the output displayed.
 
 ```shell
 mim query --id "http://data.mimiro.io/people/bob" --via="*" --json | mim transform test --file transform1.js
@@ -1809,11 +1809,11 @@ There are two main security models for the data hub.
 
 1. No security / API gateway seured. All calls are allowed at the data hub API level. This mode can be used either when developing or when the data hub API is protected behind an API gateway that implements secure access.
 
-2. Data Hub Security. This involves a datahub allowing for the registration of clients and a public key. The client (often in this model another datahub) retrieves a JWT access token by sending a request (signed with a private key) to authenticate.
+2. Data Hub Security. This involves a data hub allowing for the registration of clients and a public key. The client (often in this model another data hub) retrieves a JWT access token by sending a request (signed with a private key) to authenticate.
 
-In secured mode, it is also possile to configure an OPA endpoint. OPA is used to authorize requests. Authorization is then based on a union of datahub ACL rules and OPA policy rules for the current user.
+In secured mode, it is also possile to configure an OPA endpoint. OPA is used to authorize requests. Authorization is then based on a union of data hub ACL rules and OPA policy rules for the current user.
 
-Additionally, an external authentication provider can be configured to validate JWT tokens. This has to be an OAuth2 provider. The datahub will then validate JWT tokens against both the built-in provider and the external provider.
+Additionally, an external authentication provider can be configured to validate JWT tokens. This has to be an OAuth2 provider. The data hub will then validate JWT tokens against both the built-in provider and the external provider.
 
 The following environment variables can be set to configure the data hub security.
 
@@ -1831,7 +1831,7 @@ This is the password value for the admin user. Required in secured mode. It is h
 
 `ADMIN_LOCAL_ONLY=false`
 
-If set to true admin access is only available from the local machine / container where the datahub is running. (coming soon)
+If set to true admin access is only available from the local machine / container where the data hub is running. (coming soon)
 
 `AUTHORIZATION_MIDDLEWARE=noop`
 
@@ -1909,7 +1909,7 @@ with id and secret.
 
 Assuming there are two data hubs and the goal is to have one data hub be able to run a job that accesses a dataset on another.
 
-To register clients and ACLs it is first necessary to log into the datahub with the admin permissions.
+To register clients and ACLs it is first necessary to log into the data hub with the admin permissions.
 
 To login with admin credentials create a new login alias. Notice the type is 'admin'. The clientId and clientSecret should align with the data hub environment variables ADMIN_USERNAME and ADMIN_PASSWORD.
 
@@ -1918,14 +1918,14 @@ mim login add
     --alias localadmin \
     --type admin
     --server "https://localhost:8080" \
-    -- audience "https://localhost:8080" \
-    -- authorizer "https://auth.localhost:8081" \
+    --audience "https://localhost:8080" \
+    --authorizer "https://auth.localhost:8081" \
     --clientId "ADMIN_USERNAME" \
     --clientSecret "ADMIN_PASSWORD" \
 
 ```
 
-Then get the client id and public key from the data hub that will be connecting to this datahub. The client-id is the NODE_ID of the data hub that will be a client. The public key can be found based on the SECURITY_STORAGE_LOCATION environment variable of the client data hub. Ensure you only share the public key.
+Then get the client id and public key from the data hub that will be connecting to this data hub. The client-id is the NODE_ID of the data hub that will be a client. The public key can be found based on the SECURITY_STORAGE_LOCATION environment variable of the client data hub. Ensure you only share the public key.
 
 Register the client data hub with the following command:
 
@@ -1961,7 +1961,8 @@ To add ACLS a json-file can be created from this template:
     }
 ]
 ```
-After this file has been created it should be uploaded to the datahub.
+After this file has been created it should be uploaded to the data hub.
+
 ```
 mim acl add <client-id> -f acls.json
 ```
@@ -1992,7 +1993,7 @@ Then upload the config.
 mim acl add <client-id> -f acls.json
 ```
 
-On the client datahub it is necessary to upload a provider config that can be referenced from jobs that need to access the remote data hub.
+On the client data hub it is necessary to upload a provider config that can be referenced from jobs that need to access the remote data hub.
 
 This can be done with the following:
 
@@ -2005,35 +2006,35 @@ a POST to /provider/logins
 
 ```json
 {
-    "name": "remote-datahub-name-provider",
+    "name": "remote-data-hub-name-provider",
     "type": "nodebearer",
     "endpoint": {
         "type": "text",
-        "value": "URL-of-remote-datahub/security/token"
+        "value": "URL-of-remote-data-hub/security/token"
     },
     "audience": {
         "type": "text",
-        "value": "the name (NODE_ID) of the remote datahub you want to read from"
+        "value": "the name (NODE_ID) of the remote data hub you want to read from"
     }
 }
 ```
-The name of this provider should be used in the job to specify which one the datahub should use for this job
+The name of this provider should be used in the job to specify which one the data hub should use for this job
 
-#### Remote datahub as source config
+#### Remote data hub as source config
 ```json
   "source": {
     "Type": "HttpDatasetSource",
-    "Url": "URL-of-remote-datahub/datasets/some.Dataset/changes",
-    "TokenProvider": "remote-datahub-name-provider"
+    "Url": "URL-of-remote-data-hub/datasets/some.Dataset/changes",
+    "TokenProvider": "remote-data-hub-name-provider"
   },
 ```
 
-#### Remote datahub as sink config
+#### Remote data hub as sink config
 ```json
   "sink": {
     "Type": "HttpDatasetSink",
-    "Url": "URL-of-remote-datahub/datasets/some.Dataset/entities",
-    "TokenProvider": "remote-datahub-name-provider"
+    "Url": "URL-of-remote-data-hub/datasets/some.Dataset/entities",
+    "TokenProvider": "remote-data-hub-name-provider"
   },
 ```
 
