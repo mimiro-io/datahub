@@ -83,7 +83,7 @@ var _ = Describe("The Eventbus", func() {
 
 		var webHander *web.WebHandler
 		webHander, mockServer = web.NewWebServer(lc, e, e.Logger, &statsd.NoOpClient{})
-		mw := web.NewMiddleware(lc, e, webHander, mockServer, web.NewAuthorizer(e, e.Logger, nil), nil)
+		mw := web.NewMiddleware(lc, e, webHander, mockServer, nil)
 		web.NewDatasetHandler(lc, mockServer, e.Logger, mw, dsm, store, newBus, nil)
 
 		err = lc.Start(context.Background())

@@ -16,7 +16,6 @@ package web
 
 import (
 	"context"
-	"net/http"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -39,14 +38,7 @@ type Middleware struct {
 	env        *conf.Env
 }
 
-func NewMiddleware(
-	lc fx.Lifecycle,
-	env *conf.Env,
-	handler *WebHandler,
-	e *echo.Echo,
-	auth *AuthorizerConfig,
-	core *security.ServiceCore,
-) *Middleware {
+func NewMiddleware(lc fx.Lifecycle, env *conf.Env, handler *WebHandler, e *echo.Echo, core *security.ServiceCore) *Middleware {
 	skipper := func(c echo.Context) bool {
 		// don't secure health endpoints
 		if strings.HasPrefix(c.Request().URL.Path, "/health") {
@@ -75,7 +67,7 @@ func NewMiddleware(
 		cors:       setupCors(),
 		jwt:        setupJWT(env, core, skipper),
 		recover:    setupRecovery(handler),
-		authorizer: auth.authorizer,
+		authorizer: NewAuthorizer(env, handler.Logger, core),
 		handler:    handler,
 		env:        env,
 	}
@@ -90,11 +82,8 @@ func NewMiddleware(
 	return mw
 }
 
-type AuthorizerConfig struct {
-	authorizer func(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc
-}
-
-func NewAuthorizer(env *conf.Env, logger *zap.SugaredLogger, core *security.ServiceCore) *AuthorizerConfig {
+func NewAuthorizer(env *conf.Env, logger *zap.SugaredLogger, core *security.ServiceCore) func(
+	logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {
 	log := logger.Named("authorizer")
 
 	switch env.Auth.Middleware {
@@ -103,35 +92,15 @@ func NewAuthorizer(env *conf.Env, logger *zap.SugaredLogger, core *security.Serv
 			log.Panicf("Admin password or username not set")
 		} else {
 			log.Infof("Adding node security Authorizer")
-			acl := middlewares.LocalAuthorizer(core)
-			log.Infof("Adding OPA Authorizer")
-			opa := middlewares.OpaAuthorizer
-			return &AuthorizerConfig{authorizer: func(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {
-				return func(next echo.HandlerFunc) echo.HandlerFunc {
-					return func(c echo.Context) error {
-						// apply both authorizers, if any of them returns nil, we are good and can let the request through
-						err1 := opa(log, scopes...)(next)(c)
-						if err1 != nil {
-							err2 := acl(log, scopes...)(next)(c)
-							if err2 != nil {
-								return echo.NewHTTPError(http.StatusForbidden, "user does not have permission")
-							}
-						}
-						return nil
-					}
-				}
-			},
-			}
+			return middlewares.Authorizer(core)
 		}
 	case "noop":
 		fallthrough
 	default:
 		log.Infof("WARNING: Adding NoOp Authorizer")
-		return &AuthorizerConfig{
-			middlewares.NoOpAuthorizer,
-		}
+		return middlewares.NoOpAuthorizer
 	}
-	return &AuthorizerConfig{}
+	return nil
 
 }
 
