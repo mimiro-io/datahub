@@ -15,6 +15,7 @@
 package middlewares
 
 import (
+	"github.com/spf13/viper"
 	"net/http"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -24,45 +25,63 @@ import (
 	"github.com/mimiro-io/datahub/internal/security"
 )
 
-func LocalAuthorizer(core *security.ServiceCore) func(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {
+func Authorizer(core *security.ServiceCore) func(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {
+	opaEndpoint := viper.GetString("OPA_ENDPOINT")
 	return func(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {
 		return func(next echo.HandlerFunc) echo.HandlerFunc {
 			return func(c echo.Context) error {
 				// get user token
 				token := c.Get("user").(*jwt.Token)
-				claims := token.Claims.(*security.CustomClaims)
-				roles := claims.Roles
 
-				for _, role := range roles {
-					if role == "admin" {
-						return next(c)
+				// check OPA
+				datasets, err := doOpaCheck(c.Request().Method, c.Request().URL.Path, token, scopes, opaEndpoint)
+				if err != nil {
+					// if OPA failed, check ACL
+					err = doAclCheck(c.Request().Method, c.Request().URL.Path, token, core)
+					if err != nil {
+						return err
 					}
+				} else {
+					c.Set("datasets", datasets)
 				}
 
-				// get subject
-				subject := claims.Subject
-				acl := core.GetAccessControls(subject)
-				if acl == nil {
-					return echo.NewHTTPError(http.StatusForbidden, "user does not have permission")
-				}
-
-				// get the method
-				method := c.Request().Method
-				action := "read"
-				if method == "DELETE" || method == "POST" {
-					action = "write"
-				}
-
-				for _, ac := range acl {
-					if core.CheckGranted(ac, c.Request().URL.Path, action) {
-						return next(c)
-					}
-				}
-
-				return echo.NewHTTPError(http.StatusForbidden, "user does not have permission")
+				// if all above checks passed, continue
+				return next(c)
 			}
 		}
 	}
+}
+
+func doAclCheck(method string, path string, token *jwt.Token, core *security.ServiceCore) error {
+	claims := token.Claims.(*security.CustomClaims)
+	roles := claims.Roles
+
+	for _, role := range roles {
+		if role == "admin" {
+			return nil
+		}
+	}
+
+	// get subject
+	subject := claims.Subject
+	acl := core.GetAccessControls(subject)
+	if acl == nil {
+		return echo.NewHTTPError(http.StatusForbidden, "user does not have permission")
+	}
+
+	// get the method
+	action := "read"
+	if method == "DELETE" || method == "POST" {
+		action = "write"
+	}
+
+	for _, ac := range acl {
+		if core.CheckGranted(ac, path, action) {
+			return nil
+		}
+	}
+
+	return echo.NewHTTPError(http.StatusForbidden, "user does not have permission")
 }
 
 func NoOpAuthorizer(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {

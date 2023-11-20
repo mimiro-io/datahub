@@ -25,8 +25,6 @@ import (
 	"github.com/gojektech/heimdall/v6/httpclient"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
-	"github.com/spf13/viper"
-	"go.uber.org/zap"
 )
 
 type opaAnswer struct {
@@ -37,60 +35,46 @@ type opaRequest struct {
 	Input map[string]interface{} `json:"input"`
 }
 
-type opaDataset struct {
-	Name string `json:"name"`
-}
-
 type opaDatasets struct {
 	Result []string `json:"result"`
 }
 
-func OpaAuthorizer(_ *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {
-	opaEndpoint := viper.GetString("OPA_ENDPOINT")
-
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			token := c.Get("user").(*jwt.Token)
-
-			input := opaRequest{
-				Input: map[string]interface{}{
-					"method": c.Request().Method,
-					"path":   c.Request().URL.Path,
-					"token":  token.Raw,
-					"scopes": scopes,
-				},
-			}
-
-			body, err := opaQuery(fmt.Sprintf("%s/v1/data/datahub/authz/allow", opaEndpoint), input)
-			if err != nil {
-				return echo.NewHTTPError(http.StatusForbidden, err.Error())
-			}
-
-			answer := opaAnswer{}
-			err = json.Unmarshal(body, &answer)
-			if err != nil {
-				return echo.NewHTTPError(http.StatusForbidden, err.Error())
-			}
-			if !answer.Result {
-				return echo.NewHTTPError(http.StatusForbidden, "user has no access to resource")
-			}
-
-			// lets figure out the users datasets
-			body, err = opaQuery(fmt.Sprintf("%s/v1/data/datahub/authz/datasets", opaEndpoint), input)
-			if err != nil {
-				return echo.NewHTTPError(http.StatusForbidden, err.Error())
-			}
-			resp := opaDatasets{}
-			err = json.Unmarshal(body, &resp)
-			if err != nil {
-				return echo.NewHTTPError(http.StatusForbidden, err.Error())
-			}
-			datasets := pluckDatasets(resp)
-			c.Set("datasets", datasets)
-
-			return next(c)
-		}
+func doOpaCheck(method string, path string, token *jwt.Token, scopes []string, opaEndpoint string) ([]string, error) {
+	input := opaRequest{
+		Input: map[string]interface{}{
+			"method": method,
+			"path":   path,
+			"token":  token.Raw,
+			"scopes": scopes,
+		},
 	}
+
+	body, err := opaQuery(fmt.Sprintf("%s/v1/data/datahub/authz/allow", opaEndpoint), input)
+	if err != nil {
+		return nil, echo.NewHTTPError(http.StatusForbidden, err.Error())
+	}
+
+	answer := opaAnswer{}
+	err = json.Unmarshal(body, &answer)
+	if err != nil {
+		return nil, echo.NewHTTPError(http.StatusForbidden, err.Error())
+	}
+	if !answer.Result {
+		return nil, echo.NewHTTPError(http.StatusForbidden, "user has no access to resource")
+	}
+
+	// lets figure out the users datasets
+	body, err = opaQuery(fmt.Sprintf("%s/v1/data/datahub/authz/datasets", opaEndpoint), input)
+	if err != nil {
+		return nil, echo.NewHTTPError(http.StatusForbidden, err.Error())
+	}
+	resp := opaDatasets{}
+	err = json.Unmarshal(body, &resp)
+	if err != nil {
+		return nil, echo.NewHTTPError(http.StatusForbidden, err.Error())
+	}
+	datasets := pluckDatasets(resp)
+	return datasets, nil
 }
 
 func opaQuery(url string, request opaRequest) ([]byte, error) {

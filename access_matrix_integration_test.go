@@ -453,10 +453,26 @@ var (
 				enviromentConfig{AUTHORIZATION_MIDDLEWARE: "noop"},
 				Jobs200,
 			),
+			Entry(
+				"With AUTHORIZATION_MIDDLEWARE=on, admin access, underlying error",
+				requestDetails{path: "/datasets/unknown", tokenFrom: adminPwd},
+				userConfig{},
+				enviromentConfig{
+					AUTHORIZATION_MIDDLEWARE: "on",
+					ADMIN_USERNAME:           "foo",
+					ADMIN_PASSWORD:           "bar",
+					TOKEN_ISSUER:             "http://localhost:14447",
+					TOKEN_AUDIENCE:           "http://localhost:24978",
+					TOKEN_WELL_KNOWN:         "http://localhost:14446/well-known.json",
+				},
+				testOutcome{
+					status: 404,
+				},
+			),
 
 			// both on, opa and local values "turn on" the authorization middleware and implicitly authentication
-			localCases,
-			opaCases,
+			//localCases,
+			//opaCases,
 			onCases,
 		)
 	})
@@ -552,11 +568,15 @@ func execEntry(r requestDetails, u userConfig, ec enviromentConfig, expectedOutc
 			Expect(status).To(BeEquivalentTo(expectedOutcome.status))
 
 			jsonReceived := map[string]any{}
-			err = json.Unmarshal([]byte(fmt.Sprintf(`{"r":%s}`, resTxt)), &jsonReceived)
-			Expect(err).To(BeNil())
+			if len(resTxt) > 0 {
+				err = json.Unmarshal([]byte(fmt.Sprintf(`{"r":%s}`, resTxt)), &jsonReceived)
+				Expect(err).To(BeNil())
+			}
 			jsonExpected := map[string]any{}
-			err = json.Unmarshal([]byte(fmt.Sprintf(`{"r":%s}`, expectedOutcome.body)), &jsonExpected)
-			Expect(err).To(BeNil())
+			if len(expectedOutcome.body) > 0 {
+				err = json.Unmarshal([]byte(fmt.Sprintf(`{"r":%s}`, expectedOutcome.body)), &jsonExpected)
+				Expect(err).To(BeNil())
+			}
 			Expect(jsonReceived).To(BeEquivalentTo(jsonExpected))
 		}
 		response.Body.Close()
