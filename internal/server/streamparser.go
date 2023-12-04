@@ -17,6 +17,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 )
 
@@ -301,7 +302,7 @@ func (esp *EntityStreamParser) parseReferences(decoder *json.Decoder) (map[strin
 		case string:
 			val, err := esp.parseRefValue(decoder)
 			if err != nil {
-				return nil, errors.New("unable to parse value of reference key " + v)
+				return nil, errors.New(fmt.Sprintf("unable to parse value of reference key %s: %s", v, err))
 			}
 
 			propName := esp.localPropertyMappings[v]
