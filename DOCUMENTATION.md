@@ -1817,6 +1817,10 @@ Additionally, an external authentication provider can be configured to validate 
 
 The following environment variables can be set to configure the data hub security.
 
+`SECURITY_STORAGE_LOCATION=`
+
+SECURITY_STORAGE_LOCATION is used to point to a location on disk where the datahub will generate a key pair to use with Data Hub Security. Note that the data hub must have permissions to create these file on the location.
+
 `NODE_ID=`
 
 NODE_ID is used to give a unique identifier to a running data hub instance. It is needed when regstering this data hub instance as a client to other data hubs. It is the users responsibility to assign unique identifiers.
