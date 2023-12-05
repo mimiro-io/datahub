@@ -1977,8 +1977,11 @@ Then get, edit and update the ACL for the client:
 mim acl get <client-id> client23-acl.json
 ```
 
-The resource patterns are either exact matches or '*' matches. This will match any subpart of the URL and isnt restricted to path segments. e.g. '/datasets/core.*' can be used to secure all datasets starting with 'core.'. This also mean that access can be granted to only /changes or /entities respectively. 
-Something to have in mind if both endpoints are granted access to with '/datasets/core.Dataset*' there is also potential to grant access to '/datasets/core.DatasetWithAdditionalInfo'. 
+The resource patterns are either exact matches or '*' matches. This will match any subpart of the URL and isnt restricted to path segments. e.g. '/datasets/core.*' can be used to secure all datasets starting with 'core.'.
+
+To grant access to, for instance, /changes and /entities on a give dataset, one would add it like so: '/datasets/core.Dataset/*'.
+
+Note the trailing '/' in the line above. Something to have in mind is if both endpoints of the dataset are granted access to with '/datasets/core.Dataset*' there is also potential to grant access to '/datasets/core.DatasetWithAdditionalInfo'. 
 
 To grant full access to the client. Add to the ACL file so it looks like:
 
