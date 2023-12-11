@@ -215,7 +215,7 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 		// a returned Entity can be the product of multiple entities in multiple datasets with the same ID
 		// To get the correct namespace context, we'd have to use the supplied list of dataset names (query.Datasets)
 		// and merge their respective contexts to our result context here.
-		result[0] = handler.store.GetGlobalContext()
+		result[0] = handler.store.GetGlobalContext(false)
 
 		if entity == nil {
 			entity := &EmptyEntity{}
@@ -245,7 +245,7 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 		result := make([]interface{}, 3)
 		// To get the correct namespace context, we'd have to use the supplied list of dataset names (query.Datasets)
 		// and merge their respective contexts to our result context here.
-		result[0] = handler.store.GetGlobalContext()
+		result[0] = handler.store.GetGlobalContext(false)
 		result[1] = server.ToLegacyQueryResult(queryresult)
 		result[2], err = encodeCont(queryresult.Cont)
 		if err != nil {
@@ -262,7 +262,7 @@ func (handler *queryHandler) queryHandler(c echo.Context) error {
 		result := make([]interface{}, 2)
 		// To get the correct namespace context, we'd have to use the supplied list of dataset names (query.Datasets)
 		// and merge their respective contexts to our result context here.
-		result[0] = handler.store.GetGlobalContext()
+		result[0] = handler.store.GetGlobalContext(false)
 		result[1] = server.ToLegacyQueryResult(queryresult)
 		// for compatibility with older clients, do not add new array elem when no limit parameter was given
 		if includeContinuation {
