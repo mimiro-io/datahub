@@ -47,7 +47,7 @@ func NewNamespaceHandler(
 }
 
 func (handler *namespaceHandler) getNamespaces(c echo.Context) error {
-	v := handler.store.GetGlobalContext()
+	v := handler.store.GetGlobalContext(false)
 
 	return c.JSON(http.StatusOK, v.Namespaces)
 }

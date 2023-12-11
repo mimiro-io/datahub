@@ -342,8 +342,19 @@ func (s *Store) GetNamespacedIdentifier(val string, localNamespaces map[string]s
 	}
 }
 
-func (s *Store) GetGlobalContext() *Context {
-	return s.NamespaceManager.GetContext(nil)
+func (s *Store) GetGlobalContext(strict bool) *Context {
+	completeCtx := s.NamespaceManager.GetContext(nil)
+	if !strict {
+		return completeCtx
+	}
+	// TODO: consider caching this. Currently GetGlobalContext is only called once per request so it's not called too often
+	filterdCtx := &Context{ID: "@context", Namespaces: make(map[string]string)}
+	for prefix, expansion := range completeCtx.Namespaces {
+		if strings.HasSuffix(expansion, "#") || strings.HasSuffix(expansion, "/") {
+			filterdCtx.Namespaces[prefix] = expansion
+		}
+	}
+	return filterdCtx
 }
 
 // Open Opens the store. Must be called before using.

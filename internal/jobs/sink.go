@@ -198,8 +198,7 @@ func (httpDatasetSink *httpDatasetSink) endFullSync(ctx context.Context, runner 
 	url := httpDatasetSink.Endpoint
 
 	allObjects := make([]interface{}, 1)
-	// TODO: https://mimiro.atlassian.net/browse/MIM-693
-	allObjects[0] = runner.store.GetGlobalContext()
+	allObjects[0] = httpDatasetSink.Store.GetGlobalContext(true)
 
 	jsonEntities, err := json.Marshal(allObjects)
 	if err != nil {
@@ -255,8 +254,7 @@ func (httpDatasetSink *httpDatasetSink) processEntities(runner *Runner, entities
 	url := httpDatasetSink.Endpoint
 
 	allObjects := make([]interface{}, len(entities)+1)
-	// TODO: https://mimiro.atlassian.net/browse/MIM-693
-	allObjects[0] = runner.store.GetGlobalContext()
+	allObjects[0] = httpDatasetSink.Store.GetGlobalContext(true)
 	for i := 0; i < len(entities); i++ {
 		allObjects[i+1] = entities[i]
 	}
