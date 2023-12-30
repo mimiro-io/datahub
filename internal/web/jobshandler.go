@@ -15,13 +15,11 @@
 package web
 
 import (
-	"context"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 
 	"github.com/labstack/echo/v4"
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/jobs"
@@ -40,33 +38,27 @@ type jobsHandler struct {
 	jobScheduler *jobs.Scheduler
 }
 
-func NewJobsHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, js *jobs.Scheduler) {
+func NewJobsHandler(e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, js *jobs.Scheduler) {
 	log := logger.Named("web")
 	handler := &jobsHandler{
 		jobScheduler: js,
 	}
 
-	lc.Append(fx.Hook{
-		OnStart: func(_ context.Context) error {
-			// jobs
-			e.GET("/jobs", handler.jobsList, mw.authorizer(log, datahubRead)) // list of all defined jobs
+	// jobs
+	e.GET("/jobs", handler.jobsList, mw.authorizer(log, datahubRead)) // list of all defined jobs
 
-			// internal usage
-			e.GET("/jobs/_/schedules", handler.jobsListSchedules, mw.authorizer(log, datahubRead))
-			e.GET("/jobs/_/status", handler.jobsListStatus, mw.authorizer(log, datahubRead))
-			e.GET("/jobs/_/history", handler.jobsListHistory, mw.authorizer(log, datahubRead))
+	// internal usage
+	e.GET("/jobs/_/schedules", handler.jobsListSchedules, mw.authorizer(log, datahubRead))
+	e.GET("/jobs/_/status", handler.jobsListStatus, mw.authorizer(log, datahubRead))
+	e.GET("/jobs/_/history", handler.jobsListHistory, mw.authorizer(log, datahubRead))
 
-			e.GET(
-				"/jobs/:jobid",
-				handler.jobsGetDefinition,
-				mw.authorizer(log, datahubRead),
-			) // the json used to define it
-			e.DELETE("/jobs/:jobid", handler.jobsDelete, mw.authorizer(log, datahubWrite)) // remove an existing job
-			e.POST("/jobs", handler.jobsAdd, mw.authorizer(log, datahubWrite))
-
-			return nil
-		},
-	})
+	e.GET(
+		"/jobs/:jobid",
+		handler.jobsGetDefinition,
+		mw.authorizer(log, datahubRead),
+	) // the json used to define it
+	e.DELETE("/jobs/:jobid", handler.jobsDelete, mw.authorizer(log, datahubWrite)) // remove an existing job
+	e.POST("/jobs", handler.jobsAdd, mw.authorizer(log, datahubWrite))
 }
 
 func (handler *jobsHandler) jobsList(c echo.Context) error {

@@ -25,10 +25,8 @@ import (
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
 
-	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 )
 
@@ -58,9 +56,9 @@ var _ = ginkgo.Describe("The stream parser", func() {
 		devNull, _ := os.Open("/dev/null")
 		oldErr := os.Stderr
 		os.Stderr = devNull
-		lc := fxtest.NewLifecycle(internal.FxTestLog(ginkgo.GinkgoT(), false))
-		store = NewStore(lc, e, &statsd.NoOpClient{})
-		lc.RequireStart()
+		// lc := fxtest.NewLifecycle(internal.FxTestLog(ginkgo.GinkgoT(), false))
+		store = NewStore(e, &statsd.NoOpClient{})
+		//lc.RequireStart()
 		os.Stderr = oldErr
 	})
 	ginkgo.AfterEach(func() {

@@ -16,13 +16,13 @@ package web
 
 import (
 	"context"
+	"github.com/mimiro-io/datahub/internal/security"
 	"html/template"
 	"io"
 	"net/http"
 
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/labstack/echo/v4"
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/conf"
@@ -36,18 +36,11 @@ type Handler struct {
 	Port           string
 	Store          *server.Store
 	JobScheduler   *jobs.Scheduler
-	ContentConfig  *content.Config
+	ContentConfig  *content.ContentService
 	StatsDClient   statsd.ClientInterface
 	DatasetManager *server.DsManager
 	EventBus       server.EventBus
 	Profile        string
-}
-
-type WebHandler struct {
-	Logger       *zap.SugaredLogger
-	Port         string
-	StatsDClient statsd.ClientInterface
-	Profile      string
 }
 
 type Template struct {
@@ -70,52 +63,90 @@ func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Con
 	return t.templates.ExecuteTemplate(w, name, data)
 }
 
-func NewWebServer(
-	lc fx.Lifecycle,
-	env *conf.Env,
-	logger *zap.SugaredLogger,
-	statsd statsd.ClientInterface,
-) (*WebHandler, *echo.Echo) {
+type WebService struct {
+	env    *conf.Env
+	logger *zap.SugaredLogger
+	statsd statsd.ClientInterface
+	echo   *echo.Echo
+}
+
+func (ws *WebService) Start(ctx context.Context) error {
+	ws.logger.Infof("Starting Http server on :%s", ws.env.Port)
+	go func() {
+		_ = ws.echo.Start(":" + ws.env.Port)
+	}()
+	return nil
+}
+
+func (ws *WebService) Stop(ctx context.Context) error {
+	ws.logger.Infof("Shutting down Http server")
+	context.Background()
+	return ws.echo.Shutdown(ctx)
+}
+
+// ServiceContext is the injection of all deps grouped nicely together
+// expectation is that this can become an interface and also the things it contains
+// should provide interfaces and not structs with funcs
+type ServiceContext struct {
+	Env            *conf.Env
+	Logger         *zap.SugaredLogger
+	Statsd         statsd.ClientInterface
+	SecurityCore   *security.ServiceCore
+	ContentService *content.ContentService
+	DatasetManager *server.DsManager
+	Store          *server.Store
+	EventBus       server.EventBus
+	TokenProviders *security.TokenProviders
+	JobsScheduler  *jobs.Scheduler
+	Port           string
+}
+
+func NewWebService(serviceContext *ServiceContext) (*WebService, error) {
+	webService := &WebService{}
+	webService.env = serviceContext.Env
+	webService.logger = serviceContext.Logger
+	webService.statsd = serviceContext.Statsd
+
 	e := echo.New()
 	e.HideBanner = true
+	webService.echo = e
 
-	l := logger.Named("web")
+	NewStatusHandler(e, serviceContext.Port)
 
-	handler := &WebHandler{
-		Logger:       l,
-		Port:         env.Port,
-		StatsDClient: statsd,
-		Profile:      env.Env,
-	}
+	mw := NewMiddleware(serviceContext.Env, e, serviceContext.SecurityCore, serviceContext.Logger, serviceContext.Statsd)
+	logger := serviceContext.Logger
+	store := serviceContext.Store
 
-	lc.Append(fx.Hook{
-		OnStart: func(_ context.Context) error {
-			l.Infof("Starting Http server on :%s", env.Port)
-			go func() {
-				_ = e.Start(":" + env.Port)
-			}()
-			return nil
-		},
-		OnStop: func(ctx context.Context) error {
-			l.Infof("Shutting down Http server")
-			return e.Shutdown(ctx)
-		},
-	})
-	return handler, e
+	// call all handler registrations
+	NewContentHandler(e, logger, mw, serviceContext.ContentService)
+	NewDatasetHandler(e, logger, mw, serviceContext.DatasetManager, store, serviceContext.EventBus, serviceContext.TokenProviders)
+	NewTxnHandler(e, logger, mw, store)
+	NewQueryHandler(e, logger, mw, store, serviceContext.DatasetManager)
+	NewJobOperationHandler(e, logger, mw, serviceContext.JobsScheduler)
+	NewJobsHandler(e, logger, mw, serviceContext.JobsScheduler)
+	NewNamespaceHandler(e, logger, mw, store)
+	NewProviderHandler(e, logger, mw, serviceContext.TokenProviders)
+	NewSecurityHandler(e, logger, mw, serviceContext.SecurityCore)
+
+	return webService, nil
 }
 
-func Register(e *echo.Echo, handler *WebHandler) {
-	// this sets up the main chain
-	e.GET("/health", handler.health)
-	e.GET("/", handler.serviceInfoHandler)
+func NewStatusHandler(echo *echo.Echo, port string) {
+	handler := &StatusHandler{}
+	echo.GET("/health", handler.health)
+	echo.GET("/", handler.serviceInfoHandler)
 }
 
-func (handler *WebHandler) health(c echo.Context) error {
+type StatusHandler struct {
+	Logger *zap.SugaredLogger
+	Port   string
+}
+
+func (handler *StatusHandler) health(c echo.Context) error {
 	return c.String(http.StatusOK, "UP")
 }
 
-// serviceInfoHandler
-func (handler *WebHandler) serviceInfoHandler(c echo.Context) error {
+func (handler *StatusHandler) serviceInfoHandler(c echo.Context) error {
 	serviceInfo := &ServiceInfo{"DataHub", "server:" + handler.Port}
 	return c.JSON(http.StatusOK, serviceInfo)
 }

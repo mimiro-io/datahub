@@ -15,21 +15,18 @@
 package web
 
 import (
-	"context"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 
 	"github.com/labstack/echo/v4"
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/security"
 )
 
 func NewSecurityHandler(
-	lc fx.Lifecycle,
 	e *echo.Echo,
 	logger *zap.SugaredLogger,
 	mw *Middleware,
@@ -40,39 +37,33 @@ func NewSecurityHandler(
 	handler.serviceCore = core
 	handler.logger = log
 
-	lc.Append(fx.Hook{
-		OnStart: func(_ context.Context) error {
-			// query
-			e.POST("/security/token", handler.tokenRequestHandler)
-			e.POST("/security/clients", handler.clientRegistrationRequestHandler, mw.authorizer(log, datahubWrite))
-			e.GET("/security/clients", handler.getClientsRequestHandler, mw.authorizer(log, datahubWrite))
+	// query
+	e.POST("/security/token", handler.tokenRequestHandler)
+	e.POST("/security/clients", handler.clientRegistrationRequestHandler, mw.authorizer(log, datahubWrite))
+	e.GET("/security/clients", handler.getClientsRequestHandler, mw.authorizer(log, datahubWrite))
 
-			e.POST(
-				"/security/clients/:clientid/acl",
-				handler.setClientAccessControlsRequestHandler,
-				mw.authorizer(log, datahubWrite),
-			)
-			e.GET(
-				"/security/clients/:clientid/acl",
-				handler.getClientAccessControlsRequestHandler,
-				mw.authorizer(log, datahubWrite),
-			)
-			e.DELETE(
-				"/security/clients/:clientid/acl",
-				handler.deleteClientAccessControlsRequestHandler,
-				mw.authorizer(log, datahubWrite),
-			)
+	e.POST(
+		"/security/clients/:clientid/acl",
+		handler.setClientAccessControlsRequestHandler,
+		mw.authorizer(log, datahubWrite),
+	)
+	e.GET(
+		"/security/clients/:clientid/acl",
+		handler.getClientAccessControlsRequestHandler,
+		mw.authorizer(log, datahubWrite),
+	)
+	e.DELETE(
+		"/security/clients/:clientid/acl",
+		handler.deleteClientAccessControlsRequestHandler,
+		mw.authorizer(log, datahubWrite),
+	)
 
-			/* jwtMiddleware := MakeJWTMiddleware(core.GetActiveKeyPair().PublicKey, "node:" + core.NodeInfo.NodeId, "node:" + core.NodeInfo.NodeId)
+	/* jwtMiddleware := MakeJWTMiddleware(core.GetActiveKeyPair().PublicKey, "node:" + core.NodeInfo.NodeId, "node:" + core.NodeInfo.NodeId)
 
-			e.POST("/security/clients", handler.registerClientRequestHandler, jwtMiddleware, MakeRoleCheckMiddleware("admin"))
-			e.POST("/security/clientclaims", handler.setClientClaimsRequestHandler, jwtMiddleware, MakeRoleCheckMiddleware("admin"))
-			e.POST("/security/clientacl", handler.setClientClaimsRequestHandler, jwtMiddleware, MakeRoleCheckMiddleware("admin"))
-			*/
-
-			return nil
-		},
-	})
+	e.POST("/security/clients", handler.registerClientRequestHandler, jwtMiddleware, MakeRoleCheckMiddleware("admin"))
+	e.POST("/security/clientclaims", handler.setClientClaimsRequestHandler, jwtMiddleware, MakeRoleCheckMiddleware("admin"))
+	e.POST("/security/clientacl", handler.setClientClaimsRequestHandler, jwtMiddleware, MakeRoleCheckMiddleware("admin"))
+	*/
 }
 
 type SecurityHandler struct {

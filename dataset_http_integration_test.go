@@ -30,16 +30,14 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	"go.uber.org/fx"
-
 	"github.com/mimiro-io/datahub"
 	"github.com/mimiro-io/datahub/internal/server"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
-	var app *fx.App
+	var app *datahub.DatahubInstance
 	var mockLayer *MockLayer
 
 	location := "./http_integration_test"
@@ -59,7 +57,10 @@ var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
 		devNull, _ := os.Open("/dev/null")
 		os.Stdout = devNull
 		os.Stderr = devNull
-		app, _ = datahub.Start(context.Background())
+		// app, _ = datahub.Start(context.Background())
+		app, _ := datahub.NewDatahubInstance()
+		go app.Start()
+
 		mockLayer = NewMockLayer()
 		go func() {
 			_ = mockLayer.echo.Start(":7778")

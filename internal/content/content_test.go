@@ -23,10 +23,8 @@ import (
 	"github.com/DataDog/datadog-go/v5/statsd"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
 
-	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/server"
 )
@@ -38,7 +36,7 @@ func TestContent(t *testing.T) {
 
 var _ = Describe("The content API", func() {
 	var store *server.Store
-	var contentConfig *Config
+	var contentConfig *ContentService
 	var e *conf.Env
 	testCnt := 0
 	js := ` {
@@ -56,10 +54,10 @@ var _ = Describe("The content API", func() {
 		}
 		err := os.RemoveAll(e.StoreLocation)
 		Expect(err).To(BeNil(), "should be allowed to clean testfiles in "+e.StoreLocation)
-		lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
+		//		lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
 		sc := &statsd.NoOpClient{}
-		store = server.NewStore(lc, e, sc)
-		lc.RequireStart()
+		store = server.NewStore(e, sc)
+		//		lc.RequireStart()
 		contentConfig = NewContent(e, store, sc)
 	})
 	AfterEach(func() {

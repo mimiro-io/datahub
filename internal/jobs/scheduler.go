@@ -28,7 +28,6 @@ import (
 	"github.com/bamzi/jobrunner"
 	"github.com/dop251/goja"
 	"github.com/robfig/cron/v3"
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -105,7 +104,7 @@ type ScheduleEntry struct {
 // NewScheduler returns a new Scheduler. When started, it will load all existing JobConfiguration's from the store,
 // and schedule this with the runner.
 func NewScheduler(
-	lc fx.Lifecycle,
+
 	env *conf.Env,
 	store *server.Store,
 	dsm *server.DsManager,
@@ -118,7 +117,9 @@ func NewScheduler(
 		DatasetManager: dsm,
 	}
 
-	lc.Append(fx.Hook{
+	scheduler.Start(context.Background())
+
+	/* lc.Append(fx.Hook{
 		OnStart: func(_ context.Context) error {
 			scheduler.Logger.Infof("Starting the JobScheduler")
 
@@ -136,9 +137,28 @@ func NewScheduler(
 			runner.Stop()
 			return nil
 		},
-	})
+	}) */
 
 	return scheduler
+}
+
+func (s *Scheduler) Start(ctx context.Context) error {
+	s.Logger.Infof("Starting the JobScheduler")
+
+	for _, j := range s.loadConfigurations() {
+		err := s.AddJob(j)
+		if err != nil {
+			s.Logger.Warnf("Error loading job with id %s (%s), err: %v", j.ID, j.Title, err)
+		}
+	}
+
+	return nil
+}
+
+func (s *Scheduler) Stop(ctx context.Context) error {
+	s.Logger.Infof("Stopping job runner")
+	s.Runner.Stop()
+	return nil
 }
 
 // AddJob takes an incoming JobConfiguration and stores it in the store

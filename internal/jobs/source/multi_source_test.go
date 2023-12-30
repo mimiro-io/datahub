@@ -23,10 +23,8 @@ import (
 	"github.com/DataDog/datadog-go/v5/statsd"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
 
-	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/jobs/source"
 	"github.com/mimiro-io/datahub/internal/server"
@@ -49,16 +47,16 @@ var _ = Describe("dependency tracking", func() {
 			//Logger:        zap.NewExample().Sugar(),
 			StoreLocation: storeLocation,
 		}
-		lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
+		// lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
 
-		store = server.NewStore(lc, e, &statsd.NoOpClient{})
-		dsm = server.NewDsManager(lc, e, store, server.NoOpBus())
+		store = server.NewStore(e, &statsd.NoOpClient{})
+		dsm = server.NewDsManager(e, store, server.NoOpBus())
 		ctx = context.Background()
-		err = lc.Start(ctx)
+		/*err = lc.Start(ctx)
 		if err != nil {
 			fmt.Println(err.Error())
 			Fail(err.Error())
-		}
+		}*/
 	})
 	AfterEach(func() {
 		_ = store.Close()

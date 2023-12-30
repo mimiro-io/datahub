@@ -16,7 +16,6 @@ package server
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -32,7 +31,6 @@ import (
 
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/dgraph-io/badger/v4"
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/conf"
@@ -76,7 +74,7 @@ func (bl BadgerLogger) Warningf(format string, v ...interface{}) { bl.Logger.War
 func (bl BadgerLogger) Debugf(format string, v ...interface{})   { bl.Logger.Debugf(format, v...) }
 
 // NewStore Create a new store
-func NewStore(lc fx.Lifecycle, env *conf.Env, statsdClient statsd.ClientInterface) *Store {
+func NewStore(env *conf.Env, statsdClient statsd.ClientInterface) *Store {
 	fsTimeout := env.FullsyncLeaseTimeout
 	if fsTimeout == 0*time.Second {
 		env.Logger.Warnf("No fullsync lease timeout set, fallback to 1h")
@@ -97,7 +95,13 @@ func NewStore(lc fx.Lifecycle, env *conf.Env, statsdClient statsd.ClientInterfac
 	}
 	store.NamespaceManager = NewNamespaceManager(store)
 
-	lc.Append(fx.Hook{
+	store.logger.Infof("Opening store in location: %s", store.storeLocation)
+	err := store.Open()
+	if err != nil {
+		store.logger.Fatalf("Unable to open store %s due to %s ", store.storeLocation, err.Error())
+	}
+
+	/* lc.Append(fx.Hook{
 		OnStart: func(_ context.Context) error {
 			store.logger.Infof("Opening store in location: %s", store.storeLocation)
 			return store.Open()
@@ -106,10 +110,20 @@ func NewStore(lc fx.Lifecycle, env *conf.Env, statsdClient statsd.ClientInterfac
 			store.logger.Infof("Unmounting store")
 			return store.Close()
 		},
-	})
+	}) */
 
 	return store
 }
+
+/*func (s *Store) Start(ctx context.Context) error {
+	s.logger.Infof("Opening store in location: %s", s.storeLocation)
+	return s.Open()
+}
+
+func (s *Store) Stop(ctx context.Context) error {
+	s.logger.Infof("Closing store")
+	return s.Close()
+}*/
 
 func (s *Store) Delete() error {
 	err := s.Close()
