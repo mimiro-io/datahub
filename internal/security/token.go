@@ -15,10 +15,8 @@
 package security
 
 import (
-	"context"
 	"strings"
 
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
 
@@ -51,7 +49,6 @@ func (providers *TokenProviders) Add(providerConfig ProviderConfig) error {
 // NewTokenProviders provides a map of token providers, keyed on the
 // name of the token provider struct as lower_case.
 func NewTokenProviders(
-	lc fx.Lifecycle,
 	logger *zap.SugaredLogger,
 	providerManager *ProviderManager,
 	serviceCore *ServiceCore,
@@ -66,19 +63,14 @@ func NewTokenProviders(
 		Providers:   &providers,
 	}
 
-	lc.Append(fx.Hook{
-		OnStart: func(_ context.Context) error {
-			if providerList, err := providerManager.ListProviders(); err != nil {
-				log.Warn(err)
-			} else {
-				for _, provider := range providerList {
-					providers[strings.ToLower(provider.Name)] = tp.toProvider(provider)
-				}
-			}
-			tp.Providers = &providers
-			return nil
-		},
-	})
+	if providerList, err := providerManager.ListProviders(); err != nil {
+		log.Warn(err)
+	} else {
+		for _, provider := range providerList {
+			providers[strings.ToLower(provider.Name)] = tp.toProvider(provider)
+		}
+	}
+	tp.Providers = &providers
 
 	return tp
 }

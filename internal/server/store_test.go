@@ -27,10 +27,8 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
 
-	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 )
 
@@ -48,12 +46,12 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: storeLocation,
 		}
-		lc := fxtest.NewLifecycle(internal.FxTestLog(ginkgo.GinkgoT(), false))
-		store = NewStore(lc, e, &statsd.NoOpClient{})
-		dsm = NewDsManager(lc, e, store, NoOpBus())
+		// lc := fxtest.NewLifecycle(internal.FxTestLog(ginkgo.GinkgoT(), false))
+		store = NewStore(e, &statsd.NoOpClient{})
+		dsm = NewDsManager(e, store, NoOpBus())
 
-		err = lc.Start(context.Background())
-		Expect(err).To(BeNil())
+		// err = lc.Start(context.Background())
+		// Expect(err).To(BeNil())
 	})
 	ginkgo.AfterEach(func() {
 		// closing is cleaner, but may trigger compaction and other stuff causing the tests to hang.
@@ -551,12 +549,12 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: storeLocation,
 		}
-		lc := fxtest.NewLifecycle(internal.FxTestLog(ginkgo.GinkgoT(), false))
-		store = NewStore(lc, e, &statsd.NoOpClient{})
-		dsm = NewDsManager(lc, e, store, NoOpBus())
+		// lc := fxtest.NewLifecycle(internal.FxTestLog(ginkgo.GinkgoT(), false))
+		store = NewStore(e, &statsd.NoOpClient{})
+		dsm = NewDsManager(e, store, NoOpBus())
 
-		err = lc.Start(context.Background())
-		Expect(err).To(BeNil())
+		// err = lc.Start(context.Background())
+		// Expect(err).To(BeNil())
 	})
 	ginkgo.AfterEach(func() {
 		_ = store.Close()
@@ -1371,12 +1369,12 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: storeLocation,
 		}
-		lc := fxtest.NewLifecycle(internal.FxTestLog(ginkgo.GinkgoT(), false))
-		store = NewStore(lc, e, &statsd.NoOpClient{})
-		dsm = NewDsManager(lc, e, store, NoOpBus())
+		// lc := fxtest.NewLifecycle(internal.FxTestLog(ginkgo.GinkgoT(), false))
+		store = NewStore(e, &statsd.NoOpClient{})
+		dsm = NewDsManager(e, store, NoOpBus())
 
-		err = lc.Start(context.Background())
-		Expect(err).To(BeNil())
+		// err = lc.Start(context.Background())
+		// Expect(err).To(BeNil())
 
 		// namespaces
 		peopleNamespacePrefix, _ = store.NamespaceManager.AssertPrefixMappingForExpansion(

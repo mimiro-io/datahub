@@ -21,10 +21,8 @@ import (
 	"github.com/DataDog/datadog-go/v5/statsd"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
 
-	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/server"
 )
@@ -43,11 +41,11 @@ var _ = Describe("Security Manager", func() {
 		}
 		err := os.RemoveAll(e.StoreLocation)
 		Expect(err).To(BeNil())
-		lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
+		// lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
 		sc := &statsd.NoOpClient{}
-		store = server.NewStore(lc, e, sc)
-		lc.RequireStart()
-		pm = NewProviderManager(lc, e, store, zap.NewNop().Sugar())
+		store = server.NewStore(e, sc)
+		// lc.RequireStart()
+		pm = NewProviderManager(e, store, zap.NewNop().Sugar())
 	})
 	AfterEach(func() {
 		_ = store.Close()

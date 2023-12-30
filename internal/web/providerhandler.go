@@ -15,12 +15,10 @@
 package web
 
 import (
-	"context"
 	"net/http"
 	"net/url"
 
 	"github.com/labstack/echo/v4"
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/security"
@@ -33,7 +31,6 @@ type providerHandler struct {
 }
 
 func NewProviderHandler(
-	lc fx.Lifecycle,
 	e *echo.Echo,
 	log *zap.SugaredLogger,
 	mw *Middleware,
@@ -44,16 +41,11 @@ func NewProviderHandler(
 		tokenProviders: tokenProviders,
 	}
 
-	lc.Append(fx.Hook{
-		OnStart: func(_ context.Context) error {
-			e.POST("/provider/logins", handler.loginCreate, mw.authorizer(log, datahubWrite))
-			e.GET("/provider/logins", handler.loginList, mw.authorizer(log, datahubRead))
-			e.POST("/provider/login/:providerName", handler.loginUpdate, mw.authorizer(log, datahubWrite))
-			e.GET("/provider/login/:providerName", handler.loginGet, mw.authorizer(log, datahubRead))
-			e.DELETE("/provider/login/:providerName", handler.loginDelete, mw.authorizer(log, datahubRead))
-			return nil
-		},
-	})
+	e.POST("/provider/logins", handler.loginCreate, mw.authorizer(log, datahubWrite))
+	e.GET("/provider/logins", handler.loginList, mw.authorizer(log, datahubRead))
+	e.POST("/provider/login/:providerName", handler.loginUpdate, mw.authorizer(log, datahubWrite))
+	e.GET("/provider/login/:providerName", handler.loginGet, mw.authorizer(log, datahubRead))
+	e.DELETE("/provider/login/:providerName", handler.loginDelete, mw.authorizer(log, datahubRead))
 }
 
 func (handler *providerHandler) loginCreate(c echo.Context) error {

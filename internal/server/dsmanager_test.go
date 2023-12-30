@@ -15,7 +15,6 @@
 package server
 
 import (
-	"context"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -26,10 +25,8 @@ import (
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
 
-	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 )
 
@@ -48,13 +45,13 @@ var _ = ginkgo.Describe("The dataset manager", func() {
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: storeLocation,
 		}
-		lc := fxtest.NewLifecycle(internal.FxTestLog(ginkgo.GinkgoT(), false))
-		store = NewStore(lc, e, &statsd.NoOpClient{})
-		dsm = NewDsManager(lc, e, store, NoOpBus())
-		gc = NewGarbageCollector(lc, store, e)
+		// lc := fxtest.NewLifecycle(internal.FxTestLog(ginkgo.GinkgoT(), false))
+		store = NewStore(e, &statsd.NoOpClient{})
+		dsm = NewDsManager(e, store, NoOpBus())
+		gc = NewGarbageCollector(store, e)
 
-		err = lc.Start(context.Background())
-		Expect(err).To(BeNil())
+		// err = lc.Start(context.Background())
+		// Expect(err).To(BeNil())
 	})
 	ginkgo.AfterEach(func() {
 		_ = store.Close()

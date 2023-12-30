@@ -15,11 +15,9 @@
 package web
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/jobs"
@@ -30,7 +28,6 @@ type jobOperationHandler struct {
 }
 
 func NewJobOperationHandler(
-	lc fx.Lifecycle,
 	e *echo.Echo,
 	logger *zap.SugaredLogger,
 	mw *Middleware,
@@ -41,18 +38,12 @@ func NewJobOperationHandler(
 		jobScheduler: js,
 	}
 
-	lc.Append(fx.Hook{
-		OnStart: func(_ context.Context) error {
-			e.PUT("/job/:jobid/pause", handler.jobsPause, mw.authorizer(log, datahubWrite))
-			e.PUT("/job/:jobid/resume", handler.jobsUnpause, mw.authorizer(log, datahubWrite))
-			e.PUT("/job/:jobid/kill", handler.jobsKill, mw.authorizer(log, datahubWrite))
-			e.PUT("/job/:jobid/run", handler.jobsRun, mw.authorizer(log, datahubWrite))
-			e.PUT("/job/:jobid/reset", handler.jobsReset, mw.authorizer(log, datahubWrite))
-			e.GET("/job/:jobid/status", handler.jobsGetStatus, mw.authorizer(log, datahubRead)) // is it running
-
-			return nil
-		},
-	})
+	e.PUT("/job/:jobid/pause", handler.jobsPause, mw.authorizer(log, datahubWrite))
+	e.PUT("/job/:jobid/resume", handler.jobsUnpause, mw.authorizer(log, datahubWrite))
+	e.PUT("/job/:jobid/kill", handler.jobsKill, mw.authorizer(log, datahubWrite))
+	e.PUT("/job/:jobid/run", handler.jobsRun, mw.authorizer(log, datahubWrite))
+	e.PUT("/job/:jobid/reset", handler.jobsReset, mw.authorizer(log, datahubWrite))
+	e.GET("/job/:jobid/status", handler.jobsGetStatus, mw.authorizer(log, datahubRead)) // is it running
 }
 
 func (handler *jobOperationHandler) jobsPause(c echo.Context) error {

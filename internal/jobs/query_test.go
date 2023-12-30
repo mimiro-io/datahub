@@ -15,7 +15,6 @@
 package jobs
 
 import (
-	"context"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -23,10 +22,8 @@ import (
 	"github.com/DataDog/datadog-go/v5/statsd"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
 
-	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/server"
 )
@@ -59,12 +56,12 @@ var _ = Describe("QueryExecution", func() {
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: storeLocation,
 		}
-		lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
-		store = server.NewStore(lc, e, &statsd.NoOpClient{})
-		dsm = server.NewDsManager(lc, e, store, server.NoOpBus())
+		// lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
+		store = server.NewStore(e, &statsd.NoOpClient{})
+		dsm = server.NewDsManager(e, store, server.NoOpBus())
 
-		err = lc.Start(context.Background())
-		Expect(err).To(BeNil())
+		// err = lc.Start(context.Background())
+		// Expect(err).To(BeNil())
 	})
 	AfterEach(func() {
 		_ = store.Close()

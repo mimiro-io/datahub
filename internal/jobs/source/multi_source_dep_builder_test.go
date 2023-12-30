@@ -15,7 +15,6 @@
 package source_test
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -24,10 +23,8 @@ import (
 	"github.com/DataDog/datadog-go/v5/statsd"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
 
-	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/jobs"
 	"github.com/mimiro-io/datahub/internal/jobs/source"
@@ -51,22 +48,24 @@ var _ = Describe("parseDependencies", func() {
 			StoreLocation: storeLocation,
 			RunnerConfig:  &conf.RunnerConfig{},
 		}
-		lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
+		// lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
 
-		store = server.NewStore(lc, e, &statsd.NoOpClient{})
-		dsm = server.NewDsManager(lc, e, store, server.NoOpBus())
+		store = server.NewStore(e, &statsd.NoOpClient{})
+		dsm = server.NewDsManager(e, store, server.NoOpBus())
 
 		devNull, _ := os.Open("/dev/null")
 		oldStd := os.Stdout
 		os.Stdout = devNull
 		runner := jobs.NewRunner(e, store, nil, nil, &statsd.NoOpClient{})
-		scheduler = jobs.NewScheduler(lc, e, store, dsm, runner)
-		err = lc.Start(context.Background())
+		scheduler = jobs.NewScheduler(e, store, dsm, runner)
+		os.Stdout = oldStd
+
+		/*err = lc.Start(context.Background())
 		os.Stdout = oldStd
 		if err != nil {
 			fmt.Println(err.Error())
 			Fail(err.Error())
-		}
+		} */
 	})
 	AfterEach(func() {
 		_ = store.Close()

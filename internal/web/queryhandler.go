@@ -15,7 +15,6 @@
 package web
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -24,7 +23,6 @@ import (
 	"net/url"
 
 	"github.com/labstack/echo/v4"
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/jobs"
@@ -74,7 +72,6 @@ type queryHandler struct {
 }
 
 func NewQueryHandler(
-	lc fx.Lifecycle,
 	e *echo.Echo,
 	logger *zap.SugaredLogger,
 	mw *Middleware,
@@ -88,15 +85,10 @@ func NewQueryHandler(
 		logger:         log,
 	}
 
-	lc.Append(fx.Hook{
-		OnStart: func(_ context.Context) error {
-			// query
-			e.GET("/query", handler.queryHandler, mw.authorizer(log, datahubRead))
-			e.POST("/query", handler.queryHandler, mw.authorizer(log, datahubRead))
-			e.GET("/query/namespace", handler.queryNamespacePrefix, mw.authorizer(log, datahubRead))
-			return nil
-		},
-	})
+	// query
+	e.GET("/query", handler.queryHandler, mw.authorizer(log, datahubRead))
+	e.POST("/query", handler.queryHandler, mw.authorizer(log, datahubRead))
+	e.GET("/query/namespace", handler.queryNamespacePrefix, mw.authorizer(log, datahubRead))
 }
 
 func (handler *queryHandler) queryNamespacePrefix(c echo.Context) error {

@@ -19,6 +19,7 @@ import (
 	"context"
 	"crypto/rsa"
 	"encoding/json"
+	"github.com/mimiro-io/datahub"
 	"io"
 	"net/http"
 	"net/url"
@@ -27,12 +28,9 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/mimiro-io/datahub/internal/security"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/fx"
-
-	"github.com/mimiro-io/datahub"
-	"github.com/mimiro-io/datahub/internal/security"
 )
 
 func TestFromOutside(t *testing.T) {
@@ -79,7 +77,7 @@ yLOZNSc/qIQ=
 -----END PRIVATE KEY-----`
 
 var _ = Describe("The dataset endpoint", Ordered, func() {
-	var app *fx.App
+	var app *datahub.DatahubInstance
 
 	location := "./node_security_integration_test"
 
@@ -110,7 +108,10 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 		devNull, _ := os.Open("/dev/null")
 		os.Stdout = devNull
 		os.Stderr = devNull
-		app, _ = datahub.Start(context.Background())
+		// app, _ = datahub.Start(context.Background())
+		app, _ = datahub.NewDatahubInstance()
+		go app.Start()
+
 		os.Stdout = oldOut
 		os.Stderr = oldErr
 
@@ -428,7 +429,7 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 		// read the node private and public keys for use in this interaction
 		_, err = os.ReadFile(securityLocation + string(os.PathSeparator) + "node_key")
 		Expect(err).To(BeNil())
-		// clientPrivateKey, err := security.ParseRsaPrivateKeyFromPem(content)
+		// clientPrivateKey, err := security.ParseRsaPrivateKeyFromPem(contentService)
 
 		content, err := os.ReadFile(securityLocation + string(os.PathSeparator) + "node_key.pub")
 		Expect(err).To(BeNil())

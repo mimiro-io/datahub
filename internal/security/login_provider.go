@@ -15,14 +15,12 @@
 package security
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
 
 	"github.com/spf13/viper"
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/conf"
@@ -41,18 +39,17 @@ type ProviderManager struct {
 	log   *zap.SugaredLogger
 }
 
-func NewProviderManager(lc fx.Lifecycle, env *conf.Env, store *server.Store, log *zap.SugaredLogger) *ProviderManager {
+func NewProviderManager(env *conf.Env, store *server.Store, log *zap.SugaredLogger) *ProviderManager {
 	pm := &ProviderManager{
 		env:   env,
 		store: store,
 		log:   log.Named("login-provider"),
 	}
 
-	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
-			return pm.addComp()
-		},
-	})
+	err := pm.addComp()
+	if err != nil {
+		log.Warn("unable to process legacy jwt config " + err.Error())
+	}
 
 	return pm
 }

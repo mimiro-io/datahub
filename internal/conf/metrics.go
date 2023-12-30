@@ -15,7 +15,6 @@
 package conf
 
 import (
-	"context"
 	"math"
 	"runtime"
 	"runtime/metrics"
@@ -23,11 +22,10 @@ import (
 	"time"
 
 	"github.com/DataDog/datadog-go/v5/statsd"
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
 
-func NewMetricsClient(lc fx.Lifecycle, env *Env, logger *zap.SugaredLogger) (statsd.ClientInterface, error) {
+func NewMetricsClient(env *Env, logger *zap.SugaredLogger) (statsd.ClientInterface, error) {
 	var client statsd.ClientInterface
 	agentEndpoint := env.AgentHost
 	if agentEndpoint != "" {
@@ -43,12 +41,12 @@ func NewMetricsClient(lc fx.Lifecycle, env *Env, logger *zap.SugaredLogger) (sta
 		client = &statsd.NoOpClient{}
 	}
 
-	lc.Append(fx.Hook{
+	/* lc.Append(fx.Hook{
 		OnStop: func(_ context.Context) error {
 			env.Logger.Infof("Flushing statsd")
 			return client.Flush()
 		},
-	})
+	}) */
 
 	return client, nil
 }
@@ -58,19 +56,13 @@ type memoryReporter struct {
 	logger *zap.SugaredLogger
 }
 
-func NewMemoryReporter(lc fx.Lifecycle, statsd statsd.ClientInterface, logger *zap.SugaredLogger) *memoryReporter {
+func NewMemoryReporter(statsd statsd.ClientInterface, logger *zap.SugaredLogger) {
 	mr := &memoryReporter{
 		statsd: statsd,
 		logger: logger,
 	}
-	lc.Append(fx.Hook{
-		OnStart: func(_ context.Context) error {
-			mr.init()
-			return nil
-		},
-	})
 
-	return mr
+	mr.init()
 }
 
 func (mr *memoryReporter) init() {
