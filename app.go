@@ -28,6 +28,7 @@ import (
 	"go.uber.org/zap"
 	"os"
 	"os/signal"
+	"syscall"
 )
 
 type DatahubInstance struct {
@@ -61,7 +62,7 @@ func (dhi *DatahubInstance) Start() error {
 		}
 	}()
 
-	waitForStop(dhi)
+	dhi.waitForStop()
 
 	return nil
 }
@@ -86,7 +87,6 @@ func Run() {
 
 func (dhi *DatahubInstance) Stop(ctx context.Context) error {
 	dhi.logger.Info("Data hub stopping")
-
 	dhi.webService.Stop(ctx)
 	dhi.gc.Stop(ctx)
 	dhi.scheduler.Stop(ctx)
@@ -95,9 +95,9 @@ func (dhi *DatahubInstance) Stop(ctx context.Context) error {
 	return nil
 }
 
-func waitForStop(dhi *DatahubInstance) {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt)
+func (dhi *DatahubInstance) waitForStop() {
+	sigChan := make(chan os.Signal)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	<-sigChan
 	dhi.logger.Info("Data hub stopping")
 	shutdownCtx := context.Background()
