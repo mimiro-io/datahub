@@ -56,7 +56,7 @@ type memoryReporter struct {
 	logger *zap.SugaredLogger
 }
 
-func NewMemoryReporter(statsd statsd.ClientInterface, logger *zap.SugaredLogger) {
+func InitNewMemoryReporter(statsd statsd.ClientInterface, logger *zap.SugaredLogger) {
 	mr := &memoryReporter{
 		statsd: statsd,
 		logger: logger,

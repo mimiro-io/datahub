@@ -38,7 +38,7 @@ type jobsHandler struct {
 	jobScheduler *jobs.Scheduler
 }
 
-func NewJobsHandler(e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, js *jobs.Scheduler) {
+func RegisterJobsHandler(e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, js *jobs.Scheduler) {
 	log := logger.Named("web")
 	handler := &jobsHandler{
 		jobScheduler: js,

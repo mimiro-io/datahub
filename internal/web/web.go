@@ -36,7 +36,7 @@ type Handler struct {
 	Port           string
 	Store          *server.Store
 	JobScheduler   *jobs.Scheduler
-	ContentConfig  *content.ContentService
+	ContentConfig  *content.Service
 	StatsDClient   statsd.ClientInterface
 	DatasetManager *server.DsManager
 	EventBus       server.EventBus
@@ -91,7 +91,7 @@ type ServiceContext struct {
 	Logger         *zap.SugaredLogger
 	Statsd         statsd.ClientInterface
 	SecurityCore   *security.ServiceCore
-	ContentService *content.ContentService
+	ContentService *content.Service
 	DatasetManager *server.DsManager
 	Store          *server.Store
 	EventBus       server.EventBus
@@ -117,35 +117,25 @@ func NewWebService(serviceContext *ServiceContext) (*WebService, error) {
 	store := serviceContext.Store
 
 	// call all handler registrations
-	NewContentHandler(e, logger, mw, serviceContext.ContentService)
-	NewDatasetHandler(e, logger, mw, serviceContext.DatasetManager, store, serviceContext.EventBus, serviceContext.TokenProviders)
-	NewTxnHandler(e, logger, mw, store)
-	NewQueryHandler(e, logger, mw, store, serviceContext.DatasetManager)
-	NewJobOperationHandler(e, logger, mw, serviceContext.JobsScheduler)
-	NewJobsHandler(e, logger, mw, serviceContext.JobsScheduler)
-	NewNamespaceHandler(e, logger, mw, store)
-	NewProviderHandler(e, logger, mw, serviceContext.TokenProviders)
-	NewSecurityHandler(e, logger, mw, serviceContext.SecurityCore)
+	RegisterContentHandler(e, logger, mw, serviceContext.ContentService)
+	RegisterDatasetHandler(e, logger, mw, serviceContext.DatasetManager, store, serviceContext.EventBus, serviceContext.TokenProviders)
+	RegisterTxnHandler(e, logger, mw, store)
+	RegisterQueryHandler(e, logger, mw, store, serviceContext.DatasetManager)
+	RegisterJobOperationHandler(e, logger, mw, serviceContext.JobsScheduler)
+	RegisterJobsHandler(e, logger, mw, serviceContext.JobsScheduler)
+	RegisterNamespaceHandler(e, logger, mw, store)
+	RegisterProviderHandler(e, logger, mw, serviceContext.TokenProviders)
+	RegisterSecurityHandler(e, logger, mw, serviceContext.SecurityCore)
 
 	return webService, nil
 }
 
-func NewStatusHandler(echo *echo.Echo, port string) {
-	handler := &StatusHandler{}
-	echo.GET("/health", handler.health)
-	echo.GET("/", handler.serviceInfoHandler)
-}
-
-type StatusHandler struct {
-	Logger *zap.SugaredLogger
-	Port   string
-}
-
-func (handler *StatusHandler) health(c echo.Context) error {
-	return c.String(http.StatusOK, "UP")
-}
-
-func (handler *StatusHandler) serviceInfoHandler(c echo.Context) error {
-	serviceInfo := &ServiceInfo{"DataHub", "server:" + handler.Port}
-	return c.JSON(http.StatusOK, serviceInfo)
+func NewStatusHandler(e *echo.Echo, port string) {
+	e.GET("/health", func(c echo.Context) error {
+		return c.String(http.StatusOK, "UP")
+	})
+	e.GET("/", func(c echo.Context) error {
+		serviceInfo := &ServiceInfo{"DataHub", "server:" + port}
+		return c.JSON(http.StatusOK, serviceInfo)
+	})
 }

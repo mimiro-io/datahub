@@ -36,7 +36,7 @@ func TestContent(t *testing.T) {
 
 var _ = Describe("The content API", func() {
 	var store *server.Store
-	var contentConfig *ContentService
+	var contentConfig *Service
 	var e *conf.Env
 	testCnt := 0
 	js := ` {
@@ -58,7 +58,7 @@ var _ = Describe("The content API", func() {
 		sc := &statsd.NoOpClient{}
 		store = server.NewStore(e, sc)
 		//		lc.RequireStart()
-		contentConfig = NewContent(e, store, sc)
+		contentConfig = NewContentService(e, store, sc)
 	})
 	AfterEach(func() {
 		_ = store.Close()

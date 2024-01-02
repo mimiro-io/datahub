@@ -71,7 +71,7 @@ type queryHandler struct {
 	logger         *zap.SugaredLogger
 }
 
-func NewQueryHandler(
+func RegisterQueryHandler(
 	e *echo.Echo,
 	logger *zap.SugaredLogger,
 	mw *Middleware,
