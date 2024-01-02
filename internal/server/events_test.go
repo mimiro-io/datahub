@@ -85,6 +85,7 @@ var _ = Describe("The Eventbus", func() {
 		serviceContext.JobsScheduler = scheduler
 		serviceContext.DatasetManager = dsm
 		serviceContext.Logger = e.Logger
+		serviceContext.Statsd = &statsd.NoOpClient{}
 		webService, err = web.NewWebService(serviceContext)
 		webService.Start(context.Background())
 

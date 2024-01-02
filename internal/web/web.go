@@ -80,7 +80,6 @@ func (ws *WebService) Start(ctx context.Context) error {
 
 func (ws *WebService) Stop(ctx context.Context) error {
 	ws.logger.Infof("Shutting down Http server")
-	context.Background()
 	return ws.echo.Shutdown(ctx)
 }
 
