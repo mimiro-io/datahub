@@ -44,7 +44,7 @@ type datasetHandler struct {
 	tokenProviders *security.TokenProviders
 }
 
-func NewDatasetHandler(
+func RegisterDatasetHandler(
 	e *echo.Echo,
 	logger *zap.SugaredLogger,
 	mw *Middleware,

@@ -29,14 +29,14 @@ type Content struct {
 	Data map[string]interface{} `json:"data"`
 }
 
-type ContentService struct {
+type Service struct {
 	store  *server.Store
 	logger *zap.SugaredLogger
 	statsd statsd.ClientInterface
 }
 
-func NewContent(env *conf.Env, store *server.Store, statsd statsd.ClientInterface) *ContentService {
-	return &ContentService{
+func NewContentService(env *conf.Env, store *server.Store, statsd statsd.ClientInterface) *Service {
+	return &Service{
 		store:  store,
 		logger: env.Logger.Named("content"),
 		statsd: statsd,
@@ -44,18 +44,18 @@ func NewContent(env *conf.Env, store *server.Store, statsd statsd.ClientInterfac
 }
 
 // AddContent adds or replaces a new content entity to the store
-func (contentConfig *ContentService) AddContent(id string, payload *Content) error {
+func (contentConfig *Service) AddContent(id string, payload *Content) error {
 	return contentConfig.store.StoreObject(server.ContentIndex, id, payload)
 }
 
 // UpdateContent updates an existing content (by calling AddContent)
 // added the extra function for readability and future expansion
-func (contentConfig *ContentService) UpdateContent(id string, payload *Content) error {
+func (contentConfig *Service) UpdateContent(id string, payload *Content) error {
 	return contentConfig.AddContent(id, payload)
 }
 
 // GetContentByID returns a single content by its id
-func (contentConfig *ContentService) GetContentByID(id string) (*Content, error) {
+func (contentConfig *Service) GetContentByID(id string) (*Content, error) {
 	content := &Content{}
 	err := contentConfig.store.GetObject(server.ContentIndex, id, &content)
 	if err != nil {
@@ -68,7 +68,7 @@ func (contentConfig *ContentService) GetContentByID(id string) (*Content, error)
 }
 
 // ListContents returns all content entities, in random order
-func (contentConfig *ContentService) ListContents() ([]*Content, error) {
+func (contentConfig *Service) ListContents() ([]*Content, error) {
 	var contents []*Content
 	err := contentConfig.store.IterateObjectsRaw(server.ContentIndexBytes, func(bytes []byte) error {
 		content := &Content{}
@@ -84,6 +84,6 @@ func (contentConfig *ContentService) ListContents() ([]*Content, error) {
 }
 
 // DeleteContent deletes a single content from the store
-func (contentConfig *ContentService) DeleteContent(id string) error {
+func (contentConfig *Service) DeleteContent(id string) error {
 	return contentConfig.store.DeleteObject(server.ContentIndex, id)
 }

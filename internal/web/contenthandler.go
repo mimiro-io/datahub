@@ -27,14 +27,14 @@ import (
 )
 
 type contentHandler struct {
-	content *content.ContentService
+	content *content.Service
 }
 
-func NewContentHandler(
+func RegisterContentHandler(
 	e *echo.Echo,
 	logger *zap.SugaredLogger,
 	mw *Middleware,
-	content *content.ContentService,
+	content *content.Service,
 ) {
 	log := logger.Named("web")
 	handler := &contentHandler{

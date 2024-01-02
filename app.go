@@ -42,7 +42,7 @@ type DatahubInstance struct {
 	tokenProviders      *security.TokenProviders
 	runner              *jobs.Runner
 	scheduler           *jobs.Scheduler
-	contentService      *content.ContentService
+	contentService      *content.Service
 	authorizer          func(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc
 	webService          *web.WebService
 	middleware          *web.Middleware
@@ -134,11 +134,11 @@ func NewDatahubInstance() (*DatahubInstance, error) {
 	dhi.runner = jobs.NewRunner(dhi.env, dhi.store, dhi.tokenProviders, dhi.eventBus, dhi.metricsClient)
 	dhi.scheduler = jobs.NewScheduler(dhi.env, dhi.store, dhi.dsManager, dhi.runner)
 
-	dhi.contentService = content.NewContent(dhi.env, dhi.store, dhi.metricsClient)
+	dhi.contentService = content.NewContentService(dhi.env, dhi.store, dhi.metricsClient)
 	dhi.authorizer = web.NewAuthorizer(dhi.env, dhi.logger, dhi.securityServiceCore)
 
 	// other core services
-	conf.NewMemoryReporter(dhi.metricsClient, dhi.logger)
+	conf.InitNewMemoryReporter(dhi.metricsClient, dhi.logger)
 	dhi.backup, err = server.NewBackupManager(dhi.store, dhi.env)
 	if err != nil {
 		return nil, err

@@ -27,7 +27,7 @@ type namespaceHandler struct {
 	store *server.Store
 }
 
-func NewNamespaceHandler(
+func RegisterNamespaceHandler(
 	e *echo.Echo,
 	logger *zap.SugaredLogger,
 	mw *Middleware,

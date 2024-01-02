@@ -27,7 +27,7 @@ type jobOperationHandler struct {
 	jobScheduler *jobs.Scheduler
 }
 
-func NewJobOperationHandler(
+func RegisterJobOperationHandler(
 	e *echo.Echo,
 	logger *zap.SugaredLogger,
 	mw *Middleware,

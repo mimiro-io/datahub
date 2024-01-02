@@ -30,7 +30,7 @@ type providerHandler struct {
 	tokenProviders *security.TokenProviders
 }
 
-func NewProviderHandler(
+func RegisterProviderHandler(
 	e *echo.Echo,
 	log *zap.SugaredLogger,
 	mw *Middleware,

@@ -16,7 +16,7 @@ package web
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 
@@ -26,14 +26,14 @@ import (
 	"github.com/mimiro-io/datahub/internal/security"
 )
 
-func NewSecurityHandler(
+func RegisterSecurityHandler(
 	e *echo.Echo,
 	logger *zap.SugaredLogger,
 	mw *Middleware,
 	core *security.ServiceCore,
 ) {
 	log := logger.Named("web")
-	handler := &SecurityHandler{}
+	handler := &securityHandler{}
 	handler.serviceCore = core
 	handler.logger = log
 
@@ -66,7 +66,7 @@ func NewSecurityHandler(
 	*/
 }
 
-type SecurityHandler struct {
+type securityHandler struct {
 	serviceCore *security.ServiceCore
 	logger      *zap.SugaredLogger
 }
@@ -77,12 +77,12 @@ type TokenResponse struct {
 	TokenType   string `json:"token_type"`
 }
 
-func (handler *SecurityHandler) getClientsRequestHandler(c echo.Context) error {
+func (handler *securityHandler) getClientsRequestHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, handler.serviceCore.GetClients())
 }
 
 // oidc - oauth2 compliant token request handler
-func (handler *SecurityHandler) tokenRequestHandler(c echo.Context) error {
+func (handler *securityHandler) tokenRequestHandler(c echo.Context) error {
 	// url form encoded params
 	grantType := c.FormValue("grant_type")
 	clientAssertionType := c.FormValue("client_assertion_type")
@@ -115,8 +115,8 @@ func (handler *SecurityHandler) tokenRequestHandler(c echo.Context) error {
 	return nil
 }
 
-func (handler *SecurityHandler) clientRegistrationRequestHandler(c echo.Context) error {
-	body, err := ioutil.ReadAll(c.Request().Body)
+func (handler *securityHandler) clientRegistrationRequestHandler(c echo.Context) error {
+	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing body")
 	}
@@ -131,7 +131,7 @@ func (handler *SecurityHandler) clientRegistrationRequestHandler(c echo.Context)
 	return c.NoContent(http.StatusOK)
 }
 
-func (handler *SecurityHandler) getClientAccessControlsRequestHandler(c echo.Context) error {
+func (handler *securityHandler) getClientAccessControlsRequestHandler(c echo.Context) error {
 	clientID, err := url.QueryUnescape(c.Param("clientid"))
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing client id")
@@ -139,7 +139,7 @@ func (handler *SecurityHandler) getClientAccessControlsRequestHandler(c echo.Con
 	return c.JSON(http.StatusOK, handler.serviceCore.GetAccessControls(clientID))
 }
 
-func (handler *SecurityHandler) deleteClientAccessControlsRequestHandler(c echo.Context) error {
+func (handler *securityHandler) deleteClientAccessControlsRequestHandler(c echo.Context) error {
 	clientID, err := url.QueryUnescape(c.Param("clientid"))
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing client id")
@@ -148,8 +148,8 @@ func (handler *SecurityHandler) deleteClientAccessControlsRequestHandler(c echo.
 	return c.NoContent(http.StatusOK)
 }
 
-func (handler *SecurityHandler) setClientAccessControlsRequestHandler(c echo.Context) error {
-	body, err := ioutil.ReadAll(c.Request().Body)
+func (handler *securityHandler) setClientAccessControlsRequestHandler(c echo.Context) error {
+	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing body")
 	}

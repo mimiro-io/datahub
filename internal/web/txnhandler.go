@@ -23,7 +23,7 @@ import (
 	"github.com/mimiro-io/datahub/internal/server"
 )
 
-func NewTxnHandler(e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, store *server.Store) {
+func RegisterTxnHandler(e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, store *server.Store) {
 	log := logger.Named("web")
 	handler := &txnHandler{
 		store:  store,
