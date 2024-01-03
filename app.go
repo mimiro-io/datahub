@@ -96,7 +96,7 @@ func (dhi *DatahubInstance) Stop(ctx context.Context) error {
 }
 
 func (dhi *DatahubInstance) waitForStop() {
-	sigChan := make(chan os.Signal)
+	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	<-sigChan
 	dhi.logger.Info("Data hub stopping")
