@@ -67,11 +67,6 @@ func (dhi *DatahubInstance) Start() error {
 	return nil
 }
 
-/*type InternalService interface {
-	Start(ctx context.Context) error
-	Stop(ctx context.Context) error
-}*/
-
 func Run() {
 	dhi, err := NewDatahubInstance()
 	if err != nil {
