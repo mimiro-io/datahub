@@ -132,7 +132,10 @@ func (config *JwtConfig) ValidateToken(auth string) (*jwt.Token, error) {
 
 			switch jwks := set.(type) {
 			case jwk.Set:
-				kid := token.Header["kid"].(string)
+				kid, ok := token.Header["kid"].(string)
+				if !ok {
+					return nil, errors.New("kid header not found")
+				}
 				k, ok := jwks.LookupKeyID(kid)
 				if !ok {
 					return nil, errors.New("kid not found in jwks")
