@@ -109,7 +109,7 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 		os.Stdout = devNull
 		os.Stderr = devNull
 		// app, _ = datahub.Start(context.Background())
-		app, _ = datahub.NewDatahubInstance()
+		app, _ = datahub.NewDatahubInstance("")
 		go app.Start()
 
 		os.Stdout = oldOut

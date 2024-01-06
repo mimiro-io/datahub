@@ -40,7 +40,7 @@ var _ = Describe("Loading the Environment", Ordered, func() {
 		currentDir = d + "/../../.env-test"
 	})
 	It("should parse the test env file", func() {
-		env, err := loadEnv(&currentDir, false)
+		env, err := loadEnv(currentDir, false)
 		if err != nil {
 			Fail(err.Error())
 		}
@@ -64,7 +64,7 @@ var _ = Describe("Parsing the env file", Ordered, func() {
 			Fail(err.Error())
 		}
 		currentDir = d + "/../../.env-test"
-		e, err := loadEnv(&currentDir, false)
+		e, err := loadEnv(currentDir, false)
 		if err != nil {
 			Fail(err.Error())
 		}
@@ -112,7 +112,7 @@ var _ = Describe("Loading the env without a file", Ordered, func() {
 		viper.Reset()
 	})
 	It("should load fine", func() {
-		_, err := loadEnv(nil, false)
+		_, err := loadEnv("", false)
 		if err != nil {
 			Fail(err.Error())
 		}
@@ -131,7 +131,7 @@ var _ = Describe("Loading env from env variables only", Ordered, func() {
 		_ = os.Setenv("PROFILE", "test")
 		_ = os.Setenv("TOKEN_WELL_KNOWN", "https://example.io/jwks/.well-known/jwks.json")
 		_ = os.Setenv("DL_JWT_CLIENT_ID", "12345")
-		cf, err := loadEnv(nil, false)
+		cf, err := loadEnv("", false)
 		if err != nil {
 			Fail(err.Error())
 		}

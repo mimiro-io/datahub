@@ -14,8 +14,16 @@
 
 package main
 
-import "github.com/mimiro-io/datahub"
+import (
+	"github.com/mimiro-io/datahub"
+	"os"
+)
 
 func main() {
-	datahub.Run()
+	configLocation := ""
+	if len(os.Args) == 2 {
+		configLocation = os.Args[1]
+	}
+
+	datahub.Run(configLocation)
 }

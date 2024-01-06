@@ -654,7 +654,7 @@ func startDh(status *int) *datahub.DatahubInstance {
 		}
 	}()
 	// app, _ := datahub.Start(context.Background())
-	dhi, _ := datahub.NewDatahubInstance()
+	dhi, _ := datahub.NewDatahubInstance("")
 	go dhi.Start()
 	os.Stdout = oldOut
 	os.Stderr = oldErr

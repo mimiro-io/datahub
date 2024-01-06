@@ -67,8 +67,8 @@ func (dhi *DatahubInstance) Start() error {
 	return nil
 }
 
-func Run() {
-	dhi, err := NewDatahubInstance()
+func Run(configFile string) {
+	dhi, err := NewDatahubInstance(configFile)
 	if err != nil {
 		fmt.Println("error initialising data hub " + err.Error())
 		return
@@ -77,7 +77,6 @@ func Run() {
 	if err != nil {
 		fmt.Println("error starting data hub " + err.Error())
 	}
-
 }
 
 func (dhi *DatahubInstance) Stop(ctx context.Context) error {
@@ -101,11 +100,11 @@ func (dhi *DatahubInstance) waitForStop() {
 	os.Exit(0)
 }
 
-func NewDatahubInstance() (*DatahubInstance, error) {
+func NewDatahubInstance(configLocation string) (*DatahubInstance, error) {
 	dhi := &DatahubInstance{}
 	var err error
 
-	dhi.env, err = conf.NewEnv()
+	dhi.env, err = conf.NewEnv(configLocation)
 	if err != nil {
 		return nil, err
 	}
