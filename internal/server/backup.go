@@ -41,7 +41,7 @@ type BackupManager struct {
 	logger               *zap.SugaredLogger
 }
 
-func NewBackupManager(store *Store, env *conf.Env) (*BackupManager, error) {
+func NewBackupManager(store *Store, env *conf.Config) (*BackupManager, error) {
 	if env.BackupLocation == "" {
 		return nil, nil
 	}

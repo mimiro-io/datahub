@@ -50,7 +50,7 @@ var _ = ginkgo.Describe("The BackupManager", func() {
 		err = os.RemoveAll(backupLocation)
 		Expect(err).To(BeNil(), "should be allowed to clean testfiles in "+storeLocation)
 
-		e := &conf.Env{
+		e := &conf.Config{
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: storeLocation,
 		}

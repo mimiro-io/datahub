@@ -41,7 +41,7 @@ type DatasetName struct {
 	Name string `json:"Name"`
 }
 
-func NewDsManager(env *conf.Env, store *Store, eb EventBus) *DsManager {
+func NewDsManager(env *conf.Config, store *Store, eb EventBus) *DsManager {
 	dsm := &DsManager{
 		store:  store,
 		logger: env.Logger.Named("ds-manager"),

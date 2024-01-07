@@ -1022,7 +1022,7 @@ func setupScheduler(storeLocation string) (*Scheduler, *server.Store, *Runner, *
 	GinkgoHelper()
 	statsdClient := &StatsDRecorder{}
 	statsdClient.Reset()
-	e := &conf.Env{
+	e := &conf.Config{
 		Logger:        logger,
 		StoreLocation: storeLocation,
 		RunnerConfig: &conf.RunnerConfig{

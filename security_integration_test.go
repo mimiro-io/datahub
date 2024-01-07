@@ -20,6 +20,7 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"github.com/mimiro-io/datahub"
+	"github.com/mimiro-io/datahub/internal/conf"
 	"io"
 	"net/http"
 	"net/url"
@@ -109,7 +110,9 @@ var _ = Describe("The dataset endpoint", Ordered, func() {
 		os.Stdout = devNull
 		os.Stderr = devNull
 		// app, _ = datahub.Start(context.Background())
-		app, _ = datahub.NewDatahubInstance("")
+
+		config, _ := conf.LoadConfig("")
+		app, _ = datahub.NewDatahubInstance(config)
 		go app.Start()
 
 		os.Stdout = oldOut

@@ -105,7 +105,7 @@ type ScheduleEntry struct {
 // and schedule this with the runner.
 func NewScheduler(
 
-	env *conf.Env,
+	env *conf.Config,
 	store *server.Store,
 	dsm *server.DsManager,
 	runner *Runner,

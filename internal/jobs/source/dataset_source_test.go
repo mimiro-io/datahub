@@ -47,7 +47,7 @@ var _ = Describe("a datasetSource", func() {
 		err := os.RemoveAll(storeLocation)
 		Expect(err).To(BeNil(), "should be allowed to clean testfiles in "+storeLocation)
 
-		e := &conf.Env{
+		e := &conf.Config{
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: storeLocation,
 		}

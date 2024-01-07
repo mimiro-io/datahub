@@ -70,7 +70,7 @@ func BenchmarkGetChanges(b *testing.B) {
 
 func setup(storeLocation string, b *testing.B) (*server.Dataset, *server.Store, *server.DsManager, func()) {
 	// lc := fxtest.NewLifecycle(internal.FxTestLog(b, false))
-	env := &conf.Env{
+	env := &conf.Config{
 		Logger:        zap.NewNop().Sugar(),
 		StoreLocation: storeLocation,
 	}

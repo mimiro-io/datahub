@@ -30,10 +30,10 @@ type GarbageCollector struct {
 	store  *Store
 	logger *zap.SugaredLogger
 	quit   chan bool
-	env    *conf.Env
+	env    *conf.Config
 }
 
-func NewGarbageCollector(store *Store, env *conf.Env) *GarbageCollector {
+func NewGarbageCollector(store *Store, env *conf.Config) *GarbageCollector {
 	gc := &GarbageCollector{
 		store:  store,
 		logger: env.Logger.Named("garbagecollector"),

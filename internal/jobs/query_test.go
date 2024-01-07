@@ -52,7 +52,7 @@ var _ = Describe("QueryExecution", func() {
 		storeLocation = fmt.Sprintf("./test_store_relations_%v", testCnt)
 		err := os.RemoveAll(storeLocation)
 		Expect(err).To(BeNil(), "should be allowed to clean test files in "+storeLocation)
-		e := &conf.Env{
+		e := &conf.Config{
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: storeLocation,
 		}

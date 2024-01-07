@@ -64,7 +64,7 @@ func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Con
 }
 
 type WebService struct {
-	env    *conf.Env
+	env    *conf.Config
 	logger *zap.SugaredLogger
 	statsd statsd.ClientInterface
 	echo   *echo.Echo
@@ -87,7 +87,7 @@ func (ws *WebService) Stop(ctx context.Context) error {
 // expectation is that this can become an interface and also the things it contains
 // should provide interfaces and not structs with funcs
 type ServiceContext struct {
-	Env            *conf.Env
+	Env            *conf.Config
 	Logger         *zap.SugaredLogger
 	Statsd         statsd.ClientInterface
 	SecurityCore   *security.ServiceCore

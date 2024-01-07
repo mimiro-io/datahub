@@ -56,7 +56,7 @@ var _ = Describe("The Eventbus", func() {
 		err := os.RemoveAll(storeLocation)
 		Expect(err).To(BeNil(), "should be allowed to clean testfiles in "+storeLocation)
 
-		e := &conf.Env{
+		e := &conf.Config{
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: storeLocation,
 			Port:          "25555",
@@ -70,7 +70,7 @@ var _ = Describe("The Eventbus", func() {
 
 		// lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
 		store = server.NewStore(e, &statsd.NoOpClient{})
-		newBus, _ := server.NewBus(&conf.Env{Logger: zap.NewNop().Sugar()})
+		newBus, _ := server.NewBus(&conf.Config{Logger: zap.NewNop().Sugar()})
 		eventBus = newBus.(*server.MEventBus)
 		dsm = server.NewDsManager(e, store, newBus)
 

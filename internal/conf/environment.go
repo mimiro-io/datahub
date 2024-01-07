@@ -20,7 +20,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type Env struct {
+type Config struct {
 	Logger                  *zap.SugaredLogger
 	Env                     string
 	Port                    string

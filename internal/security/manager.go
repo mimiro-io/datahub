@@ -115,7 +115,7 @@ type ServiceCore struct {
 	roles sync.Map
 }
 
-func NewServiceCore(env *conf.Env) *ServiceCore {
+func NewServiceCore(env *conf.Config) *ServiceCore {
 	serviceCore := &ServiceCore{}
 	serviceCore.Location = env.SecurityStorageLocation
 	serviceCore.AdminClientKey = env.AdminUserName

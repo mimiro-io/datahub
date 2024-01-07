@@ -37,7 +37,7 @@ func TestContent(t *testing.T) {
 var _ = Describe("The content API", func() {
 	var store *server.Store
 	var contentConfig *Service
-	var e *conf.Env
+	var e *conf.Config
 	testCnt := 0
 	js := ` {
 		  "id": "test-import-content",
@@ -48,7 +48,7 @@ var _ = Describe("The content API", func() {
 		} } `
 	BeforeEach(func() {
 		testCnt = testCnt + 1
-		e = &conf.Env{
+		e = &conf.Config{
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: "./test_add_content_" + strconv.Itoa(testCnt),
 		}

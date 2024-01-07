@@ -48,7 +48,7 @@ var _ = ginkgo.Describe("A Dataset", func() {
 		Expect(err).To(BeNil(), "should be allowed to clean testfiles in "+storeLocation)
 
 		// create store
-		e := &conf.Env{Logger: zap.NewNop().Sugar(), StoreLocation: storeLocation}
+		e := &conf.Config{Logger: zap.NewNop().Sugar(), StoreLocation: storeLocation}
 		// lc := fxtest.NewLifecycle(internal.FxTestLog(ginkgo.GinkgoT(), false))
 		s := NewStore(e, &statsd.NoOpClient{})
 		dsm := NewDsManager(e, s, NoOpBus())

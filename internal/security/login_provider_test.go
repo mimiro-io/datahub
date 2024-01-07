@@ -29,13 +29,13 @@ import (
 
 var _ = Describe("Login Provider Crud operations", func() {
 	var store *server.Store
-	var e *conf.Env
+	var e *conf.Config
 	var pm *ProviderManager
 	testCnt := 0
 
 	BeforeEach(func() {
 		testCnt = testCnt + 1
-		e = &conf.Env{
+		e = &conf.Config{
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: "./test_login_provider_" + strconv.Itoa(testCnt),
 		}

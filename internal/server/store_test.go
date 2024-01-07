@@ -42,7 +42,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 		storeLocation = fmt.Sprintf("./test_store_relations_%v", testCnt)
 		err := os.RemoveAll(storeLocation)
 		Expect(err).To(BeNil(), "should be allowed to clean testfiles in "+storeLocation)
-		e := &conf.Env{
+		e := &conf.Config{
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: storeLocation,
 		}
@@ -545,7 +545,7 @@ var _ = ginkgo.Describe("The dataset storage", func() {
 		storeLocation = fmt.Sprintf("./test_store_%v", testCnt)
 		err := os.RemoveAll(storeLocation)
 		Expect(err).To(BeNil(), "should be allowed to clean testfiles in "+storeLocation)
-		e := &conf.Env{
+		e := &conf.Config{
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: storeLocation,
 		}
@@ -1365,7 +1365,7 @@ var _ = ginkgo.Describe("Scoped storage functions", func() {
 		storeLocation = fmt.Sprintf("./test_store_dsscope_%v", testCnt)
 		err := os.RemoveAll(storeLocation)
 		Expect(err).To(BeNil(), "should be allowed to clean testfiles in "+storeLocation)
-		e := &conf.Env{
+		e := &conf.Config{
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: storeLocation,
 		}

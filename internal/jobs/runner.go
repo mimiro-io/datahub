@@ -48,7 +48,7 @@ type SyncJobState struct {
 
 // NewRunner creates a new job runner. It should only be used from the main.go
 func NewRunner(
-	env *conf.Env,
+	env *conf.Config,
 	store *server.Store,
 	tokenProviders *security.TokenProviders,
 	eb server.EventBus,

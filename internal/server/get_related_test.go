@@ -36,7 +36,7 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 		storeLocation = fmt.Sprintf("./test_get_relations_%v", testCnt)
 		err := os.RemoveAll(storeLocation)
 		Expect(err).To(BeNil(), "should be allowed to clean testfiles in "+storeLocation)
-		e := &conf.Env{
+		e := &conf.Config{
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: storeLocation,
 		}

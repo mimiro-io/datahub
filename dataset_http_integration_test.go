@@ -20,6 +20,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/mimiro-io/datahub/internal/conf"
 	"io"
 	"net/http"
 	"net/url"
@@ -58,7 +59,8 @@ var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
 		os.Stdout = devNull
 		os.Stderr = devNull
 		// app, _ = datahub.Start(context.Background())
-		app, _ = datahub.NewDatahubInstance("")
+		config, _ := conf.LoadConfig("")
+		app, _ = datahub.NewDatahubInstance(config)
 		go app.Start()
 
 		mockLayer = NewMockLayer()

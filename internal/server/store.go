@@ -74,7 +74,7 @@ func (bl BadgerLogger) Warningf(format string, v ...interface{}) { bl.Logger.War
 func (bl BadgerLogger) Debugf(format string, v ...interface{})   { bl.Logger.Debugf(format, v...) }
 
 // NewStore Create a new store
-func NewStore(env *conf.Env, statsdClient statsd.ClientInterface) *Store {
+func NewStore(env *conf.Config, statsdClient statsd.ClientInterface) *Store {
 	fsTimeout := env.FullsyncLeaseTimeout
 	if fsTimeout == 0*time.Second {
 		env.Logger.Warnf("No fullsync lease timeout set, fallback to 1h")

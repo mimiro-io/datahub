@@ -39,7 +39,7 @@ var _ = Describe("PagedQuery in transforms", func() {
 		err := os.RemoveAll(storeLocation)
 		Expect(err).To(BeNil(), "should be allowed to clean testfiles in "+storeLocation)
 
-		e := &conf.Env{Logger: logger, StoreLocation: storeLocation}
+		e := &conf.Config{Logger: logger, StoreLocation: storeLocation}
 
 		// lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
 		store = server.NewStore(e, &statsd.NoOpClient{})

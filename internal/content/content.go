@@ -35,7 +35,7 @@ type Service struct {
 	statsd statsd.ClientInterface
 }
 
-func NewContentService(env *conf.Env, store *server.Store, statsd statsd.ClientInterface) *Service {
+func NewContentService(env *conf.Config, store *server.Store, statsd statsd.ClientInterface) *Service {
 	return &Service{
 		store:  store,
 		logger: env.Logger.Named("content"),

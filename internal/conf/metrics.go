@@ -25,7 +25,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func NewMetricsClient(env *Env, logger *zap.SugaredLogger) (statsd.ClientInterface, error) {
+func NewMetricsClient(env *Config, logger *zap.SugaredLogger) (statsd.ClientInterface, error) {
 	var client statsd.ClientInterface
 	agentEndpoint := env.AgentHost
 	if agentEndpoint != "" {

@@ -16,6 +16,7 @@ package main
 
 import (
 	"github.com/mimiro-io/datahub"
+	"github.com/mimiro-io/datahub/internal/conf"
 	"os"
 )
 
@@ -25,5 +26,10 @@ func main() {
 		configLocation = os.Args[1]
 	}
 
-	datahub.Run(configLocation)
+	conf, err := conf.LoadConfig(configLocation)
+	if err != nil {
+		panic(err)
+	}
+
+	datahub.Run(conf)
 }

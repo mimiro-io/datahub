@@ -26,7 +26,7 @@ var _ = Describe("Start an instance", Ordered, func() {
 	BeforeAll(func() {
 	})
 	It("should be of noop type when no agent host", func() {
-		env := &Env{
+		env := &Config{
 			AgentHost: "",
 		}
 		client, err := NewMetricsClient(env, zap.NewNop().Sugar())
@@ -35,7 +35,7 @@ var _ = Describe("Start an instance", Ordered, func() {
 	})
 
 	It("should be statsd client when agent host set", func() {
-		env := &Env{
+		env := &Config{
 			AgentHost: "127.0.0.1:8125",
 		}
 		client, err := NewMetricsClient(env, zap.NewNop().Sugar())

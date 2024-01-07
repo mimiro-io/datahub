@@ -32,7 +32,7 @@ import (
 )
 
 type DatahubInstance struct {
-	env                 *conf.Env
+	config              *conf.Config
 	metricsClient       statsd.ClientInterface
 	logger              *zap.SugaredLogger
 	eventBus            server.EventBus
@@ -67,8 +67,8 @@ func (dhi *DatahubInstance) Start() error {
 	return nil
 }
 
-func Run(configFile string) {
-	dhi, err := NewDatahubInstance(configFile)
+func Run(env *conf.Config) {
+	dhi, err := NewDatahubInstance(env)
 	if err != nil {
 		fmt.Println("error initialising data hub " + err.Error())
 		return
@@ -100,51 +100,47 @@ func (dhi *DatahubInstance) waitForStop() {
 	os.Exit(0)
 }
 
-func NewDatahubInstance(configLocation string) (*DatahubInstance, error) {
+func NewDatahubInstance(config *conf.Config) (*DatahubInstance, error) {
 	dhi := &DatahubInstance{}
 	var err error
 
-	dhi.env, err = conf.NewEnv(configLocation)
+	dhi.config = config
+	dhi.logger = conf.NewLogger(dhi.config)
+
+	dhi.metricsClient, err = conf.NewMetricsClient(dhi.config, dhi.logger)
 	if err != nil {
 		return nil, err
 	}
 
-	dhi.logger = conf.NewLogger(dhi.env)
-
-	dhi.metricsClient, err = conf.NewMetricsClient(dhi.env, dhi.logger)
-	if err != nil {
-		return nil, err
-	}
-
-	dhi.eventBus, err = server.NewBus(dhi.env)
+	dhi.eventBus, err = server.NewBus(dhi.config)
 
 	// create store and add it to services
-	dhi.store = server.NewStore(dhi.env, dhi.metricsClient)
-	dhi.dsManager = server.NewDsManager(dhi.env, dhi.store, dhi.eventBus)
+	dhi.store = server.NewStore(dhi.config, dhi.metricsClient)
+	dhi.dsManager = server.NewDsManager(dhi.config, dhi.store, dhi.eventBus)
 
-	dhi.providerManager = security.NewProviderManager(dhi.env, dhi.store, dhi.logger)
-	dhi.securityServiceCore = security.NewServiceCore(dhi.env)
+	dhi.providerManager = security.NewProviderManager(dhi.config, dhi.store, dhi.logger)
+	dhi.securityServiceCore = security.NewServiceCore(dhi.config)
 	dhi.tokenProviders = security.NewTokenProviders(dhi.logger, dhi.providerManager, dhi.securityServiceCore)
-	dhi.runner = jobs.NewRunner(dhi.env, dhi.store, dhi.tokenProviders, dhi.eventBus, dhi.metricsClient)
-	dhi.scheduler = jobs.NewScheduler(dhi.env, dhi.store, dhi.dsManager, dhi.runner)
+	dhi.runner = jobs.NewRunner(dhi.config, dhi.store, dhi.tokenProviders, dhi.eventBus, dhi.metricsClient)
+	dhi.scheduler = jobs.NewScheduler(dhi.config, dhi.store, dhi.dsManager, dhi.runner)
 
-	dhi.contentService = content.NewContentService(dhi.env, dhi.store, dhi.metricsClient)
-	dhi.authorizer = web.NewAuthorizer(dhi.env, dhi.logger, dhi.securityServiceCore)
+	dhi.contentService = content.NewContentService(dhi.config, dhi.store, dhi.metricsClient)
+	dhi.authorizer = web.NewAuthorizer(dhi.config, dhi.logger, dhi.securityServiceCore)
 
 	// other core services
 	conf.InitNewMemoryReporter(dhi.metricsClient, dhi.logger)
-	dhi.backup, err = server.NewBackupManager(dhi.store, dhi.env)
+	dhi.backup, err = server.NewBackupManager(dhi.store, dhi.config)
 	if err != nil {
 		return nil, err
 	}
 
-	dhi.gc = server.NewGarbageCollector(dhi.store, dhi.env)
+	dhi.gc = server.NewGarbageCollector(dhi.store, dhi.config)
 	// dhi.gc.Start(context.Background())
 
 	// web service config from dhi (ideally we pass through the dhi here or interface)
 	// this approach avoids an import loop. which can also be solved by moving some code around
 	serviceContext := &web.ServiceContext{}
-	serviceContext.Env = dhi.env
+	serviceContext.Env = dhi.config
 	serviceContext.ContentService = dhi.contentService
 	serviceContext.Logger = dhi.logger
 	serviceContext.Statsd = dhi.metricsClient
@@ -152,7 +148,7 @@ func NewDatahubInstance(configLocation string) (*DatahubInstance, error) {
 	serviceContext.JobsScheduler = dhi.scheduler
 	serviceContext.DatasetManager = dhi.dsManager
 	serviceContext.EventBus = dhi.eventBus
-	serviceContext.Port = dhi.env.Port
+	serviceContext.Port = dhi.config.Port
 	serviceContext.TokenProviders = dhi.tokenProviders
 	serviceContext.Store = dhi.store
 
@@ -177,7 +173,7 @@ func NewDatahubInstance(configLocation string) (*DatahubInstance, error) {
 			fx.StartTimeout(fxTimeout),
 		),
 		fx.Provide(
-			conf.NewEnv,
+			conf.LoadConfig,
 			conf.NewMetricsClient,
 			conf.NewLogger,
 			server.NewBus,

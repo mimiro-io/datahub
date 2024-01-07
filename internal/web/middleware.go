@@ -35,10 +35,10 @@ type Middleware struct {
 	authorizer func(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc
 	// 	handler    *WebHandler
 	logger *zap.SugaredLogger
-	env    *conf.Env
+	env    *conf.Config
 }
 
-func NewMiddleware(env *conf.Env, e *echo.Echo, core *security.ServiceCore, logger *zap.SugaredLogger, statsd statsd.ClientInterface) *Middleware {
+func NewMiddleware(env *conf.Config, e *echo.Echo, core *security.ServiceCore, logger *zap.SugaredLogger, statsd statsd.ClientInterface) *Middleware {
 	skipper := func(c echo.Context) bool {
 		// don't secure health endpoints
 		if strings.HasPrefix(c.Request().URL.Path, "/health") {
@@ -84,7 +84,7 @@ func NewMiddleware(env *conf.Env, e *echo.Echo, core *security.ServiceCore, logg
 	return mw
 }
 
-func NewAuthorizer(env *conf.Env, logger *zap.SugaredLogger, core *security.ServiceCore) func(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {
+func NewAuthorizer(env *conf.Config, logger *zap.SugaredLogger, core *security.ServiceCore) func(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {
 	log := logger.Named("authorizer")
 
 	switch env.Auth.Middleware {
@@ -117,7 +117,7 @@ func (middleware *Middleware) configure(e *echo.Echo, logger *zap.SugaredLogger)
 	e.Use(middleware.recover)
 }
 
-func setupJWT(env *conf.Env, core *security.ServiceCore, skipper func(c echo.Context) bool) echo.MiddlewareFunc {
+func setupJWT(env *conf.Config, core *security.ServiceCore, skipper func(c echo.Context) bool) echo.MiddlewareFunc {
 	config := &middlewares.JwtConfig{
 		Skipper:   skipper,
 		Audience:  env.Auth.Audience,

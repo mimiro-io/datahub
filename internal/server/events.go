@@ -46,7 +46,7 @@ type MEventBus struct {
 
 type NoOp struct{}
 
-func NewBus(env *conf.Env) (EventBus, error) {
+func NewBus(env *conf.Config) (EventBus, error) {
 	// configure id generator (it doesn't have to be monoton)
 	node := uint64(1)
 	initialTime := uint64(1577865600000) // set 2020-01-01 PST as initial time

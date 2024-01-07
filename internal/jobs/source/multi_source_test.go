@@ -42,7 +42,7 @@ var _ = Describe("dependency tracking", func() {
 		err := os.RemoveAll(storeLocation)
 		Expect(err).To(BeNil(), "should be allowed to clean testfiles in "+storeLocation)
 
-		e := &conf.Env{
+		e := &conf.Config{
 			Logger: zap.NewNop().Sugar(),
 			//Logger:        zap.NewExample().Sugar(),
 			StoreLocation: storeLocation,

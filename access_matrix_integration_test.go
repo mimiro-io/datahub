@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/mimiro-io/datahub/internal/conf"
 	"io"
 	"net/http"
 	"os"
@@ -653,8 +654,8 @@ func startDh(status *int) *datahub.DatahubInstance {
 			*status = -1
 		}
 	}()
-	// app, _ := datahub.Start(context.Background())
-	dhi, _ := datahub.NewDatahubInstance("")
+	config, _ := conf.LoadConfig("")
+	dhi, _ := datahub.NewDatahubInstance(config)
 	go dhi.Start()
 	os.Stdout = oldOut
 	os.Stderr = oldErr

@@ -46,7 +46,7 @@ var _ = Describe("A dataset iterator", Ordered, func() {
 	BeforeAll(func() {
 		os.RemoveAll(storeLocation)
 		// lc = fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
-		env := &conf.Env{
+		env := &conf.Config{
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: storeLocation,
 		}

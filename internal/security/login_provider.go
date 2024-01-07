@@ -34,12 +34,12 @@ type Provider interface {
 }
 
 type ProviderManager struct {
-	env   *conf.Env
+	env   *conf.Config
 	store *server.Store
 	log   *zap.SugaredLogger
 }
 
-func NewProviderManager(env *conf.Env, store *server.Store, log *zap.SugaredLogger) *ProviderManager {
+func NewProviderManager(env *conf.Config, store *server.Store, log *zap.SugaredLogger) *ProviderManager {
 	pm := &ProviderManager{
 		env:   env,
 		store: store,
