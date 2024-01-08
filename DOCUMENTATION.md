@@ -770,7 +770,7 @@ Additionally, a trigger configuration defines the mode of operation of the job:
 - `fullsync` processes all entities in the source dataset
 
 > [!CAUTION]
-> Incremental updates can only be used on the /changes endpoint.
+> In jobs with an HttpDatasetSource, incremental updates can only be used on the /changes endpoint.
 
 It can make sense to transfer small incremental updates with high frequency, while also having a daily fullsync defined in the same job.
 
