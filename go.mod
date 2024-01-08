@@ -28,6 +28,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
+require go.uber.org/fx v1.20.1
+
 require (
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
