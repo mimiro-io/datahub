@@ -16,12 +16,11 @@ package server
 
 import (
 	"fmt"
-	"os"
-
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
+	"os"
 
 	"github.com/mimiro-io/datahub/internal/conf"
 )
@@ -227,7 +226,7 @@ var _ = ginkgo.Describe("The GarbageCollector", func() {
 	})
 
 	ginkgo.It("Should stop when asked to", func() {
-		go func() { gc.quit <- true }()
+		gc.quit <- true // prepare channel by putting a quit value in it. In normal operation this would happen while running
 		err := gc.Cleandeleted()
 		Expect(err).NotTo(BeZero())
 		Expect(err.Error()).To(Equal("gc cancelled"))
