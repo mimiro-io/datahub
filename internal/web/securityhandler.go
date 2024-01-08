@@ -15,67 +15,58 @@
 package web
 
 import (
-	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 
 	"github.com/labstack/echo/v4"
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/security"
 )
 
-func NewSecurityHandler(
-	lc fx.Lifecycle,
+func RegisterSecurityHandler(
 	e *echo.Echo,
 	logger *zap.SugaredLogger,
 	mw *Middleware,
 	core *security.ServiceCore,
 ) {
 	log := logger.Named("web")
-	handler := &SecurityHandler{}
+	handler := &securityHandler{}
 	handler.serviceCore = core
 	handler.logger = log
 
-	lc.Append(fx.Hook{
-		OnStart: func(_ context.Context) error {
-			// query
-			e.POST("/security/token", handler.tokenRequestHandler)
-			e.POST("/security/clients", handler.clientRegistrationRequestHandler, mw.authorizer(log, datahubWrite))
-			e.GET("/security/clients", handler.getClientsRequestHandler, mw.authorizer(log, datahubWrite))
+	// query
+	e.POST("/security/token", handler.tokenRequestHandler)
+	e.POST("/security/clients", handler.clientRegistrationRequestHandler, mw.authorizer(log, datahubWrite))
+	e.GET("/security/clients", handler.getClientsRequestHandler, mw.authorizer(log, datahubWrite))
 
-			e.POST(
-				"/security/clients/:clientid/acl",
-				handler.setClientAccessControlsRequestHandler,
-				mw.authorizer(log, datahubWrite),
-			)
-			e.GET(
-				"/security/clients/:clientid/acl",
-				handler.getClientAccessControlsRequestHandler,
-				mw.authorizer(log, datahubWrite),
-			)
-			e.DELETE(
-				"/security/clients/:clientid/acl",
-				handler.deleteClientAccessControlsRequestHandler,
-				mw.authorizer(log, datahubWrite),
-			)
+	e.POST(
+		"/security/clients/:clientid/acl",
+		handler.setClientAccessControlsRequestHandler,
+		mw.authorizer(log, datahubWrite),
+	)
+	e.GET(
+		"/security/clients/:clientid/acl",
+		handler.getClientAccessControlsRequestHandler,
+		mw.authorizer(log, datahubWrite),
+	)
+	e.DELETE(
+		"/security/clients/:clientid/acl",
+		handler.deleteClientAccessControlsRequestHandler,
+		mw.authorizer(log, datahubWrite),
+	)
 
-			/* jwtMiddleware := MakeJWTMiddleware(core.GetActiveKeyPair().PublicKey, "node:" + core.NodeInfo.NodeId, "node:" + core.NodeInfo.NodeId)
+	/* jwtMiddleware := MakeJWTMiddleware(core.GetActiveKeyPair().PublicKey, "node:" + core.NodeInfo.NodeId, "node:" + core.NodeInfo.NodeId)
 
-			e.POST("/security/clients", handler.registerClientRequestHandler, jwtMiddleware, MakeRoleCheckMiddleware("admin"))
-			e.POST("/security/clientclaims", handler.setClientClaimsRequestHandler, jwtMiddleware, MakeRoleCheckMiddleware("admin"))
-			e.POST("/security/clientacl", handler.setClientClaimsRequestHandler, jwtMiddleware, MakeRoleCheckMiddleware("admin"))
-			*/
-
-			return nil
-		},
-	})
+	e.POST("/security/clients", handler.registerClientRequestHandler, jwtMiddleware, MakeRoleCheckMiddleware("admin"))
+	e.POST("/security/clientclaims", handler.setClientClaimsRequestHandler, jwtMiddleware, MakeRoleCheckMiddleware("admin"))
+	e.POST("/security/clientacl", handler.setClientClaimsRequestHandler, jwtMiddleware, MakeRoleCheckMiddleware("admin"))
+	*/
 }
 
-type SecurityHandler struct {
+type securityHandler struct {
 	serviceCore *security.ServiceCore
 	logger      *zap.SugaredLogger
 }
@@ -86,12 +77,12 @@ type TokenResponse struct {
 	TokenType   string `json:"token_type"`
 }
 
-func (handler *SecurityHandler) getClientsRequestHandler(c echo.Context) error {
+func (handler *securityHandler) getClientsRequestHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, handler.serviceCore.GetClients())
 }
 
 // oidc - oauth2 compliant token request handler
-func (handler *SecurityHandler) tokenRequestHandler(c echo.Context) error {
+func (handler *securityHandler) tokenRequestHandler(c echo.Context) error {
 	// url form encoded params
 	grantType := c.FormValue("grant_type")
 	clientAssertionType := c.FormValue("client_assertion_type")
@@ -124,8 +115,8 @@ func (handler *SecurityHandler) tokenRequestHandler(c echo.Context) error {
 	return nil
 }
 
-func (handler *SecurityHandler) clientRegistrationRequestHandler(c echo.Context) error {
-	body, err := ioutil.ReadAll(c.Request().Body)
+func (handler *securityHandler) clientRegistrationRequestHandler(c echo.Context) error {
+	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing body")
 	}
@@ -140,7 +131,7 @@ func (handler *SecurityHandler) clientRegistrationRequestHandler(c echo.Context)
 	return c.NoContent(http.StatusOK)
 }
 
-func (handler *SecurityHandler) getClientAccessControlsRequestHandler(c echo.Context) error {
+func (handler *securityHandler) getClientAccessControlsRequestHandler(c echo.Context) error {
 	clientID, err := url.QueryUnescape(c.Param("clientid"))
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing client id")
@@ -148,7 +139,7 @@ func (handler *SecurityHandler) getClientAccessControlsRequestHandler(c echo.Con
 	return c.JSON(http.StatusOK, handler.serviceCore.GetAccessControls(clientID))
 }
 
-func (handler *SecurityHandler) deleteClientAccessControlsRequestHandler(c echo.Context) error {
+func (handler *securityHandler) deleteClientAccessControlsRequestHandler(c echo.Context) error {
 	clientID, err := url.QueryUnescape(c.Param("clientid"))
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing client id")
@@ -157,8 +148,8 @@ func (handler *SecurityHandler) deleteClientAccessControlsRequestHandler(c echo.
 	return c.NoContent(http.StatusOK)
 }
 
-func (handler *SecurityHandler) setClientAccessControlsRequestHandler(c echo.Context) error {
-	body, err := ioutil.ReadAll(c.Request().Body)
+func (handler *securityHandler) setClientAccessControlsRequestHandler(c echo.Context) error {
+	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing body")
 	}

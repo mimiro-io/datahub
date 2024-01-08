@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v4"
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/conf"
@@ -31,51 +30,54 @@ type GarbageCollector struct {
 	store  *Store
 	logger *zap.SugaredLogger
 	quit   chan bool
+	env    *conf.Config
 }
 
-func NewGarbageCollector(lc fx.Lifecycle, store *Store, env *conf.Env) *GarbageCollector {
+func NewGarbageCollector(store *Store, env *conf.Config) *GarbageCollector {
 	gc := &GarbageCollector{
 		store:  store,
 		logger: env.Logger.Named("garbagecollector"),
 		quit:   make(chan bool),
+		env:    env,
 	}
 
-	lc.Append(fx.Hook{
-		OnStart: func(_ context.Context) error {
-			if env.GcOnStartup {
-				gc.logger.Info("Starting inital GC in background")
-				go func() {
-					ts := time.Now()
-					var err error
-					gc.logger.Info("Starting to clean deleted datasets")
-					err = gc.Cleandeleted()
-					if err != nil {
-						gc.logger.Warnf("cleaning of deleted datasets failed: %v", err.Error())
-						return
-					} else {
-						gc.logger.Infof("Finished cleaning of deleted datasets after %v", time.Since(ts).Round(time.Millisecond))
-					}
-					ts = time.Now()
-					gc.logger.Info("Starting badger gc")
-					err = gc.GC()
-					if err != nil {
-						gc.logger.Warn("badger gc failed: ", err)
-					} else {
-						gc.logger.Infof("Finished badger gc after %v", time.Since(ts).Round(time.Millisecond))
-					}
-				}()
-			} else {
-				gc.logger.Info("GC_ON_STARTUP disabled")
-			}
-			return nil
-		},
-		OnStop: func(_ context.Context) error {
-			go func() { gc.quit <- true }()
-			return nil
-		},
-	})
+	gc.Start(context.Background())
 
 	return gc
+}
+
+func (garbageCollector *GarbageCollector) Start(ctx context.Context) error {
+	if garbageCollector.env.GcOnStartup {
+		garbageCollector.logger.Info("Starting inital GC in background")
+		go func() {
+			ts := time.Now()
+			var err error
+			garbageCollector.logger.Info("Starting to clean deleted datasets")
+			err = garbageCollector.Cleandeleted()
+			if err != nil {
+				garbageCollector.logger.Warnf("cleaning of deleted datasets failed: %v", err.Error())
+				return
+			} else {
+				garbageCollector.logger.Infof("Finished cleaning of deleted datasets after %v", time.Since(ts).Round(time.Millisecond))
+			}
+			ts = time.Now()
+			garbageCollector.logger.Info("Starting badger gc")
+			err = garbageCollector.GC()
+			if err != nil {
+				garbageCollector.logger.Warn("badger gc failed: ", err)
+			} else {
+				garbageCollector.logger.Infof("Finished badger gc after %v", time.Since(ts).Round(time.Millisecond))
+			}
+		}()
+	} else {
+		garbageCollector.logger.Info("GC_ON_STARTUP disabled")
+	}
+	return nil
+}
+
+func (garbageCollector *GarbageCollector) Stop(ctx context.Context) error {
+	go func() { garbageCollector.quit <- true }()
+	return nil
 }
 
 func (garbageCollector *GarbageCollector) GC() error {

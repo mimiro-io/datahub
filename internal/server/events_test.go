@@ -25,14 +25,11 @@ import (
 	"time"
 
 	"github.com/DataDog/datadog-go/v5/statsd"
-	"github.com/labstack/echo/v4"
 	"github.com/mustafaturan/bus"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
 
-	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/jobs"
 	"github.com/mimiro-io/datahub/internal/server"
@@ -47,7 +44,7 @@ var _ = Describe("The Eventbus", func() {
 	var dsm *server.DsManager
 	var scheduler *jobs.Scheduler
 	var runner *jobs.Runner
-	var mockServer *echo.Echo
+	var webService *web.WebService
 	var peopleDs *server.Dataset
 	BeforeEach(func() {
 		testCnt += 1
@@ -59,7 +56,7 @@ var _ = Describe("The Eventbus", func() {
 		err := os.RemoveAll(storeLocation)
 		Expect(err).To(BeNil(), "should be allowed to clean testfiles in "+storeLocation)
 
-		e := &conf.Env{
+		e := &conf.Config{
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: storeLocation,
 			Port:          "25555",
@@ -71,23 +68,31 @@ var _ = Describe("The Eventbus", func() {
 		oldOut := os.Stdout
 		os.Stdout = devNull
 
-		lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
-		store = server.NewStore(lc, e, &statsd.NoOpClient{})
-		newBus, _ := server.NewBus(&conf.Env{Logger: zap.NewNop().Sugar()})
+		// lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
+		store = server.NewStore(e, &statsd.NoOpClient{})
+		newBus, _ := server.NewBus(&conf.Config{Logger: zap.NewNop().Sugar()})
 		eventBus = newBus.(*server.MEventBus)
-		dsm = server.NewDsManager(lc, e, store, newBus)
+		dsm = server.NewDsManager(e, store, newBus)
 
 		runner = jobs.NewRunner(
 			e, store, nil, eventBus, &statsd.NoOpClient{})
-		scheduler = jobs.NewScheduler(lc, e, store, dsm, runner)
+		scheduler = jobs.NewScheduler(e, store, dsm, runner)
 
-		var webHander *web.WebHandler
-		webHander, mockServer = web.NewWebServer(lc, e, e.Logger, &statsd.NoOpClient{})
-		mw := web.NewMiddleware(lc, e, webHander, mockServer, nil)
-		web.NewDatasetHandler(lc, mockServer, e.Logger, mw, dsm, store, newBus, nil)
+		serviceContext := &web.ServiceContext{}
+		serviceContext.Store = store
+		serviceContext.EventBus = newBus
+		serviceContext.Env = e
+		serviceContext.JobsScheduler = scheduler
+		serviceContext.DatasetManager = dsm
+		serviceContext.Logger = e.Logger
+		serviceContext.Statsd = &statsd.NoOpClient{}
+		webService, err = web.NewWebService(serviceContext)
+		webService.Start(context.Background())
 
-		err = lc.Start(context.Background())
-		Expect(err).To(BeNil())
+		// mw := web.NewMiddleware(lc, e, webHander, mockServer, nil)
+		// web.NewDatasetHandler(lc, mockServer, e.Logger, mw, dsm, store, newBus, nil)
+		// err = lc.Start(serviceContext.Background())
+		// Expect(err).To(BeNil())
 
 		os.Stdout = oldOut
 
@@ -96,7 +101,7 @@ var _ = Describe("The Eventbus", func() {
 	})
 	AfterEach(func() {
 		runner.Stop()
-		_ = mockServer.Close()
+		_ = webService.Stop(context.Background())
 		_ = store.Close()
 		_ = os.RemoveAll(storeLocation)
 		_ = os.RemoveAll("./views")

@@ -25,10 +25,8 @@ import (
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
 
-	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 )
 
@@ -52,15 +50,15 @@ var _ = ginkgo.Describe("The BackupManager", func() {
 		err = os.RemoveAll(backupLocation)
 		Expect(err).To(BeNil(), "should be allowed to clean testfiles in "+storeLocation)
 
-		e := &conf.Env{
+		e := &conf.Config{
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: storeLocation,
 		}
 
-		lc := fxtest.NewLifecycle(internal.FxTestLog(ginkgo.GinkgoT(), false))
-		s = NewStore(lc, e, &statsd.NoOpClient{})
+		// lc := fxtest.NewLifecycle(internal.FxTestLog(ginkgo.GinkgoT(), false))
+		s = NewStore(e, &statsd.NoOpClient{})
 
-		Expect(s.Open()).To(BeNil())
+		// Expect(s.Open()).To(BeNil())
 
 		backup = &BackupManager{}
 		backup.logger = zap.NewNop().Sugar()

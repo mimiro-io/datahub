@@ -29,7 +29,6 @@ import (
 
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/security"
@@ -45,8 +44,7 @@ type datasetHandler struct {
 	tokenProviders *security.TokenProviders
 }
 
-func NewDatasetHandler(
-	lc fx.Lifecycle,
+func RegisterDatasetHandler(
 	e *echo.Echo,
 	logger *zap.SugaredLogger,
 	mw *Middleware,
@@ -63,21 +61,16 @@ func NewDatasetHandler(
 		tokenProviders: tokenProviders,
 	}
 
-	lc.Append(fx.Hook{
-		OnStart: func(_ context.Context) error {
-			e.GET("/datasets", handler.datasetList, mw.authorizer(log, datahubRead))
-			e.GET("/datasets/:dataset/entities", handler.getEntitiesHandler, mw.authorizer(log, datahubRead))
-			e.GET("/datasets/:dataset/changes", handler.getChangesHandler, mw.authorizer(log, datahubRead))
-			e.POST("/datasets/:dataset/entities", handler.storeEntitiesHandler, mw.authorizer(log, datahubWrite))
+	e.GET("/datasets", handler.datasetList, mw.authorizer(log, datahubRead))
+	e.GET("/datasets/:dataset/entities", handler.getEntitiesHandler, mw.authorizer(log, datahubRead))
+	e.GET("/datasets/:dataset/changes", handler.getChangesHandler, mw.authorizer(log, datahubRead))
+	e.POST("/datasets/:dataset/entities", handler.storeEntitiesHandler, mw.authorizer(log, datahubWrite))
 
-			e.GET("/datasets/:dataset", handler.datasetGet, mw.authorizer(log, datahubRead))
-			e.POST("/datasets/:dataset", handler.datasetCreate, mw.authorizer(log, datahubWrite))
-			e.PATCH("/datasets/:dataset", handler.datasetUpdate, mw.authorizer(log, datahubWrite))
-			e.DELETE("/datasets/:dataset", handler.deleteDatasetHandler, mw.authorizer(log, datahubWrite))
-			e.DELETE("/datasets", handler.deleteAllDatasets, mw.authorizer(log, datahubWrite))
-			return nil
-		},
-	})
+	e.GET("/datasets/:dataset", handler.datasetGet, mw.authorizer(log, datahubRead))
+	e.POST("/datasets/:dataset", handler.datasetCreate, mw.authorizer(log, datahubWrite))
+	e.PATCH("/datasets/:dataset", handler.datasetUpdate, mw.authorizer(log, datahubWrite))
+	e.DELETE("/datasets/:dataset", handler.deleteDatasetHandler, mw.authorizer(log, datahubWrite))
+	e.DELETE("/datasets", handler.deleteAllDatasets, mw.authorizer(log, datahubWrite))
 }
 
 // datasetList

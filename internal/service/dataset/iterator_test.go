@@ -15,7 +15,6 @@
 package dataset_test
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"testing"
@@ -23,10 +22,8 @@ import (
 	"github.com/DataDog/datadog-go/v5/statsd"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
 
-	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/server"
 	ds "github.com/mimiro-io/datahub/internal/service/dataset"
@@ -40,7 +37,7 @@ func TestDatasetIterator(t *testing.T) {
 
 var _ = Describe("A dataset iterator", Ordered, func() {
 	storeLocation := "./test_service_dataset_iterator"
-	var lc *fxtest.Lifecycle
+	// var lc *fxtest.Lifecycle
 	var dsm *server.DsManager
 	var ds0 *server.Dataset
 	var ds1 *server.Dataset
@@ -48,14 +45,14 @@ var _ = Describe("A dataset iterator", Ordered, func() {
 	var store *server.Store
 	BeforeAll(func() {
 		os.RemoveAll(storeLocation)
-		lc = fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
-		env := &conf.Env{
+		// lc = fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
+		env := &conf.Config{
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: storeLocation,
 		}
-		store = server.NewStore(lc, env, &statsd.NoOpClient{})
-		dsm = server.NewDsManager(lc, env, store, server.NoOpBus())
-		lc.Start(context.Background())
+		store = server.NewStore(env, &statsd.NoOpClient{})
+		dsm = server.NewDsManager(env, store, server.NoOpBus())
+		// lc.Start(context.Background())
 
 		ds0, _ = dsm.CreateDataset("arabic", nil)
 		ds0.StoreEntities([]*server.Entity{
@@ -80,7 +77,7 @@ var _ = Describe("A dataset iterator", Ordered, func() {
 		})
 	})
 	AfterAll(func() {
-		lc.Stop(context.Background())
+		// lc.Stop(context.Background())
 		os.RemoveAll(storeLocation)
 	})
 	It("should be able to create a 0 offset", func() {

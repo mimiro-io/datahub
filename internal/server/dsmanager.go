@@ -23,7 +23,6 @@ import (
 	"strings"
 	"sync"
 
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/conf"
@@ -42,24 +41,18 @@ type DatasetName struct {
 	Name string `json:"Name"`
 }
 
-func NewDsManager(lc fx.Lifecycle, env *conf.Env, store *Store, eb EventBus) *DsManager {
+func NewDsManager(env *conf.Config, store *Store, eb EventBus) *DsManager {
 	dsm := &DsManager{
 		store:  store,
 		logger: env.Logger.Named("ds-manager"),
 		eb:     eb,
 	}
 
-	lc.Append(fx.Hook{
-		OnStart: func(_ context.Context) error {
-			eb.Init(dsm.GetDatasetNames())
-			// if we are missing core datasets, we add these here
-			_, err := dsm.CreateDataset(datasetCore, nil)
-			if err != nil {
-				dsm.logger.Warn(err)
-			}
-			return nil
-		},
-	})
+	eb.Init(dsm.GetDatasetNames())
+	_, err := dsm.CreateDataset(datasetCore, nil)
+	if err != nil {
+		dsm.logger.Warn(err)
+	}
 
 	return dsm
 }

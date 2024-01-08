@@ -22,7 +22,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func NewLogger(env *Env) *zap.SugaredLogger {
+func NewLogger(env *Config) *zap.SugaredLogger {
 	logLevel := viper.GetString("LOG_LEVEL")
 	env.Logger.Infof("Resetting log level to %s", logLevel)
 	return GetLogger(env.Env, getLogLevel(logLevel)) // reset the logger after env load

@@ -15,7 +15,6 @@
 package jobs
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,10 +32,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/robfig/cron/v3"
-	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
 
-	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/security"
 	"github.com/mimiro-io/datahub/internal/server"
@@ -1025,7 +1022,7 @@ func setupScheduler(storeLocation string) (*Scheduler, *server.Store, *Runner, *
 	GinkgoHelper()
 	statsdClient := &StatsDRecorder{}
 	statsdClient.Reset()
-	e := &conf.Env{
+	e := &conf.Config{
 		Logger:        logger,
 		StoreLocation: storeLocation,
 		RunnerConfig: &conf.RunnerConfig{
@@ -1041,23 +1038,21 @@ func setupScheduler(storeLocation string) (*Scheduler, *server.Store, *Runner, *
 	devNull, _ := os.Open("/dev/null")
 	oldStd := os.Stdout
 	os.Stdout = devNull
-	lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
-	store := server.NewStore(lc, e, statsdClient)
+	// lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
+	store := server.NewStore(e, statsdClient)
 
-	pm := security.NewProviderManager(lc, e, store, logger)
-	tps := security.NewTokenProviders(lc, logger, pm, nil)
+	pm := security.NewProviderManager(e, store, logger)
+	tps := security.NewTokenProviders(logger, pm, nil)
 	runner := NewRunner(e, store, tps, eb, statsdClient)
-
-	dsm := server.NewDsManager(lc, e, store, server.NoOpBus())
-
-	s := NewScheduler(lc, e, store, dsm, runner)
+	dsm := server.NewDsManager(e, store, server.NoOpBus())
+	s := NewScheduler(e, store, dsm, runner)
 
 	// undo redirect of stdout after successful init of fx and jobrunner
 	os.Stdout = oldStd
-	err := lc.Start(context.Background())
-	if err != nil {
-		Fail(err.Error())
-	}
+	// err := lc.Start(context.Background())
+	//if err != nil {
+	// 	Fail(err.Error())
+	// }
 	// add basic auth provider called local
 	tps.Add(security.ProviderConfig{
 		Name:     "local",

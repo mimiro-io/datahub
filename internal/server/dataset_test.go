@@ -15,7 +15,6 @@
 package server
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strconv"
@@ -24,10 +23,8 @@ import (
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
 
-	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 )
 
@@ -51,12 +48,12 @@ var _ = ginkgo.Describe("A Dataset", func() {
 		Expect(err).To(BeNil(), "should be allowed to clean testfiles in "+storeLocation)
 
 		// create store
-		e := &conf.Env{Logger: zap.NewNop().Sugar(), StoreLocation: storeLocation}
-		lc := fxtest.NewLifecycle(internal.FxTestLog(ginkgo.GinkgoT(), false))
-		s := NewStore(lc, e, &statsd.NoOpClient{})
-		dsm := NewDsManager(lc, e, s, NoOpBus())
-		err = lc.Start(context.Background())
-		Expect(err).To(BeNil())
+		e := &conf.Config{Logger: zap.NewNop().Sugar(), StoreLocation: storeLocation}
+		// lc := fxtest.NewLifecycle(internal.FxTestLog(ginkgo.GinkgoT(), false))
+		s := NewStore(e, &statsd.NoOpClient{})
+		dsm := NewDsManager(e, s, NoOpBus())
+		// err = lc.Start(context.Background())
+		// Expect(err).To(BeNil())
 
 		// namespaces
 		peopleNamespacePrefix, _ := s.NamespaceManager.AssertPrefixMappingForExpansion(

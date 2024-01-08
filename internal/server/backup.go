@@ -15,7 +15,6 @@
 package server
 
 import (
-	"context"
 	"encoding/binary"
 	"io"
 	"os"
@@ -24,7 +23,6 @@ import (
 
 	"github.com/bamzi/jobrunner"
 	"github.com/robfig/cron/v3"
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/conf"
@@ -43,7 +41,7 @@ type BackupManager struct {
 	logger               *zap.SugaredLogger
 }
 
-func NewBackupManager(lc fx.Lifecycle, store *Store, env *conf.Env) (*BackupManager, error) {
+func NewBackupManager(store *Store, env *conf.Config) (*BackupManager, error) {
 	if env.BackupLocation == "" {
 		return nil, nil
 	}
@@ -71,23 +69,15 @@ func NewBackupManager(lc fx.Lifecycle, store *Store, env *conf.Env) (*BackupMana
 	}
 	backup.lastID = lastID
 
-	lc.Append(fx.Hook{
-		OnStart: func(_ context.Context) error {
-			backup.logger.Info("init backup via hook")
-			schedule, err := cron.ParseStandard(backup.schedule)
-			if err != nil {
-				backup.logger.Error("bad cron schedule for backup job")
-				return err
-			}
+	backup.logger.Info("init backup via hook")
+	schedule, err := cron.ParseStandard(backup.schedule)
+	if err != nil {
+		backup.logger.Error("bad cron schedule for backup job")
+		return nil, err
+	}
 
-			// pass in this backupManager struct. function Run will be called by the scheduler
-			jobrunner.MainCron.Schedule(schedule, jobrunner.New(backup))
-			return nil
-		},
-		OnStop: func(ctx context.Context) error {
-			return nil
-		},
-	})
+	// pass in this backupManager struct. function Run will be called by the scheduler
+	jobrunner.MainCron.Schedule(schedule, jobrunner.New(backup))
 
 	return backup, nil
 }

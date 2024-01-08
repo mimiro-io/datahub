@@ -15,7 +15,6 @@
 package jobs
 
 import (
-	"context"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -23,10 +22,8 @@ import (
 	"github.com/DataDog/datadog-go/v5/statsd"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
 
-	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/server"
 )
@@ -42,15 +39,15 @@ var _ = Describe("PagedQuery in transforms", func() {
 		err := os.RemoveAll(storeLocation)
 		Expect(err).To(BeNil(), "should be allowed to clean testfiles in "+storeLocation)
 
-		e := &conf.Env{Logger: logger, StoreLocation: storeLocation}
+		e := &conf.Config{Logger: logger, StoreLocation: storeLocation}
 
-		lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
-		store = server.NewStore(lc, e, &statsd.NoOpClient{})
-		dsm = server.NewDsManager(lc, e, store, server.NoOpBus())
-		err = lc.Start(context.Background())
-		if err != nil {
-			Fail(err.Error())
-		}
+		// lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
+		store = server.NewStore(e, &statsd.NoOpClient{})
+		dsm = server.NewDsManager(e, store, server.NoOpBus())
+		// err = lc.Start(context.Background())
+		//if err != nil {
+		//	Fail(err.Error())
+		//}
 	})
 	AfterEach(func() {
 		_ = store.Close()

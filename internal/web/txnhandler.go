@@ -15,29 +15,22 @@
 package web
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/server"
 )
 
-func NewTxnHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, store *server.Store) {
+func RegisterTxnHandler(e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, store *server.Store) {
 	log := logger.Named("web")
 	handler := &txnHandler{
 		store:  store,
 		logger: log,
 	}
 
-	lc.Append(fx.Hook{
-		OnStart: func(_ context.Context) error {
-			e.POST("/transactions", handler.processTransaction, mw.authorizer(log, datahubWrite))
-			return nil
-		},
-	})
+	e.POST("/transactions", handler.processTransaction, mw.authorizer(log, datahubWrite))
 }
 
 type txnHandler struct {

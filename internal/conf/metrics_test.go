@@ -19,32 +19,26 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/fx"
-	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
-
-	"github.com/mimiro-io/datahub/internal"
 )
 
 var _ = Describe("Start an instance", Ordered, func() {
-	var lc fx.Lifecycle
 	BeforeAll(func() {
-		lc = fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
 	})
 	It("should be of noop type when no agent host", func() {
-		env := &Env{
+		env := &Config{
 			AgentHost: "",
 		}
-		client, err := NewMetricsClient(lc, env, zap.NewNop().Sugar())
+		client, err := NewMetricsClient(env, zap.NewNop().Sugar())
 		Expect(err).To(BeNil())
 		Expect(reflect.ValueOf(client).Type().String()).To(Equal("*statsd.NoOpClient"))
 	})
 
 	It("should be statsd client when agent host set", func() {
-		env := &Env{
+		env := &Config{
 			AgentHost: "127.0.0.1:8125",
 		}
-		client, err := NewMetricsClient(lc, env, zap.NewNop().Sugar())
+		client, err := NewMetricsClient(env, zap.NewNop().Sugar())
 		Expect(err).To(BeNil())
 		Expect(reflect.ValueOf(client).Type().String()).To(Equal("*statsd.Client"))
 	})

@@ -15,7 +15,6 @@
 package conf
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -25,21 +24,23 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-var filePtr = flag.String("config", "", "Optional path to the config file")
-
-// NewEnv bootstraps the environment from the .env files, but also
+// LoadConfig bootstraps the environment from the .env files, but also
 // takes care of getting secrets from the secrets store.
 // It will first start a logger to be able to log that it is loading
 // an environment, and as soon as it knows more about that, it will
 // switch to the correct logger
 // You can give it a basePath, this is great for testing, but by default
 // this is set to "."
-func NewEnv() (*Env, error) {
-	flag.Parse()
-	return loadEnv(filePtr, true)
+func LoadConfig(configFile string) (*Config, error) {
+	return load(configFile)
 }
 
-func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
+// Creates a config without loading the environment and sets all defaults
+func NewConfig() (*Config, error) {
+	return load("")
+}
+
+func load(basePath string) (*Config, error) {
 	profile, found := os.LookupEnv("PROFILE")
 	if !found {
 		profile = "local"
@@ -48,12 +49,12 @@ func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 	logger := GetLogger(profile, zapcore.InfoLevel) // add a default logger while loading the env
 	logger.Infof("Loading logging profile: %s", profile)
 
-	err := parseEnv(basePath, logger, loadFromHome)
+	err := parse(basePath, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Env{
+	return &Config{
 		Logger:         logger,
 		Env:            profile,
 		Port:           viper.GetString("SERVER_PORT"),
@@ -95,16 +96,16 @@ func loadEnv(basePath *string, loadFromHome bool) (*Env, error) {
 	}, nil
 }
 
-func parseEnv(basePath *string, logger *zap.SugaredLogger, loadFromHome bool) error {
+func parse(basePath string, logger *zap.SugaredLogger) error {
 	path := "."
 	configFile := ".env"
-	if basePath != nil && *basePath != "" {
+	if basePath != "" {
 		// if a base path is set, we expect the full path
-		runes := []rune(*basePath)
+		runes := []rune(basePath)
 		if string(runes[len(runes)-1:]) == "/" {
-			path = *basePath
+			path = basePath
 		} else {
-			last := strings.LastIndex(*basePath, "/")
+			last := strings.LastIndex(basePath, "/")
 			if last > -1 {
 				// some rune magic to get the path + the file name
 				path = string(runes[0 : last+1])
@@ -151,9 +152,7 @@ func parseEnv(basePath *string, logger *zap.SugaredLogger, loadFromHome bool) er
 	viper.SetConfigType("env")
 	viper.SetConfigName(configFile)
 	viper.AddConfigPath(path)
-	if loadFromHome {
-		viper.AddConfigPath("$HOME/.datahub") // look for a .env file in home
-	}
+	
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			// Config file not found; ignore error if desired

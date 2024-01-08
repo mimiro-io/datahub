@@ -21,33 +21,31 @@ import (
 	"github.com/DataDog/datadog-go/v5/statsd"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/fx/fxtest"
 	"go.uber.org/zap"
 
-	"github.com/mimiro-io/datahub/internal"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/server"
 )
 
 var _ = Describe("Security Manager", func() {
 	var store *server.Store
-	var e *conf.Env
+	var e *conf.Config
 	var pm *ProviderManager
 	testCnt := 0
 
 	BeforeEach(func() {
 		testCnt = testCnt + 1
-		e = &conf.Env{
+		e = &conf.Config{
 			Logger:        zap.NewNop().Sugar(),
 			StoreLocation: "./test_login_provider_" + strconv.Itoa(testCnt),
 		}
 		err := os.RemoveAll(e.StoreLocation)
 		Expect(err).To(BeNil())
-		lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
+		// lc := fxtest.NewLifecycle(internal.FxTestLog(GinkgoT(), false))
 		sc := &statsd.NoOpClient{}
-		store = server.NewStore(lc, e, sc)
-		lc.RequireStart()
-		pm = NewProviderManager(lc, e, store, zap.NewNop().Sugar())
+		store = server.NewStore(e, sc)
+		// lc.RequireStart()
+		pm = NewProviderManager(e, store, zap.NewNop().Sugar())
 	})
 	AfterEach(func() {
 		_ = store.Close()

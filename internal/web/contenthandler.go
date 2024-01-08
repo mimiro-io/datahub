@@ -15,13 +15,11 @@
 package web
 
 import (
-	"context"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/content"
@@ -29,33 +27,25 @@ import (
 )
 
 type contentHandler struct {
-	content *content.Config
+	content *content.Service
 }
 
-func NewContentHandler(
-	lc fx.Lifecycle,
+func RegisterContentHandler(
 	e *echo.Echo,
 	logger *zap.SugaredLogger,
 	mw *Middleware,
-	content *content.Config,
+	content *content.Service,
 ) {
 	log := logger.Named("web")
 	handler := &contentHandler{
 		content: content,
 	}
 
-	lc.Append(fx.Hook{
-		OnStart: func(_ context.Context) error {
-			// datas
-			e.GET("/content", handler.contentList, mw.authorizer(log, datahubRead))
-			e.POST("/content", handler.contentAdd, mw.authorizer(log, datahubWrite))
-			e.GET("/content/:contentId", handler.contentShow, mw.authorizer(log, datahubRead))
-			e.PUT("/content/:contentId", handler.contentUpdate, mw.authorizer(log, datahubWrite))
-			e.DELETE("/content/:contentId", handler.contentDelete, mw.authorizer(log, datahubWrite))
-
-			return nil
-		},
-	})
+	e.GET("/content", handler.contentList, mw.authorizer(log, datahubRead))
+	e.POST("/content", handler.contentAdd, mw.authorizer(log, datahubWrite))
+	e.GET("/content/:contentId", handler.contentShow, mw.authorizer(log, datahubRead))
+	e.PUT("/content/:contentId", handler.contentUpdate, mw.authorizer(log, datahubWrite))
+	e.DELETE("/content/:contentId", handler.contentDelete, mw.authorizer(log, datahubWrite))
 }
 
 func (handler *contentHandler) contentList(c echo.Context) error {

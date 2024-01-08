@@ -15,12 +15,11 @@
 package web
 
 import (
-	"context"
+	"github.com/DataDog/datadog-go/v5/statsd"
 	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/conf"
@@ -29,16 +28,17 @@ import (
 )
 
 type Middleware struct {
-	logger     echo.MiddlewareFunc
+	logging    echo.MiddlewareFunc
 	cors       echo.MiddlewareFunc
 	jwt        echo.MiddlewareFunc
 	recover    echo.MiddlewareFunc
 	authorizer func(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc
-	handler    *WebHandler
-	env        *conf.Env
+	// 	handler    *WebHandler
+	logger *zap.SugaredLogger
+	env    *conf.Config
 }
 
-func NewMiddleware(lc fx.Lifecycle, env *conf.Env, handler *WebHandler, e *echo.Echo, core *security.ServiceCore) *Middleware {
+func NewMiddleware(env *conf.Config, e *echo.Echo, core *security.ServiceCore, logger *zap.SugaredLogger, statsd statsd.ClientInterface) *Middleware {
 	skipper := func(c echo.Context) bool {
 		// don't secure health endpoints
 		if strings.HasPrefix(c.Request().URL.Path, "/health") {
@@ -63,27 +63,28 @@ func NewMiddleware(lc fx.Lifecycle, env *conf.Env, handler *WebHandler, e *echo.
 	}
 
 	mw := &Middleware{
-		logger:     setupLogger(handler, skipper),
+		logging:    setupLogger(logger, statsd, skipper),
 		cors:       setupCors(),
 		jwt:        setupJWT(env, core, skipper),
-		recover:    setupRecovery(handler),
-		authorizer: NewAuthorizer(env, handler.Logger, core),
-		handler:    handler,
+		recover:    setupRecovery(logger),
+		authorizer: NewAuthorizer(env, logger, core),
 		env:        env,
+		logger:     logger,
 	}
 
-	lc.Append(fx.Hook{
+	mw.configure(e, logger)
+
+	/*lc.Append(fx.Hook{
 		OnStart: func(_ context.Context) error {
 			mw.configure(e)
 			return nil
 		},
-	})
+	}) */
 
 	return mw
 }
 
-func NewAuthorizer(env *conf.Env, logger *zap.SugaredLogger, core *security.ServiceCore) func(
-	logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {
+func NewAuthorizer(env *conf.Config, logger *zap.SugaredLogger, core *security.ServiceCore) func(logger *zap.SugaredLogger, scopes ...string) echo.MiddlewareFunc {
 	log := logger.Named("authorizer")
 
 	switch env.Auth.Middleware {
@@ -104,11 +105,11 @@ func NewAuthorizer(env *conf.Env, logger *zap.SugaredLogger, core *security.Serv
 
 }
 
-func (middleware *Middleware) configure(e *echo.Echo) {
-	e.Use(middleware.logger)
+func (middleware *Middleware) configure(e *echo.Echo, logger *zap.SugaredLogger) {
+	e.Use(middleware.logging)
 
 	if middleware.env.Auth.Middleware == "noop" { // don't enable local security if noop is enabled
-		middleware.handler.Logger.Infof("WARNING: Security is disabled")
+		middleware.logger.Infof("WARNING: Security is disabled")
 	} else {
 		e.Use(middleware.cors)
 		e.Use(middleware.jwt)
@@ -116,7 +117,7 @@ func (middleware *Middleware) configure(e *echo.Echo) {
 	e.Use(middleware.recover)
 }
 
-func setupJWT(env *conf.Env, core *security.ServiceCore, skipper func(c echo.Context) bool) echo.MiddlewareFunc {
+func setupJWT(env *conf.Config, core *security.ServiceCore, skipper func(c echo.Context) bool) echo.MiddlewareFunc {
 	config := &middlewares.JwtConfig{
 		Skipper:   skipper,
 		Audience:  env.Auth.Audience,
@@ -134,11 +135,11 @@ func setupJWT(env *conf.Env, core *security.ServiceCore, skipper func(c echo.Con
 	return middlewares.JWTHandler(config)
 }
 
-func setupLogger(handler *WebHandler, skipper func(c echo.Context) bool) echo.MiddlewareFunc {
+func setupLogger(logger *zap.SugaredLogger, statsd statsd.ClientInterface, skipper func(c echo.Context) bool) echo.MiddlewareFunc {
 	return middlewares.LoggerFilter(middlewares.LoggerConfig{
 		Skipper:      skipper,
-		Logger:       handler.Logger.Desugar(),
-		StatsdClient: handler.StatsDClient,
+		Logger:       logger.Desugar(),
+		StatsdClient: statsd,
 	})
 }
 
@@ -149,6 +150,6 @@ func setupCors() echo.MiddlewareFunc {
 	})
 }
 
-func setupRecovery(handler *WebHandler) echo.MiddlewareFunc {
-	return middlewares.RecoverWithConfig(middlewares.DefaultRecoverConfig, handler.Logger)
+func setupRecovery(logger *zap.SugaredLogger) echo.MiddlewareFunc {
+	return middlewares.RecoverWithConfig(middlewares.DefaultRecoverConfig, logger)
 }

@@ -22,12 +22,13 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/spf13/viper v1.17.0
-	go.uber.org/fx v1.20.1
 	go.uber.org/zap v1.26.0
 	golang.org/x/oauth2 v0.13.0
 	golang.org/x/sync v0.4.0
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+require go.uber.org/fx v1.20.1
 
 require (
 	github.com/Microsoft/go-winio v0.6.1 // indirect
