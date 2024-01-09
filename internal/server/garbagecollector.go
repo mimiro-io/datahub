@@ -37,7 +37,7 @@ func NewGarbageCollector(store *Store, env *conf.Config) *GarbageCollector {
 	gc := &GarbageCollector{
 		store:  store,
 		logger: env.Logger.Named("garbagecollector"),
-		quit:   make(chan bool),
+		quit:   make(chan bool, 1),
 		env:    env,
 	}
 
