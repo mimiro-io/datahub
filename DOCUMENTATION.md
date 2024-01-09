@@ -769,6 +769,9 @@ Additionally, a trigger configuration defines the mode of operation of the job:
 - `incremental` only processes changes that are new since the last run
 - `fullsync` processes all entities in the source dataset
 
+> [!CAUTION]
+> In jobs with an HttpDatasetSource, incremental updates can only be used on the /changes endpoint.
+
 It can make sense to transfer small incremental updates with high frequency, while also having a daily fullsync defined in the same job.
 
 Triggers can be configured with an `onError` section, which defines how to handle sink errors in the job.
