@@ -331,7 +331,14 @@ func (datasetSink *datasetSink) endFullSync(ctx context.Context, runner *Runner)
 	if dataset == nil {
 		return fmt.Errorf("dataset does not exist: %v", datasetSink.DatasetName)
 	}
-	return dataset.CompleteFullSync(ctx)
+	err := dataset.CompleteFullSync(ctx)
+	if err != nil {
+		return err
+	}
+	// we emit an event so event handlers can react to it
+	runner.eventBus.Emit(ctx, "dataset."+datasetSink.DatasetName, nil)
+	runner.eventBus.Emit(ctx, "dataset.core.Dataset", nil) // something has changed, should trigger this always
+	return nil
 }
 
 func (datasetSink *datasetSink) processEntities(runner *Runner, entities []*server.Entity) error {
@@ -345,10 +352,13 @@ func (datasetSink *datasetSink) processEntities(runner *Runner, entities []*serv
 	err := dataset.StoreEntities(entities)
 
 	if err == nil {
-		// we emit the event so event handlers can react to it
-		ctx := context.Background()
-		runner.eventBus.Emit(ctx, "dataset."+datasetSink.DatasetName, nil)
-		runner.eventBus.Emit(ctx, "dataset.core.Dataset", nil) // something has changed, should trigger this always
+		// when in fullsync mode, wait to emit events until after the fullsync is complete. see endFullSync
+		if !dataset.FullSyncStarted() {
+			// we emit the event so event handlers can react to it
+			ctx := context.Background()
+			runner.eventBus.Emit(ctx, "dataset."+datasetSink.DatasetName, nil)
+			runner.eventBus.Emit(ctx, "dataset.core.Dataset", nil) // something has changed, should trigger this always
+		}
 	}
 
 	return err
