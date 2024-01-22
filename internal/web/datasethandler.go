@@ -269,6 +269,12 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 	}
 
 	f := c.QueryParam("from")
+
+	since := c.QueryParam("since")
+	if since != "" {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Errorf("since parameter only supported for changes"))
+	}
+
 	reverse := c.QueryParam("reverse")
 	if reverse != "" {
 		return echo.NewHTTPError(http.StatusBadRequest, fmt.Errorf("reverse parameter only supported for changes"))
