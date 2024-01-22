@@ -27,3 +27,5 @@ test/
 # unit test result used in sonar
 report.json
 
+# neotest-ginkgo
+suite_test.json

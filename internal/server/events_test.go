@@ -87,6 +87,7 @@ var _ = Describe("The Eventbus", func() {
 		serviceContext.Logger = e.Logger
 		serviceContext.Statsd = &statsd.NoOpClient{}
 		webService, err = web.NewWebService(serviceContext)
+		Expect(err).To(BeNil())
 		webService.Start(context.Background())
 
 		// mw := web.NewMiddleware(lc, e, webHander, mockServer, nil)
@@ -144,6 +145,27 @@ var _ = Describe("The Eventbus", func() {
 		Expect(err).To(BeNil())
 		wg.Wait()
 		Expect(eventReceived).To(BeTrue())
+	}, SpecTimeout(10*time.Second))
+
+	It("Should emit an event if entities are removed / deletes are  posted to /entitites", func(_ SpecContext) {
+		var eventReceived bool
+		var wg sync.WaitGroup
+		wg.Add(1)
+		eventBus.SubscribeToDataset("people", "*", func(e *bus.Event) {
+			if e.Topic == "dataset.people" {
+				eventReceived = true
+				wg.Done()
+			}
+		})
+		reader := strings.NewReader(`[
+				{ "id" : "@context", "namespaces" : { "_" : "http://data.mimiro.io/core/" } },
+				{ "id" : "homer", "deleted": true }
+            ]`)
+
+		_, err := http.Post("http://localhost:25555/datasets/people/entities", "application/json", reader)
+		Expect(err).To(BeNil())
+		wg.Wait()
+		Expect(eventReceived).To(BeTrue())
 	}, SpecTimeout(1*time.Minute))
 
 	It("Should emit event on sink's topic when a job with datasetSink is done", func() {
@@ -179,6 +201,68 @@ var _ = Describe("The Eventbus", func() {
 		wg.Wait()
 		Expect(eventReceived).To(BeTrue(), "Should have observed event for people dataset")
 	})
+
+	It("Should emit event on sink's topic when a jobSink received a diminished fullsync", func(_ SpecContext) {
+		// add data to people dataset
+		_, err := dsm.CreateDataset("peoplesink", nil)
+		Expect(err).To(BeNil())
+		srcDs, err := dsm.CreateDataset("peopleorigin", nil)
+		Expect(err).To(BeNil())
+
+		// prepare source with 2 entities
+		err = srcDs.StoreEntities([]*server.Entity{
+			server.NewEntity("homer", 0),
+			server.NewEntity("marge", 0),
+		})
+		Expect(err).To(BeNil())
+		// also prepare people (sink) with 2 entities
+		err = peopleDs.StoreEntities([]*server.Entity{
+			server.NewEntity("homer", 0),
+			server.NewEntity("marge", 0),
+		})
+		Expect(err).To(BeNil())
+
+		// now register to people dataset
+		var eventReceived bool
+		var wg sync.WaitGroup
+		eventBus.SubscribeToDataset("people", "*", func(e *bus.Event) {
+			if e.Topic == "dataset.people" {
+				eventReceived = true
+				wg.Done()
+			}
+		})
+
+		j, err := scheduler.Parse([]byte((`{
+				"id" : "job0",
+				"title" : "job0",
+				"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
+				"paused": true,
+				"source" : {
+					"Type" : "DatasetSource",
+					"Name": "peopleorigin"
+
+				},
+				"sink" : {
+					"Type" : "DatasetSink",
+					"Name": "people"
+				}
+			}`)))
+		Expect(err).To(BeNil())
+		err = scheduler.AddJob(j)
+
+		// now, delete source dataset and recreate it with only 1 entity
+		Expect(dsm.DeleteDataset("peopleorigin")).To(BeNil())
+		srcDs, err = dsm.CreateDataset("peopleorigin", nil)
+		Expect(err).To(BeNil())
+		Expect(srcDs.StoreEntities([]*server.Entity{server.NewEntity("homer", 0)})).To(BeNil())
+
+		// run a fullsync, deletion detection should pick up on the missing entity and emit an event
+		wg.Add(1)
+		_, err = scheduler.RunJob(j.ID, jobs.JobTypeFull)
+		Expect(err).To(BeNil())
+		wg.Wait()
+		Expect(eventReceived).To(BeTrue(), "Should have observed event for people dataset")
+	}, SpecTimeout(5*time.Second))
 
 	It("Should trigger jobs that listen on the dataset's topic", func() {
 		// add a extra listener for this test to know when the job is done

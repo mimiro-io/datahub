@@ -201,7 +201,7 @@ var _ = Describe("Calling ToString from a transform", func() {
 		}
 		ret := transform.ToString(e)
 
-		Expect(ret).To(Equal("&{ns1:1 1 2 false map[] map[field1:hello]}"))
+		Expect(ret).To(Equal("&{map[] map[field1:hello] ns1:1 1 2 false}"))
 	})
 })
 

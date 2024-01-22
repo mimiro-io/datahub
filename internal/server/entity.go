@@ -20,12 +20,12 @@ import (
 
 // Entity data structure
 type Entity struct {
+	References map[string]interface{} `json:"refs"`
+	Properties map[string]interface{} `json:"props"`
 	ID         string                 `json:"id,omitempty"`
 	InternalID uint64                 `json:"internalId,omitempty"`
 	Recorded   uint64                 `json:"recorded,omitempty"`
 	IsDeleted  bool                   `json:"deleted,omitempty"`
-	References map[string]interface{} `json:"refs"`
-	Properties map[string]interface{} `json:"props"`
 }
 
 // NewEntity Create a new entity with global uri and internal resource id
