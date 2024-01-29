@@ -67,6 +67,10 @@ func (dhi *DatahubInstance) Start() error {
 	return nil
 }
 
+func LoadConfig(configLocation string) (*conf.Config, error) {
+	return conf.LoadConfig(configLocation)
+}
+
 func Run(env *conf.Config) {
 	dhi, err := NewDatahubInstance(env)
 	if err != nil {
