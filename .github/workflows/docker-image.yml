@@ -55,7 +55,7 @@ jobs:
           git fetch --all --tags
           DESCRIBE=$( git describe --always --tags --long --first-parent )
           VERSION=$(echo $DESCRIBE | cut -d "-" -f 1)
-          VERSION=${$VERSION:1}
+          VERSION="${$VERSION:1}""
           NEXT=$( pysemver bump patch $VERSION )
           echo "tag=$NEXT" >> $GITHUB_OUTPUT
 
