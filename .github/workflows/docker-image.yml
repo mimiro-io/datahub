@@ -37,7 +37,7 @@ jobs:
           then
             echo "Strip v from tag"
             STRIPPED_VAR="${GITHUB_REF:1}"
-            echo "NEW_VAR=$VERSION_TAG" >> $GITHUB_ENV
+            echo "VERSION_TAG=$STRIPPED_VAR" >> $GITHUB_ENV
           fi
 
       - name: validate release tag
@@ -139,7 +139,7 @@ jobs:
           then
             echo "Strip v from tag"
             STRIPPED_VAR="${GITHUB_REF:1}"
-            echo "NEW_VAR=$VERSION_TAG" >> $GITHUB_ENV
+            echo "VERSION_TAG=$STRIPPED_VAR" >> $GITHUB_ENV
           fi
 
       - name: validate release tag
@@ -244,7 +244,7 @@ jobs:
           then
             echo "Strip v from tag"
             STRIPPED_VAR="${GITHUB_REF:1}"
-            echo "NEW_VAR=$VERSION_TAG" >> $GITHUB_ENV
+            echo "VERSION_TAG=$STRIPPED_VAR" >> $GITHUB_ENV
           fi
 
       - name: validate release tag
