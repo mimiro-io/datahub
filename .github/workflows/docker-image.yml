@@ -140,7 +140,8 @@ jobs:
           if [ ${{ github.event_name }} == 'release' ]
           then
             echo "Strip v from tag"
-            STRIPPED_VAR="${GITHUB_REF:1}"
+            LAST_PART=$(echo $GITHUB_REF | cut -d / -f 3)
+            STRIPPED_VAR="${LAST_PART:1}"
             echo "VERSION_TAG=$STRIPPED_VAR" >> $GITHUB_ENV
           fi
 
@@ -149,7 +150,7 @@ jobs:
           if [ ${{ github.event_name }} == 'release' ]
           then
             echo "Validate that release tag is valid semver"
-            /home/ec2-user/.local/bin/pysemver check $(echo $VERSION_TAG | cut -d / -f 3)
+            pysemver check $(echo $VERSION_TAG | cut -d / -f 3)
           fi
 
       - name: get next version
@@ -158,8 +159,10 @@ jobs:
           git fetch --all --tags
           DESCRIBE=$( git describe --always --tags --long --first-parent )
           VERSION=$(echo $DESCRIBE | cut -d "-" -f 1)
-          NEXT=$( /home/ec2-user/.local/bin/pysemver bump patch $VERSION )
+          VERSION="${VERSION:1}"
+          NEXT=$( pysemver bump patch $VERSION )
           echo "tag=$NEXT" >> $GITHUB_OUTPUT
+
 
       - name: "Calculated unstable tag"
         run: echo "base tag next unstable version... ${{ steps.semver-tag.outputs.tag }}"
@@ -245,7 +248,8 @@ jobs:
           if [ ${{ github.event_name }} == 'release' ]
           then
             echo "Strip v from tag"
-            STRIPPED_VAR="${GITHUB_REF:1}"
+            LAST_PART=$(echo $GITHUB_REF | cut -d / -f 3)
+            STRIPPED_VAR="${LAST_PART:1}"
             echo "VERSION_TAG=$STRIPPED_VAR" >> $GITHUB_ENV
           fi
 
@@ -263,8 +267,10 @@ jobs:
           git fetch --all --tags
           DESCRIBE=$( git describe --always --tags --long --first-parent )
           VERSION=$(echo $DESCRIBE | cut -d "-" -f 1)
+          VERSION="${VERSION:1}"
           NEXT=$( pysemver bump patch $VERSION )
           echo "tag=$NEXT" >> $GITHUB_OUTPUT
+
 
       - name: "Calculated unstable tag"
         run: echo "base tag next unstable version... ${{ steps.semver-tag.outputs.tag }}"
