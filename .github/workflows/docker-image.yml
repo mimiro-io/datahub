@@ -55,6 +55,9 @@ jobs:
           git fetch --all --tags
           DESCRIBE=$( git describe --always --tags --long --first-parent )
           VERSION=$(echo $DESCRIBE | cut -d "-" -f 1)
+          if [[ $VERSION == v* ]]; then
+            VERSION=${VERSION:1}
+          fi
           NEXT=$( pysemver bump patch $VERSION )
           echo "tag=$NEXT" >> $GITHUB_OUTPUT
 
@@ -158,6 +161,9 @@ jobs:
           git fetch --all --tags
           DESCRIBE=$( git describe --always --tags --long --first-parent )
           VERSION=$(echo $DESCRIBE | cut -d "-" -f 1)
+          if [[ $VERSION == v* ]]; then
+            VERSION=${VERSION:1}
+          fi
           NEXT=$( pysemver bump patch $VERSION )
           echo "tag=$NEXT" >> $GITHUB_OUTPUT
 
@@ -265,6 +271,9 @@ jobs:
           git fetch --all --tags
           DESCRIBE=$( git describe --always --tags --long --first-parent )
           VERSION=$(echo $DESCRIBE | cut -d "-" -f 1)
+          if [[ $VERSION == v* ]]; then
+            VERSION=${VERSION:1}
+          fi
           NEXT=$( pysemver bump patch $VERSION )
           echo "tag=$NEXT" >> $GITHUB_OUTPUT
 
