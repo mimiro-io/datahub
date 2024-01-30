@@ -152,7 +152,7 @@ jobs:
           if [ ${{ github.event_name }} == 'release' ]
           then
             echo "Validate that release tag is valid semver"
-            pysemver check $(echo $VERSION_TAG | cut -d / -f 3)
+            /home/ec2-user/.local/bin/pysemver check $(echo $VERSION_TAG | cut -d / -f 3)
           fi
 
       - name: get next version
@@ -164,7 +164,7 @@ jobs:
           if [[ $VERSION == v* ]]; then
             VERSION=${VERSION:1}
           fi
-          NEXT=$( pysemver bump patch $VERSION )
+          NEXT=$( /home/ec2-user/.local/bin/pysemver bump patch $VERSION )
           echo "tag=$NEXT" >> $GITHUB_OUTPUT
 
 
