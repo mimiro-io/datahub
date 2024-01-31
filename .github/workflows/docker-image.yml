@@ -31,12 +31,22 @@ jobs:
       - name: install semver tool
         run: pip3 install semver
 
+      - name: strip v from tag
+        run: |
+          if [ ${{ github.event_name }} == 'release' ]
+          then
+            echo "Strip v from tag"
+            LAST_PART=$(echo $GITHUB_REF | cut -d / -f 3)
+            STRIPPED_VAR="${LAST_PART:1}"
+            echo "VERSION_TAG=$STRIPPED_VAR" >> $GITHUB_ENV
+          fi
+
       - name: validate release tag
         run: |
           if [ ${{ github.event_name }} == 'release' ]
           then
             echo "Validate that release tag is valid semver"
-            pysemver check $(echo $GITHUB_REF | cut -d / -f 3)
+            pysemver check $VERSION_TAG
           fi
 
       - name: get next version
@@ -45,6 +55,9 @@ jobs:
           git fetch --all --tags
           DESCRIBE=$( git describe --always --tags --long --first-parent )
           VERSION=$(echo $DESCRIBE | cut -d "-" -f 1)
+          if [[ $VERSION == v* ]]; then
+            VERSION=${VERSION:1}
+          fi
           NEXT=$( pysemver bump patch $VERSION )
           echo "tag=$NEXT" >> $GITHUB_OUTPUT
 
@@ -57,7 +70,7 @@ jobs:
           if [ ${{ github.event_name }} == 'release' ]
           then
             echo "Setting Stable Image Tag"
-            echo "image_tag=${{ env.DOCKERHUB_REPOSITORY }}:$(echo $GITHUB_REF | cut -d / -f 3)-$(uname -m)" >> $GITHUB_OUTPUT
+            echo "image_tag=${{ env.DOCKERHUB_REPOSITORY }}:$VERSION_TAG-$(uname -m)" >> $GITHUB_OUTPUT
           else
             echo "Setting Unstable Image"
             echo "image_tag=${{ env.DOCKERHUB_REPOSITORY }}:${{ steps.semver-tag.outputs.tag }}-$GITHUB_RUN_NUMBER-unstable-$(uname -m)" >> $GITHUB_OUTPUT
@@ -124,12 +137,22 @@ jobs:
       - name: install semver tool
         run: pip3 install semver
 
+      - name: strip v from tag
+        run: |
+          if [ ${{ github.event_name }} == 'release' ]
+          then
+            echo "Strip v from tag"
+            LAST_PART=$(echo $GITHUB_REF | cut -d / -f 3)
+            STRIPPED_VAR="${LAST_PART:1}"
+            echo "VERSION_TAG=$STRIPPED_VAR" >> $GITHUB_ENV
+          fi
+
       - name: validate release tag
         run: |
           if [ ${{ github.event_name }} == 'release' ]
           then
             echo "Validate that release tag is valid semver"
-            /home/ec2-user/.local/bin/pysemver check $(echo $GITHUB_REF | cut -d / -f 3)
+            /home/ec2-user/.local/bin/pysemver check $VERSION_TAG
           fi
 
       - name: get next version
@@ -138,8 +161,12 @@ jobs:
           git fetch --all --tags
           DESCRIBE=$( git describe --always --tags --long --first-parent )
           VERSION=$(echo $DESCRIBE | cut -d "-" -f 1)
+          if [[ $VERSION == v* ]]; then
+            VERSION=${VERSION:1}
+          fi
           NEXT=$( /home/ec2-user/.local/bin/pysemver bump patch $VERSION )
           echo "tag=$NEXT" >> $GITHUB_OUTPUT
+
 
       - name: "Calculated unstable tag"
         run: echo "base tag next unstable version... ${{ steps.semver-tag.outputs.tag }}"
@@ -150,7 +177,7 @@ jobs:
           if [ ${{ github.event_name }} == 'release' ]
           then
             echo "Setting Stable Image Tag"
-            echo "image_tag=${{ env.DOCKERHUB_REPOSITORY }}:$(echo $GITHUB_REF | cut -d / -f 3)-$(uname -m)" >> $GITHUB_OUTPUT
+            echo "image_tag=${{ env.DOCKERHUB_REPOSITORY }}:$VERSION_TAG-$(uname -m)" >> $GITHUB_OUTPUT
           else
             echo "Setting Unstable Image"
             echo "image_tag=${{ env.DOCKERHUB_REPOSITORY }}:${{ steps.semver-tag.outputs.tag }}-$GITHUB_RUN_NUMBER-unstable-$(uname -m)" >> $GITHUB_OUTPUT
@@ -219,13 +246,23 @@ jobs:
 
       - name: install semver tool
         run: pip3 install semver
+      
+      - name: strip v from tag
+        run: |
+          if [ ${{ github.event_name }} == 'release' ]
+          then
+            echo "Strip v from tag"
+            LAST_PART=$(echo $GITHUB_REF | cut -d / -f 3)
+            STRIPPED_VAR="${LAST_PART:1}"
+            echo "VERSION_TAG=$STRIPPED_VAR" >> $GITHUB_ENV
+          fi
 
       - name: validate release tag
         run: |
           if [ ${{ github.event_name }} == 'release' ]
           then
             echo "Validate that release tag is valid semver"
-            pysemver check $(echo $GITHUB_REF | cut -d / -f 3)
+            pysemver check $VERSION_TAG
           fi
 
       - name: get next version
@@ -234,8 +271,12 @@ jobs:
           git fetch --all --tags
           DESCRIBE=$( git describe --always --tags --long --first-parent )
           VERSION=$(echo $DESCRIBE | cut -d "-" -f 1)
+          if [[ $VERSION == v* ]]; then
+            VERSION=${VERSION:1}
+          fi
           NEXT=$( pysemver bump patch $VERSION )
           echo "tag=$NEXT" >> $GITHUB_OUTPUT
+
 
       - name: "Calculated unstable tag"
         run: echo "base tag next unstable version... ${{ steps.semver-tag.outputs.tag }}"
@@ -253,7 +294,7 @@ jobs:
           if [ ${{ github.event_name }} == 'release' ]
           then
             echo "Setting Stable Image Tag"
-            echo "image_tag=${{ env.DOCKERHUB_REPOSITORY }}:$(echo $GITHUB_REF | cut -d / -f 3)" >> $GITHUB_OUTPUT
+            echo "image_tag=${{ env.DOCKERHUB_REPOSITORY }}:$VERSION_TAG" >> $GITHUB_OUTPUT
           else
             echo "Setting Unstable Image"
             echo "image_tag=${{ env.DOCKERHUB_REPOSITORY }}:${{ steps.semver-tag.outputs.tag }}-$GITHUB_RUN_NUMBER-unstable" >> $GITHUB_OUTPUT
