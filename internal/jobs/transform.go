@@ -26,9 +26,9 @@ import (
 	"time"
 
 	"github.com/DataDog/datadog-go/v5/statsd"
-	"github.com/dop251/goja"
 	"github.com/gofrs/uuid"
 	"github.com/gojektech/heimdall/v6/httpclient"
+	"github.com/mimiro-io/goja"
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/server"

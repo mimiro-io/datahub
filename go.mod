@@ -2,19 +2,17 @@ module github.com/mimiro-io/datahub
 
 go 1.21
 
-replace github.com/dop251/goja => github.com/mimiro-io/goja v1.0.0
-
 require (
 	github.com/DataDog/datadog-go/v5 v5.3.0
 	github.com/bamzi/jobrunner v1.0.0
 	github.com/dgraph-io/badger/v4 v4.2.0
-	github.com/dop251/goja v1.0.0
 	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/gojektech/heimdall/v6 v6.1.0
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/uuid v1.4.0
 	github.com/labstack/echo/v4 v4.11.2
 	github.com/lestrrat-go/jwx/v2 v2.0.16
+	github.com/mimiro-io/goja v1.1.0
 	github.com/mustafaturan/bus v1.0.2
 	github.com/mustafaturan/monoton v1.0.0
 	github.com/onsi/ginkgo/v2 v2.12.0
@@ -50,7 +48,7 @@ require (
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/flatbuffers v23.5.26+incompatible // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
-	github.com/google/pprof v0.0.0-20230602150820-91b7bce49751 // indirect
+	github.com/google/pprof v0.0.0-20240207164012-fb44976bdcd5 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/klauspost/compress v1.17.2 // indirect
 	github.com/labstack/gommon v0.4.0 // indirect
@@ -84,11 +82,10 @@ require (
 	golang.org/x/mod v0.13.0 // indirect
 	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/sys v0.13.0 // indirect
-	golang.org/x/text v0.13.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.14.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
-	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 )
