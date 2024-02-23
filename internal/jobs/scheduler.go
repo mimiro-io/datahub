@@ -26,7 +26,7 @@ import (
 
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/bamzi/jobrunner"
-	"github.com/dop251/goja"
+	"github.com/mimiro-io/goja"
 	"github.com/robfig/cron/v3"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -104,7 +104,6 @@ type ScheduleEntry struct {
 // NewScheduler returns a new Scheduler. When started, it will load all existing JobConfiguration's from the store,
 // and schedule this with the runner.
 func NewScheduler(
-
 	env *conf.Config,
 	store *server.Store,
 	dsm *server.DsManager,
@@ -270,6 +269,7 @@ func (s *Scheduler) LoadJob(jobID string) (*JobConfiguration, error) {
 	}
 	return jobConfig, nil
 }
+
 func (s *Scheduler) GetJobState(id string) (*SyncJobState, error) {
 	syncJobState := &SyncJobState{}
 	err := s.Store.GetObject(server.JobDataIndex, id, syncJobState)
