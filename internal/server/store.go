@@ -738,7 +738,7 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 	var resultEntity *Entity
 	if mergePartials {
 		resultEntity = s.mergePartials(partials)
-	} else {
+	} else if len(partials) > 0 {
 		resultEntity = s.createMultiOriginEntity(partials)
 	}
 

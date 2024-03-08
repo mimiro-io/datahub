@@ -1173,6 +1173,18 @@ var _ = ginkgo.Describe("GetManyRelatedEntitiesBatch", func() {
 			Expect(queryResult.Relations[1].RelatedEntity.IsDeleted).To(BeFalse())
 		})
 	})
+	ginkgo.Describe("Merged Partials", func() {
+		ginkgo.It("Set to false with ref pointing to missing entity", func() {
+			pref := persist("friends", store, dsm, buildTestBatch(store, []testPerson{
+				{id: 1, friends: []int{3}},
+				{id: 2, friends: []int{}},
+			}))
+			start := []string{pref + ":person-1"}
+			queryResult, err := store.GetManyRelatedEntitiesBatch(start, pref+":Friend", false, nil, 0, false)
+			Expect(err).To(BeNil())
+			Expect(queryResult.Relations).To(HaveLen(1))
+		})
+	})
 })
 
 func persist(dsName string, store *Store, dsm *DsManager, b []*Entity) string {
