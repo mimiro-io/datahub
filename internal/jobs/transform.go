@@ -170,6 +170,7 @@ func (s *Scheduler) parseTransform(config *JobConfiguration) (Transform, error) 
 			switch transformTypeName {
 			case "HttpTransform":
 				transform := &HTTPTransform{}
+				transform.NamespaceManager = s.Store.NamespaceManager
 				url, ok := transformConfig["Url"]
 				if ok && url != "" {
 					transform.URL = url.(string)
@@ -183,6 +184,12 @@ func (s *Scheduler) parseTransform(config *JobConfiguration) (Transform, error) 
 					transform.TimeOut = timeout.(float64)
 				} else {
 					transform.TimeOut = 0
+				}
+				supportContext, ok := transformConfig["SupportContext"]
+				if ok {
+					transform.SupportContext = supportContext.(bool)
+				} else {
+					transform.SupportContext = false
 				}
 				return transform, nil
 			case "JavascriptTransform":
@@ -615,12 +622,14 @@ func (javascriptTransform *JavascriptTransform) GetConfig() map[string]interface
 }
 
 type HTTPTransform struct {
-	URL            string
-	Authentication string  // "none, basic, token"
-	User           string  // for use in basic auth
-	Password       string  // for use in basic auth
-	TokenProvider  string  // for use in token auth
-	TimeOut        float64 // set timeout for http-transform
+	URL              string
+	Authentication   string                   // "none, basic, token"
+	User             string                   // for use in basic auth
+	Password         string                   // for use in basic auth
+	TokenProvider    string                   // for use in token auth
+	TimeOut          float64                  // set timeout for http-transform
+	SupportContext   bool                     // indicates if this transform supports context
+	NamespaceManager *server.NamespaceManager // the store
 }
 
 func (httpTransform *HTTPTransform) getParallelism() int {
@@ -638,12 +647,27 @@ func (httpTransform *HTTPTransform) transformEntities(
 	// create headers if needed
 	url := httpTransform.URL
 
-	// set up our request
-	jsonEntities, err := json.Marshal(entities)
-	if err != nil {
-		return nil, err
+	var jsonData []byte
+	var err error
+	if httpTransform.SupportContext {
+		// add context to the request
+		ctx := httpTransform.NamespaceManager.GetContext(nil)
+
+		// create new array with ctx first
+		allEntities := make([]any, 0)
+		for _, entity := range entities {
+			allEntities = append(allEntities, entity)
+		}
+
+		jsonData, _ = json.Marshal(ctx)
+	} else {
+		jsonData, err = json.Marshal(entities)
+		if err != nil {
+			return nil, err
+		}
 	}
-	r := bytes.NewReader(jsonEntities)
+
+	r := bytes.NewReader(jsonData)
 	req, err := http.NewRequest("POST", url, r) //
 	if err != nil {
 		return nil, err
@@ -680,6 +704,11 @@ func (httpTransform *HTTPTransform) transformEntities(
 		return nil, err
 	}
 
+	// strip context
+	if httpTransform.SupportContext {
+		transformedEntities = transformedEntities[1:]
+	}
+
 	return transformedEntities, nil
 }
 
@@ -690,5 +719,6 @@ func (httpTransform *HTTPTransform) GetConfig() map[string]interface{} {
 	config["TokenProvider"] = httpTransform.TokenProvider
 	config["Authentication"] = httpTransform.Authentication
 	config["TimeOut"] = httpTransform.TimeOut
+	config["SupportContext"] = httpTransform.SupportContext
 	return config
 }
