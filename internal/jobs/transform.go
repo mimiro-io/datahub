@@ -655,11 +655,12 @@ func (httpTransform *HTTPTransform) transformEntities(
 
 		// create new array with ctx first
 		allEntities := make([]any, 0)
+		allEntities = append(allEntities, ctx)
 		for _, entity := range entities {
 			allEntities = append(allEntities, entity)
 		}
 
-		jsonData, _ = json.Marshal(ctx)
+		jsonData, _ = json.Marshal(allEntities)
 	} else {
 		jsonData, err = json.Marshal(entities)
 		if err != nil {
