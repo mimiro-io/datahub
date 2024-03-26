@@ -969,6 +969,32 @@ func NewMockService() MockService {
 		return context.JSONBlob(http.StatusOK, body)
 	})
 
+	e.POST("/transforms/identity-with-context", func(context echo.Context) error {
+		body, err := ioutil.ReadAll(context.Request().Body)
+		if err != nil {
+			return err
+		}
+
+		data := make([]map[string]interface{}, 0)
+		err = json.Unmarshal(body, &data)
+
+		// update the context
+		namespaces := data[0]["namespaces"].(map[string]interface{})
+		namespaces["exnew"] = "http://example-transform.mimiro.io/"
+
+		// update an entity
+		props := data[1]["props"].(map[string]interface{})
+		props["exnew:label"] = "a new label"
+
+		// to json
+		body, err = json.Marshal(data)
+		if err != nil {
+			return err
+		}
+
+		return context.JSONBlob(http.StatusOK, body)
+	})
+
 	e.POST("/datasets/writeabledevnull", func(context echo.Context) error {
 		body, err := ioutil.ReadAll(context.Request().Body)
 		if err != nil {
