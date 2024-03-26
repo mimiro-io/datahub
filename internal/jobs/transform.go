@@ -656,6 +656,7 @@ func (httpTransform *HTTPTransform) transformEntities(
 
 		// create new array with ctx first
 		allEntities := make([]any, 0)
+		allEntities = append(allEntities, ctx)
 		for _, entity := range entities {
 			allEntities = append(allEntities, entity)
 		}
