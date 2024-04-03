@@ -663,7 +663,10 @@ func (httpTransform *HTTPTransform) transformEntities(
 		// add context to the request at start of array
 		allEntities = append([]any{ctx}, allEntities...)
 
-		jsonData, _ = json.Marshal(allEntities)
+		jsonData, err = json.Marshal(allEntities)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		jsonData, err = json.Marshal(entities)
 		if err != nil {
@@ -835,8 +838,7 @@ func (e EgdmNamespaceManagerShim) AssertPrefixedIdentifierFromURI(value string) 
 }
 
 func (e EgdmNamespaceManagerShim) AsContext() *egdm.Context {
-	//TODO implement me
-	panic("implement me")
+	return e.localContext.AsContext()
 }
 
 func (httpTransform *HTTPTransform) GetConfig() map[string]interface{} {

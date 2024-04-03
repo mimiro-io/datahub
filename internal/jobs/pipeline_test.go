@@ -931,11 +931,18 @@ var _ = Describe("A pipeline", func() {
 
 		job.Run()
 
+		// get new namespace
+		ns1, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://example-transform.mimiro.io/")
+
 		// check number of entities in target dataset
 		peopleDataset := dsm.GetDataset("NewProducts")
 		result, err := peopleDataset.GetEntities("", 50)
 		Expect(err).To(BeNil())
 		Expect(len(result.Entities)).To(Equal(1))
+		// check the entity id
+		Expect(result.Entities[0].ID).To(Equal(ns + ":homer"))
+		// check for new property
+		Expect(result.Entities[0].Properties[ns1+":label"]).To(Equal("a new label"))
 	})
 
 	It("Should not write to the sink if an external transform endpoint is 404", func() {
