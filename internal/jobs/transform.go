@@ -32,6 +32,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/mimiro-io/datahub/internal/server"
+	egdm "github.com/mimiro-io/entity-graph-data-model"
 )
 
 type Transform interface {
@@ -170,6 +171,7 @@ func (s *Scheduler) parseTransform(config *JobConfiguration) (Transform, error) 
 			switch transformTypeName {
 			case "HttpTransform":
 				transform := &HTTPTransform{}
+				transform.NamespaceManager = s.Store.NamespaceManager
 				url, ok := transformConfig["Url"]
 				if ok && url != "" {
 					transform.URL = url.(string)
@@ -183,6 +185,12 @@ func (s *Scheduler) parseTransform(config *JobConfiguration) (Transform, error) 
 					transform.TimeOut = timeout.(float64)
 				} else {
 					transform.TimeOut = 0
+				}
+				supportContext, ok := transformConfig["SupportContext"]
+				if ok {
+					transform.SupportContext = supportContext.(bool)
+				} else {
+					transform.SupportContext = false
 				}
 				return transform, nil
 			case "JavascriptTransform":
@@ -615,12 +623,14 @@ func (javascriptTransform *JavascriptTransform) GetConfig() map[string]interface
 }
 
 type HTTPTransform struct {
-	URL            string
-	Authentication string  // "none, basic, token"
-	User           string  // for use in basic auth
-	Password       string  // for use in basic auth
-	TokenProvider  string  // for use in token auth
-	TimeOut        float64 // set timeout for http-transform
+	URL              string
+	Authentication   string                   // "none, basic, token"
+	User             string                   // for use in basic auth
+	Password         string                   // for use in basic auth
+	TokenProvider    string                   // for use in token auth
+	TimeOut          float64                  // set timeout for http-transform
+	SupportContext   bool                     // indicates if this transform supports context
+	NamespaceManager *server.NamespaceManager // the store
 }
 
 func (httpTransform *HTTPTransform) getParallelism() int {
@@ -638,12 +648,33 @@ func (httpTransform *HTTPTransform) transformEntities(
 	// create headers if needed
 	url := httpTransform.URL
 
-	// set up our request
-	jsonEntities, err := json.Marshal(entities)
-	if err != nil {
-		return nil, err
+	var jsonData []byte
+	var err error
+	if httpTransform.SupportContext {
+		// add context to the request
+		ctx := httpTransform.NamespaceManager.GetContext(nil)
+
+		// create new array with ctx first
+		allEntities := make([]any, 0)
+		for _, entity := range entities {
+			allEntities = append(allEntities, entity)
+		}
+
+		// add context to the request at start of array
+		allEntities = append([]any{ctx}, allEntities...)
+
+		jsonData, err = json.Marshal(allEntities)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		jsonData, err = json.Marshal(entities)
+		if err != nil {
+			return nil, err
+		}
 	}
-	r := bytes.NewReader(jsonEntities)
+
+	r := bytes.NewReader(jsonData)
 	req, err := http.NewRequest("POST", url, r) //
 	if err != nil {
 		return nil, err
@@ -674,13 +705,140 @@ func (httpTransform *HTTPTransform) transformEntities(
 		return nil, err
 	}
 
-	var transformedEntities []*server.Entity
-	err = json.Unmarshal(body, &transformedEntities)
+	// strip context
+	if httpTransform.SupportContext {
+		shim := &EgdmNamespaceManagerShim{}
+		shim.nsManager = httpTransform.NamespaceManager
+		shim.localContext = egdm.NewNamespaceContext()
+		parser := egdm.NewEntityParser(shim)
+		ec, err := parser.LoadEntityCollection(bytes.NewReader(body))
+
+		transformedEntities := make([]*server.Entity, 0)
+		for _, entity := range ec.Entities {
+			transformedEntities = append(transformedEntities, convertEgdmEntityToServerEntity(entity))
+		}
+
+		return transformedEntities, err
+
+	} else {
+		var transformedEntities []*server.Entity
+		err = json.Unmarshal(body, &transformedEntities)
+		if err != nil {
+			return nil, err
+		}
+		return transformedEntities, nil
+	}
+}
+
+func convertEgdmEntityToServerEntity(entity *egdm.Entity) *server.Entity {
+	dest := &server.Entity{
+		ID:         entity.ID,
+		Properties: entity.Properties,
+		References: entity.References,
+		IsDeleted:  entity.IsDeleted,
+	}
+	return dest
+}
+
+type EgdmNamespaceManagerShim struct {
+	nsManager    *server.NamespaceManager
+	localContext *egdm.NamespaceContext
+}
+
+func (e EgdmNamespaceManagerShim) GetNamespaceExpansionForPrefix(prefix string) (string, error) {
+	return e.localContext.GetNamespaceExpansionForPrefix(prefix)
+}
+
+func (e EgdmNamespaceManagerShim) GetPrefixForExpansion(expansion string) (string, error) {
+	return e.localContext.GetPrefixForExpansion(expansion)
+}
+
+func (e EgdmNamespaceManagerShim) StorePrefixExpansionMapping(prefix string, expansion string) {
+	e.localContext.StorePrefixExpansionMapping(prefix, expansion)
+}
+
+func (e EgdmNamespaceManagerShim) IsFullUri(value string) bool {
+	return e.localContext.IsFullUri(value)
+}
+
+func (e EgdmNamespaceManagerShim) GetFullURI(value string) (string, error) {
+	return e.localContext.GetFullURI(value)
+}
+
+func (e EgdmNamespaceManagerShim) GetPrefixedIdentifier(value string) (string, error) {
+	// look at local context and expand if not already
+	// then call to server ns manager to get the value
+	fullUri, err := e.localContext.GetFullURI(value)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	return transformedEntities, nil
+	// get the expansion from the full uri based on last # or /
+	lastHash := strings.LastIndex(fullUri, "#")
+	if lastHash > 0 {
+		expansion := fullUri[:lastHash+1]
+		postfix := fullUri[lastHash+1:]
+		prefix, err := e.nsManager.AssertPrefixMappingForExpansion(expansion)
+		if err != nil {
+			return "", err
+		}
+		return prefix + ":" + postfix, nil
+	} else {
+		lastSlash := strings.LastIndex(fullUri, "/")
+		if lastSlash > 0 {
+			expansion := fullUri[:lastSlash+1]
+			postfix := fullUri[lastSlash+1:]
+			prefix, err := e.nsManager.AssertPrefixMappingForExpansion(expansion)
+			if err != nil {
+				return "", err
+			}
+			return prefix + ":" + postfix, nil
+		} else {
+			return "", errors.New("no expansion found in local or store context")
+		}
+	}
+}
+
+func (e EgdmNamespaceManagerShim) GetNamespaceMappings() map[string]string {
+	return e.localContext.GetNamespaceMappings()
+}
+
+func (e EgdmNamespaceManagerShim) AssertPrefixedIdentifierFromURI(value string) (string, error) {
+	// look at local context and expand if not already
+	// then call to server ns manager to get the value
+	fullUri, err := e.localContext.GetFullURI(value)
+	if err != nil {
+		return "", err
+	}
+
+	// get the expansion from the full uri based on last # or /
+	lastHash := strings.LastIndex(fullUri, "#")
+	if lastHash > 0 {
+		expansion := fullUri[:lastHash+1]
+		postfix := fullUri[lastHash+1:]
+		prefix, err := e.nsManager.AssertPrefixMappingForExpansion(expansion)
+		if err != nil {
+			return "", err
+		}
+		return prefix + ":" + postfix, nil
+	} else {
+		lastSlash := strings.LastIndex(fullUri, "/")
+		if lastSlash > 0 {
+			expansion := fullUri[:lastSlash+1]
+			postfix := fullUri[lastSlash+1:]
+			prefix, err := e.nsManager.AssertPrefixMappingForExpansion(expansion)
+			if err != nil {
+				return "", err
+			}
+			return prefix + ":" + postfix, nil
+		} else {
+			return "", errors.New("no expansion found in local or store context")
+		}
+	}
+}
+
+func (e EgdmNamespaceManagerShim) AsContext() *egdm.Context {
+	return e.localContext.AsContext()
 }
 
 func (httpTransform *HTTPTransform) GetConfig() map[string]interface{} {
@@ -690,5 +848,6 @@ func (httpTransform *HTTPTransform) GetConfig() map[string]interface{} {
 	config["TokenProvider"] = httpTransform.TokenProvider
 	config["Authentication"] = httpTransform.Authentication
 	config["TimeOut"] = httpTransform.TimeOut
+	config["SupportContext"] = httpTransform.SupportContext
 	return config
 }

@@ -885,6 +885,66 @@ var _ = Describe("A pipeline", func() {
 		Expect(len(result.Entities)).To(Equal(1))
 	})
 
+	It("Should run external transforms in internal jobs with support for context", func() {
+		ds, _ := dsm.CreateDataset("Products", nil)
+		_, _ = dsm.CreateDataset("NewProducts", nil)
+
+		ns, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/transforms/")
+
+		entities := make([]*server.Entity, 1)
+		entity := server.NewEntity(ns+":homer", 0)
+		entity.Properties[ns+":name"] = "homer"
+		entity.References[ns+":type"] = ns + ":Person"
+		entities[0] = entity
+
+		Expect(ds.StoreEntities(entities)).To(BeNil())
+
+		// define job
+		jobJSON := `{
+			"id" : "sync-datasetsource-to-datasetsink-ext-with-context",
+			"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
+			"source" : {
+				"Type" : "DatasetSource",
+				"Name" : "Products"
+			},
+			"transform" : {
+				"Type" : "HttpTransform",
+                "SupportContext" : true,
+				"Url" : "http://localhost:7777/transforms/identity-with-context"
+			},
+			"sink" : {
+				"Type" : "DatasetSink",
+                "Name" : "NewProducts"
+			}}`
+
+		jobConfig, _ := scheduler.Parse([]byte(jobJSON))
+		pipeline, err := scheduler.toPipeline(jobConfig, JobTypeIncremental)
+		Expect(err).To(BeNil())
+
+		job := &job{
+			dsm:      dsm,
+			id:       jobConfig.ID,
+			pipeline: pipeline,
+			schedule: jobConfig.Triggers[0].Schedule,
+			runner:   runner,
+		}
+
+		job.Run()
+
+		// get new namespace
+		ns1, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://example-transform.mimiro.io/")
+
+		// check number of entities in target dataset
+		peopleDataset := dsm.GetDataset("NewProducts")
+		result, err := peopleDataset.GetEntities("", 50)
+		Expect(err).To(BeNil())
+		Expect(len(result.Entities)).To(Equal(1))
+		// check the entity id
+		Expect(result.Entities[0].ID).To(Equal(ns + ":homer"))
+		// check for new property
+		Expect(result.Entities[0].Properties[ns1+":label"]).To(Equal("a new label"))
+	})
+
 	It("Should not write to the sink if an external transform endpoint is 404", func() {
 		jobJSON := ` {
 			"id" : "sync-httpdatasetsource-to-datasetsink-1",

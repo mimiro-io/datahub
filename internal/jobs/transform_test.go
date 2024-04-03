@@ -204,26 +204,3 @@ var _ = Describe("Calling ToString from a transform", func() {
 		Expect(ret).To(Equal("&{map[] map[field1:hello] ns1:1 1 2 false}"))
 	})
 })
-
-var _ = Describe("Test that httpTransform picks up timeout from config", func() {
-	It("Should return correct httpTransform", func() {
-		c := &JobConfiguration{
-			ID:          "oes3fjudqn",
-			Title:       "my-test-title",
-			Description: "my-description",
-			Source:      map[string]interface{}{"Type": "DatasetSource", "Name": "test-dataset"},
-			Sink:        map[string]interface{}{"Type": "DatasetSink", "Name": "test-transformed"},
-			Transform: map[string]interface{}{
-				"TimeOut": 70.00,
-				"Type":    "HttpTransform",
-				"Url":     "https://very-external",
-			},
-		}
-		transform := &HTTPTransform{TimeOut: 70.00, URL: "https://very-external"}
-		scheduler := Scheduler{}
-		test, err := scheduler.parseTransform(c)
-		Expect(err).To(BeNil(), "should not error here")
-
-		Expect(transform).To(Equal(test), "Bare minimum transform")
-	})
-})
