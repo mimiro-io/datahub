@@ -712,6 +712,9 @@ func (httpTransform *HTTPTransform) transformEntities(
 		shim.localContext = egdm.NewNamespaceContext()
 		parser := egdm.NewEntityParser(shim)
 		ec, err := parser.LoadEntityCollection(bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
 
 		transformedEntities := make([]*server.Entity, 0)
 		for _, entity := range ec.Entities {
