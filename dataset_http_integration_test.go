@@ -45,6 +45,8 @@ var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
 	queryURL := "http://localhost:24997/query"
 	dsURL := "http://localhost:24997/datasets/bananas"
 	proxyDsURL := "http://localhost:24997/datasets/cucumbers"
+	smartDsURL := "http://localhost:24997/datasets/smart"
+
 	datasetsURL := "http://localhost:24997/datasets"
 	BeforeAll(func() {
 		_ = os.RemoveAll(location)
@@ -155,6 +157,41 @@ var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
 			var l []map[string]interface{}
 			_ = json.Unmarshal(b, &l)
 			Expect(len(l)).To(Equal(3), "core.Dataset, bananas, cucumbers are listed")
+		})
+
+		It("Should create a smart dataset with base64 encoded transform", func() {
+			// create new dataset
+			js := `function build_entities(since = "", limit = -1) {
+						for (let i = 0; i < 3; i++) {
+							Emit({
+								"ID": "ns0:smart-" + i,
+								"Properties": { "ns0:smart": i },
+								"References": { "ns2:type": "ns1:smart-entity" }
+							});
+						}
+						const newSince="5";
+						return newSince;
+					}`
+			f := base64.StdEncoding.EncodeToString([]byte(js))
+			res, err := http.Post(smartDsURL, "application/json", strings.NewReader(fmt.Sprintf(`{
+				"smartDatasetConfig": {
+					"transform": "%s"
+				}
+			}`, f)))
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+
+			res, err = http.Get(smartDsURL)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			b, _ := io.ReadAll(res.Body)
+			m := map[string]interface{}{}
+			_ = json.Unmarshal(b, &m)
+			Expect(m["id"]).To(Equal("ns0:smart"))
+			refs := m["refs"].(map[string]interface{})
+			Expect(refs["ns2:type"]).To(Equal("ns1:smart-dataset"))
 		})
 	})
 	Describe("The /entities and /changes API support JSON-LD", Ordered, func() {
@@ -1051,6 +1088,38 @@ var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
 			result = rArr[1].([]any)
 			Expect(len(result)).To(Equal(1))
 			Expect(result[0].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:7"))
+		})
+	})
+	Describe("the /changes and /entities endpoints for smart datasets", Ordered, func() {
+		It("Should reject POST /entities for smart datasets", func() {
+			payload := strings.NewReader(bananasFromTo(1, 3, false))
+			res, err := http.Post(smartDsURL+"/entities", "application/json", payload)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(http.StatusNotImplemented))
+		})
+		It("Should reject GET /entities for smart datasets", func() {
+			res, err := http.Get(smartDsURL + "/entities")
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(http.StatusNotImplemented))
+		})
+		Describe("Should execute transform on GET /changes for smart datasets", func() {
+			It("without since", func() {
+				res, err := http.Get(smartDsURL + "/changes")
+				Expect(err).To(BeNil())
+				Expect(res).NotTo(BeZero())
+				Expect(res.StatusCode).To(Equal(http.StatusOK))
+				body, err := io.ReadAll(res.Body)
+				Expect(err).To(BeNil())
+				var entities []*server.Entity
+				err = json.Unmarshal(body, &entities)
+				Expect(err).To(BeNil())
+				Expect(len(entities)).To(Equal(5), "context, cont and 3 entities")
+				Expect(entities[1].ID).To(Equal("ns0:smart-0"))
+				Expect(entities[2].ID).To(Equal("ns0:smart-1"))
+				Expect(entities[3].ID).To(Equal("ns0:smart-2"))
+			})
 		})
 	})
 })

@@ -42,6 +42,10 @@ type ProxyDatasetConfig struct {
 	AuthProviderName    string `json:"authProviderName"`
 }
 
+type SmartDatasetConfig struct {
+	Transform string
+}
+
 // Dataset data structure
 type Dataset struct {
 	ID                  string `json:"id"`
@@ -60,6 +64,7 @@ type Dataset struct {
 	PublicNamespaces    []string `json:"publicNamespaces"`
 	fullSyncID          string
 	ProxyConfig         *ProxyDatasetConfig `json:"proxyConfig"`
+	SmartDatasetConfig  *SmartDatasetConfig `json:"smartDatasetConfig"`
 }
 
 // NewDataset Create a new dataset from the params provided

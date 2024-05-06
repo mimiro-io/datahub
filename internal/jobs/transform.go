@@ -547,6 +547,20 @@ func (javascriptTransform *JavascriptTransform) ExecuteQuery(resultWriter QueryR
 	return nil
 }
 
+func (javascriptTransform *JavascriptTransform) BuildEntities(since string, f func(entity *server.Entity) error) (string, error) {
+	var buildFunc func() (string, error)
+	err := javascriptTransform.Runtime.ExportTo(javascriptTransform.Runtime.Get("build_entities"), &buildFunc)
+	if err != nil {
+		return since, err
+	}
+
+	javascriptTransform.statsDClient = &statsd.NoOpClient{}
+
+	javascriptTransform.Runtime.Set("Emit", f)
+
+	return buildFunc() // return continuation and error
+}
+
 func (javascriptTransform *JavascriptTransform) transformEntities(
 	runner *Runner,
 	entities []*server.Entity,
