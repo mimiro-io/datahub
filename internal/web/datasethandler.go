@@ -157,9 +157,9 @@ func (handler *datasetHandler) datasetCreate(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, "invalid proxy configuration provided")
 		}
 		_, err = handler.datasetManager.CreateDataset(datasetName, createDatasetConfig)
-	} else if createDatasetConfig.SmartDatasetConfig != nil {
-		if createDatasetConfig.SmartDatasetConfig.Transform == "" {
-			return echo.NewHTTPError(http.StatusBadRequest, "invalid smart dataset configuration provided")
+	} else if createDatasetConfig.VirtualDatasetConfig != nil {
+		if createDatasetConfig.VirtualDatasetConfig.Transform == "" {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid virtual dataset configuration provided")
 		}
 		_, err = handler.datasetManager.CreateDataset(datasetName, createDatasetConfig)
 	} else {
@@ -292,8 +292,8 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 		return c.NoContent(http.StatusNotFound)
 	}
 
-	if dataset.IsSmart() {
-		return echo.NewHTTPError(http.StatusNotImplemented, "smart datasets only support /changes")
+	if dataset.IsVirtual() {
+		return echo.NewHTTPError(http.StatusNotImplemented, "virtual datasets only support /changes")
 	}
 
 	// check if we need to return JSON-LD
@@ -640,10 +640,11 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 			// write only array closing bracket
 			_, _ = c.Response().Write([]byte("]"))
 		}
-	} else if dataset.IsSmart() {
-		smartDataset := dataset.AsSmartDataset(
+	} else if dataset.IsVirtual() {
+		virtualDataset := dataset.AsVirtualDataset(
 			handler.datasetManager,
-			func(d *server.SmartDataset, since string, f func(entity *server.Entity) error) (string, error) {
+			func(d *server.VirtualDataset, params map[string]any, since string,
+				f func(entity *server.Entity) error) (string, error) {
 				l := d.Logger
 				jsQuery, err := jobs.NewJavascriptTransform(l, d.Transform, d.Store, d.DsManager)
 				if err != nil {
@@ -651,14 +652,14 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 					return "", err
 				}
 
-				return jsQuery.BuildEntities(since, f)
+				return jsQuery.BuildEntities(params, since, f)
 			})
 		preStream()
 		// check if we are streaming json-ld
 		continuationToken := ""
 		var err error
 		if asJsonLd {
-			continuationToken, err = smartDataset.StreamChanges(since, func(entity *server.Entity) error {
+			continuationToken, err = virtualDataset.StreamChanges(since, c.Request().Body, func(entity *server.Entity) error {
 				_, _ = c.Response().Write([]byte(","))
 				jsonData, _ := json.Marshal(toJSONLD(entity))
 				_, _ = c.Response().Write(jsonData)
@@ -668,7 +669,7 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 			}
 		} else {
-			continuationToken, err = smartDataset.StreamChanges(since, func(entity *server.Entity) error {
+			continuationToken, err = virtualDataset.StreamChanges(since, c.Request().Body, func(entity *server.Entity) error {
 				_, _ = c.Response().Write([]byte(","))
 				jsonData, _ := json.Marshal(entity)
 				_, _ = c.Response().Write(jsonData)
@@ -800,8 +801,8 @@ func (handler *datasetHandler) processEntities(
 		).ForwardEntities(c.Request().Body, c.Request().Header)
 	}
 
-	if dataset.IsSmart() {
-		return echo.NewHTTPError(http.StatusNotImplemented, "smart datasets are read-only")
+	if dataset.IsVirtual() {
+		return echo.NewHTTPError(http.StatusNotImplemented, "virtual datasets are read-only")
 	}
 
 	// start new fullsync if requested

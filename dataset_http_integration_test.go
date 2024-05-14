@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/mimiro-io/datahub/internal/conf"
+	egdm "github.com/mimiro-io/entity-graph-data-model"
 	"io"
 	"net/http"
 	"net/url"
@@ -45,7 +46,7 @@ var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
 	queryURL := "http://localhost:24997/query"
 	dsURL := "http://localhost:24997/datasets/bananas"
 	proxyDsURL := "http://localhost:24997/datasets/cucumbers"
-	smartDsURL := "http://localhost:24997/datasets/smart"
+	virtualDsURL := "http://localhost:24997/datasets/virtual"
 
 	datasetsURL := "http://localhost:24997/datasets"
 	BeforeAll(func() {
@@ -159,22 +160,27 @@ var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
 			Expect(len(l)).To(Equal(3), "core.Dataset, bananas, cucumbers are listed")
 		})
 
-		It("Should create a smart dataset with base64 encoded transform", func() {
+		It("Should create a virtual dataset with base64 encoded transform", func() {
 			// create new dataset
-			js := `function build_entities(since = "", limit = -1) {
+			js := `function build_entities(params = {}, since = "", limit = -1) {
+						const prefix1 = AssertNamespacePrefix("http://data.mimiro.io/things/");
+						const prefix2 = AssertNamespacePrefix("http://data.mimiro.io/items/");
 						for (let i = 0; i < 3; i++) {
-							Emit({
-								"ID": "ns0:smart-" + i,
-								"Properties": { "ns0:smart": i },
-								"References": { "ns2:type": "ns1:smart-entity" }
-							});
+							const e = NewEntity();
+							SetId(e, prefix1+":virtual-" + i);
+							SetProperty(e, prefix1, "virtual", i);
+							SetProperty(e, prefix1, "params", params.param);
+							AddReference(e, prefix1, "type", prefix2+":virtual-entity");
+							if (isNaN(parseInt(since)) || i > parseInt(since)) {
+								Emit(e);
+							}
 						}
-						const newSince="5";
+						const newSince=5;
 						return newSince;
 					}`
 			f := base64.StdEncoding.EncodeToString([]byte(js))
-			res, err := http.Post(smartDsURL, "application/json", strings.NewReader(fmt.Sprintf(`{
-				"smartDatasetConfig": {
+			res, err := http.Post(virtualDsURL, "application/json", strings.NewReader(fmt.Sprintf(`{
+				"virtualDatasetConfig": {
 					"transform": "%s"
 				}
 			}`, f)))
@@ -182,16 +188,16 @@ var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
 			Expect(res).NotTo(BeZero())
 			Expect(res.StatusCode).To(Equal(200))
 
-			res, err = http.Get(smartDsURL)
+			res, err = http.Get(virtualDsURL)
 			Expect(err).To(BeNil())
 			Expect(res).NotTo(BeZero())
 			Expect(res.StatusCode).To(Equal(200))
 			b, _ := io.ReadAll(res.Body)
 			m := map[string]interface{}{}
 			_ = json.Unmarshal(b, &m)
-			Expect(m["id"]).To(Equal("ns0:smart"))
+			Expect(m["id"]).To(Equal("ns0:virtual"))
 			refs := m["refs"].(map[string]interface{})
-			Expect(refs["ns2:type"]).To(Equal("ns1:smart-dataset"))
+			Expect(refs["ns2:type"]).To(Equal("ns1:virtual-dataset"))
 		})
 	})
 	Describe("The /entities and /changes API support JSON-LD", Ordered, func() {
@@ -1090,35 +1096,130 @@ var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
 			Expect(result[0].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:7"))
 		})
 	})
-	Describe("the /changes and /entities endpoints for smart datasets", Ordered, func() {
-		It("Should reject POST /entities for smart datasets", func() {
+	Describe("the /changes and /entities endpoints for virtual datasets", Ordered, func() {
+		It("Should reject POST /entities for virtual datasets", func() {
 			payload := strings.NewReader(bananasFromTo(1, 3, false))
-			res, err := http.Post(smartDsURL+"/entities", "application/json", payload)
+			res, err := http.Post(virtualDsURL+"/entities", "application/json", payload)
 			Expect(err).To(BeNil())
 			Expect(res).NotTo(BeZero())
 			Expect(res.StatusCode).To(Equal(http.StatusNotImplemented))
 		})
-		It("Should reject GET /entities for smart datasets", func() {
-			res, err := http.Get(smartDsURL + "/entities")
+		It("Should reject GET /entities for virtual datasets", func() {
+			res, err := http.Get(virtualDsURL + "/entities")
 			Expect(err).To(BeNil())
 			Expect(res).NotTo(BeZero())
 			Expect(res.StatusCode).To(Equal(http.StatusNotImplemented))
 		})
-		Describe("Should execute transform on GET /changes for smart datasets", func() {
+		Describe("Should execute transform on GET /changes for virtual datasets", Ordered, func() {
 			It("without since", func() {
-				res, err := http.Get(smartDsURL + "/changes")
+				res, err := http.Get(virtualDsURL + "/changes")
 				Expect(err).To(BeNil())
 				Expect(res).NotTo(BeZero())
 				Expect(res.StatusCode).To(Equal(http.StatusOK))
-				body, err := io.ReadAll(res.Body)
+
+				nsm := egdm.NewNamespaceContext()
+				p := egdm.NewEntityParser(nsm).WithLenientNamespaceChecks()
+				ec, err := p.LoadEntityCollection(res.Body)
 				Expect(err).To(BeNil())
-				var entities []*server.Entity
-				err = json.Unmarshal(body, &entities)
+
+				Expect(ec.Entities).NotTo(BeZero())
+				Expect(ec.NamespaceManager).NotTo(BeZero())
+				Expect(ec.Continuation).NotTo(BeZero())
+				Expect(len(ec.Entities)).To(Equal(3))
+				Expect(ec.Entities[0].ID).To(Equal("ns5:virtual-0"))
+				Expect(ec.Entities[1].ID).To(Equal("ns5:virtual-1"))
+				Expect(ec.Entities[2].ID).To(Equal("ns5:virtual-2"))
+				Expect(ec.Continuation.Token).To(Equal("5"))
+			})
+			It("with since", func() {
+				res, err := http.Get(virtualDsURL + "/changes?since=1")
 				Expect(err).To(BeNil())
-				Expect(len(entities)).To(Equal(5), "context, cont and 3 entities")
-				Expect(entities[1].ID).To(Equal("ns0:smart-0"))
-				Expect(entities[2].ID).To(Equal("ns0:smart-1"))
-				Expect(entities[3].ID).To(Equal("ns0:smart-2"))
+				Expect(res).NotTo(BeZero())
+				Expect(res.StatusCode).To(Equal(http.StatusOK))
+
+				nsm := egdm.NewNamespaceContext()
+				p := egdm.NewEntityParser(nsm).WithLenientNamespaceChecks()
+				ec, err := p.LoadEntityCollection(res.Body)
+				Expect(err).To(BeNil())
+
+				Expect(ec.Entities).NotTo(BeZero())
+				Expect(ec.NamespaceManager).NotTo(BeZero())
+				Expect(ec.NamespaceManager.GetNamespaceMappings()).To(Equal(map[string]string{
+					"ns0": "http://data.mimiro.io/core/dataset/",
+					"ns1": "http://data.mimiro.io/core/",
+					"ns2": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+					"ns3": "http://example.com",
+					"ns4": "http://example.mimiro.io/",
+					"ns5": "http://data.mimiro.io/things/",
+					"ns6": "http://data.mimiro.io/items/",
+				}))
+				Expect(ec.Continuation).NotTo(BeZero())
+				Expect(len(ec.Entities)).To(Equal(1))
+				Expect(ec.Entities[0].ID).To(Equal("ns5:virtual-2"))
+				Expect(ec.Continuation.Token).To(Equal("5"))
+			})
+			It("with public namespaces", func() {
+				// get transform from virtual dataset
+				res, err := http.Get(virtualDsURL)
+				Expect(err).To(BeNil())
+				j := map[string]any{}
+				err = json.NewDecoder(res.Body).Decode(&j)
+				Expect(err).To(BeNil())
+				t := j["props"].(map[string]any)["ns0:transform"].(string)
+
+				// delete it
+				req, _ := http.NewRequest("DELETE", virtualDsURL, nil)
+				res, err = http.DefaultClient.Do(req)
+				Expect(err).To(BeNil())
+				Expect(res).NotTo(BeZero())
+				Expect(res.StatusCode).To(Equal(200))
+
+				// recreate with transform and public namespaces
+				res, err = http.Post(virtualDsURL, "application/json", strings.NewReader(fmt.Sprintf(`{
+					"virtualDatasetConfig": {
+						"transform": "%s"
+					},
+					"publicNamespaces": ["http://data.mimiro.io/things/", "http://data.mimiro.io/items/"]
+				}`, t)))
+				Expect(err).To(BeNil())
+				Expect(res).NotTo(BeZero())
+				Expect(res.StatusCode).To(Equal(200))
+
+				res, err = http.Get(virtualDsURL + "/changes?since=1")
+				Expect(err).To(BeNil())
+				Expect(res).NotTo(BeZero())
+				Expect(res.StatusCode).To(Equal(http.StatusOK))
+
+				ec, err := egdm.NewEntityParser(egdm.NewNamespaceContext()).
+					WithLenientNamespaceChecks().
+					LoadEntityCollection(res.Body)
+				Expect(err).To(BeNil())
+
+				Expect(ec.Entities).NotTo(BeZero())
+				Expect(ec.NamespaceManager).NotTo(BeZero())
+				Expect(ec.NamespaceManager.GetNamespaceMappings()).To(Equal(map[string]string{
+					"ns5": "http://data.mimiro.io/things/",
+					"ns6": "http://data.mimiro.io/items/",
+				}))
+				Expect(ec.Continuation).NotTo(BeZero())
+				Expect(len(ec.Entities)).To(Equal(1))
+				Expect(ec.Entities[0].ID).To(Equal("ns5:virtual-2"))
+				Expect(ec.Continuation.Token).To(Equal("5"))
+			})
+			It("with request body array", func() {
+				req, err := http.NewRequest("GET", virtualDsURL+"/changes", strings.NewReader(`["12345", "67890"]`))
+				Expect(err).To(BeNil())
+				res, err := http.DefaultClient.Do(req)
+				Expect(err).To(BeNil())
+				Expect(res).NotTo(BeZero())
+				Expect(res.StatusCode).To(Equal(200))
+				ec, err := egdm.NewEntityParser(egdm.NewNamespaceContext()).
+					WithLenientNamespaceChecks().
+					LoadEntityCollection(res.Body)
+				Expect(err).To(BeNil())
+
+				Expect(ec.Entities).NotTo(BeZero())
+				Expect(ec.Entities[0].Properties).To(HaveKeyWithValue("ns5:params", []any{"12345", "67890"}))
 			})
 		})
 	})

@@ -42,29 +42,29 @@ type ProxyDatasetConfig struct {
 	AuthProviderName    string `json:"authProviderName"`
 }
 
-type SmartDatasetConfig struct {
+type VirtualDatasetConfig struct {
 	Transform string
 }
 
 // Dataset data structure
 type Dataset struct {
-	ID                  string `json:"id"`
-	InternalID          uint32 `json:"internalId"`
-	SubjectIdentifier   string `json:"subjectIdentifier"`
-	store               *Store
-	WriteLock           sync.Mutex
-	fullSyncStarted     bool
-	fullSyncLease       *fullSyncLease
-	fullSyncSeen        map[uint64]int
-	isChangeCache       bool      // indicates if this is a local change cache
-	dataChangeNotifiers []string  // list of endpoints to ping after new batch committed.
-	cache               []*Entity // cache of recently updated entities.
-	cacheStartOffset    uint32    // log position start in cache
-	markedForDeletion   bool
-	PublicNamespaces    []string `json:"publicNamespaces"`
-	fullSyncID          string
-	ProxyConfig         *ProxyDatasetConfig `json:"proxyConfig"`
-	SmartDatasetConfig  *SmartDatasetConfig `json:"smartDatasetConfig"`
+	ID                   string `json:"id"`
+	InternalID           uint32 `json:"internalId"`
+	SubjectIdentifier    string `json:"subjectIdentifier"`
+	store                *Store
+	WriteLock            sync.Mutex
+	fullSyncStarted      bool
+	fullSyncLease        *fullSyncLease
+	fullSyncSeen         map[uint64]int
+	isChangeCache        bool      // indicates if this is a local change cache
+	dataChangeNotifiers  []string  // list of endpoints to ping after new batch committed.
+	cache                []*Entity // cache of recently updated entities.
+	cacheStartOffset     uint32    // log position start in cache
+	markedForDeletion    bool
+	PublicNamespaces     []string `json:"publicNamespaces"`
+	fullSyncID           string
+	ProxyConfig          *ProxyDatasetConfig   `json:"proxyConfig"`
+	VirtualDatasetConfig *VirtualDatasetConfig `json:"virtualDatasetConfig"`
 }
 
 // NewDataset Create a new dataset from the params provided

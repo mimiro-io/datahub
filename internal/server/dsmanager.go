@@ -60,7 +60,7 @@ func NewDsManager(env *conf.Config, store *Store, eb EventBus) *DsManager {
 func (dsm *DsManager) NewDatasetEntity(
 	name string,
 	proxyDatasetConfig *ProxyDatasetConfig,
-	smartDatasetConfig *SmartDatasetConfig,
+	virtualDatasetConfig *VirtualDatasetConfig,
 	publicNamespaces []string,
 ) *Entity {
 	prefix, _ := dsm.store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/core/dataset/")
@@ -79,9 +79,9 @@ func (dsm *DsManager) NewDatasetEntity(
 		entity.Properties[prefix+":upstreamTransform"] = proxyDatasetConfig.UpstreamTransform
 	}
 
-	if smartDatasetConfig != nil && smartDatasetConfig.Transform != "" {
-		entity.References[rdfNamespacePrefix+":type"] = core + ":smart-dataset"
-		entity.Properties[prefix+":transform"] = smartDatasetConfig.Transform
+	if virtualDatasetConfig != nil && virtualDatasetConfig.Transform != "" {
+		entity.References[rdfNamespacePrefix+":type"] = core + ":virtual-dataset"
+		entity.Properties[prefix+":transform"] = virtualDatasetConfig.Transform
 	}
 
 	if len(publicNamespaces) > 0 {
@@ -99,9 +99,9 @@ func (dsm *DsManager) storeEntity(dataset *Dataset, entity *Entity) error {
 }
 
 type CreateDatasetConfig struct {
-	ProxyDatasetConfig *ProxyDatasetConfig `json:"ProxyDatasetConfig"`
-	SmartDatasetConfig *SmartDatasetConfig `json:"SmartDatasetConfig"`
-	PublicNamespaces   []string            `json:"publicNamespaces"`
+	ProxyDatasetConfig   *ProxyDatasetConfig   `json:"ProxyDatasetConfig"`
+	VirtualDatasetConfig *VirtualDatasetConfig `json:"VirtualDatasetConfig"`
+	PublicNamespaces     []string              `json:"publicNamespaces"`
 }
 
 type UpdateDatasetConfig struct {
@@ -130,7 +130,7 @@ func (dsm *DsManager) CreateDataset(name string, createDatasetConfig *CreateData
 	if createDatasetConfig != nil {
 		ds.ProxyConfig = createDatasetConfig.ProxyDatasetConfig
 		ds.PublicNamespaces = createDatasetConfig.PublicNamespaces
-		ds.SmartDatasetConfig = createDatasetConfig.SmartDatasetConfig
+		ds.VirtualDatasetConfig = createDatasetConfig.VirtualDatasetConfig
 	}
 
 	jsonData, _ := json.Marshal(ds)
@@ -147,7 +147,7 @@ func (dsm *DsManager) CreateDataset(name string, createDatasetConfig *CreateData
 	dsm.eb.RegisterTopic(name)
 
 	// add the entity
-	ent := dsm.NewDatasetEntity(name, ds.ProxyConfig, ds.SmartDatasetConfig, ds.PublicNamespaces)
+	ent := dsm.NewDatasetEntity(name, ds.ProxyConfig, ds.VirtualDatasetConfig, ds.PublicNamespaces)
 
 	core := dsm.GetDataset(datasetCore)
 	err = dsm.storeEntity(core, ent)
