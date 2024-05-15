@@ -1515,7 +1515,7 @@ Also note that existing references with the same predicate will be overwritten.
 var personTypePrefix = AssertNamespacePrefix("http://data.mimiro.io/schema/person/");
 var companyPrefix = AssertNamespacePrefix("http://data.mimiro.io/schema/company/");
 
-AddReference(person, personTypePrefix, "worksfor", companyPrefix+":acme");
+AddReference(person, personTypePrefix, "worksfor", PrefixField(companyPrefix, "acme"));
 ```
 
 #### SetDeleted / GetDeleted
