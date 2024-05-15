@@ -272,6 +272,44 @@ be referenced if the remote dataset requires authentication. See (security provi
 SUCCESS  Dataset has been created
 ```
 
+## Virtual Datasets
+
+Virtual Datasets are similar to Proxy Datasets, but instead of proxying data from a remote source, they are based on
+a transformation script that generates entities on the fly.
+
+The transformation script is written in Javascript and can use the same functions as a transform in a job.
+
+Since virtual datasets are not backed by a real data source, they are read-only.
+
+The transform script needs to implement a javascript function with the following signature:
+
+```javascript
+function build_entities(params, since) {
+    const continuationToken = since + 5;
+    for (let i = since; i < continuationToken; i++) {
+        Emit(NewEntity());
+    }
+    return continuationToken;
+}
+```
+DataHub will allow users to POST any json object or array to the virtual dataset endpoint. The data will be passed to the build_entities function as the params argument.
+`since` request parameters are also forwarded to the javascript function.
+
+Any value that is returned from the function will be used as the continuation token in the constructed UDA batch response.
+
+Each entity that is emitted using the `Emit` function in the script will be included in the response.
+
+To create a virtual dataset, create a dataset with extra configuration in the request body like so:
+
+```bash
+curl -XPOST \
+  --header "Content-Type: application/json" \
+  --data '{"virtualDatasetConfig": { "transform": "BASE64-ENCODED-TRANSFORMATION-SCRIPT" } }' \
+  http://datahub/datasets/dataset-name
+
+```
+
+
 ## Query
 
 The query model is very simple, for now. It is possible to fetch a single entity via its URI, and it is possible to traverse from one, or many entities to related entities via incoming or outgoing references.
@@ -506,7 +544,7 @@ Job definitions are described using JSON and can be uploaded to the data hub usi
             "triggerType": "either 'cron' or 'onchange'",
             "jobType": "either 'incremental' or 'fullsync'",
             "schedule": "a cron expression defining when to execute the defined jobType. Only set when triggerType=cron",
-            "monitoredDataset": "name of dataset to monitor, used with triggerType=onchange", 
+            "monitoredDataset": "name of dataset to monitor, used with triggerType=onchange",
             "onError": [{
               "errorHandler":  "log or reRun",
                 "retryDelay": "delay between retries, only used with reRun",
@@ -761,7 +799,7 @@ It will also retry failed requests up to 3 times in 2 second intervals.
 
 The triggers list can contain any number of trigger definitions.
 
-There are two types of triggers that can be used to schedule jobs: 
+There are two types of triggers that can be used to schedule jobs:
 - `cron` periodically executes a job on a schedule
 - `onchange` executes a job when a monitored dataset changes.
 
@@ -777,7 +815,7 @@ It can make sense to transfer small incremental updates with high frequency, whi
 Triggers can be configured with an `onError` section, which defines how to handle sink errors in the job.
 There are two error handlers available:
 - `log` will log the error and continue with the next entity.
-  When the configured number of errors (`maxItems`) is reached, the job will stop and fail. 
+  When the configured number of errors (`maxItems`) is reached, the job will stop and fail.
   If no `maxItems` is configured, the default is to log all errors and continue.
 - `reRun` will re-run the entire job a number of times, with a delay between each retry.
   If the job still fails after the configured number of runs, the job will stop and fail.
@@ -1467,6 +1505,19 @@ var personTypePrefix = GetNamespacePrefix(
 SetProperty(person, personTypePrefix, "name", "bobby");
 ```
 
+#### AddReference
+
+To set the value of a named reference on an entity use the AddReference function.
+Note that the reference value must be a CURIE.
+Also note that existing references with the same predicate will be overwritten.
+
+```javascript
+var personTypePrefix = AssertNamespacePrefix("http://data.mimiro.io/schema/person/");
+var companyPrefix = AssertNamespacePrefix("http://data.mimiro.io/schema/company/");
+
+AddReference(person, personTypePrefix, "worksfor", PrefixField(companyPrefix, "acme"));
+```
+
 #### SetDeleted / GetDeleted
 
 `SetDeleted` takes a parameter `entity` of type Entity, and a boolean flag, and updates the deleted state on the Entity.
@@ -1984,7 +2035,7 @@ The resource patterns are either exact matches or '*' matches. This will match a
 
 To grant access to, for instance, /changes and /entities on a give dataset, one would add it like so: '/datasets/core.Dataset/*'.
 
-Note the trailing '/' in the line above. Something to have in mind is if both endpoints of the dataset are granted access to with '/datasets/core.Dataset*' there is also potential to grant access to '/datasets/core.DatasetWithAdditionalInfo'. 
+Note the trailing '/' in the line above. Something to have in mind is if both endpoints of the dataset are granted access to with '/datasets/core.Dataset*' there is also potential to grant access to '/datasets/core.DatasetWithAdditionalInfo'.
 
 To grant full access to the client. Add to the ACL file so it looks like:
 

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/mimiro-io/datahub/internal/jobs"
 	"io"
 	"net/http"
 	"net/url"
@@ -156,6 +157,11 @@ func (handler *datasetHandler) datasetCreate(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, "invalid proxy configuration provided")
 		}
 		_, err = handler.datasetManager.CreateDataset(datasetName, createDatasetConfig)
+	} else if createDatasetConfig.VirtualDatasetConfig != nil {
+		if createDatasetConfig.VirtualDatasetConfig.Transform == "" {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid virtual dataset configuration provided")
+		}
+		_, err = handler.datasetManager.CreateDataset(datasetName, createDatasetConfig)
 	} else {
 		createDatasetConfig.ProxyDatasetConfig = nil // make sure we don't accidently store invalid proxy config
 		_, err = handler.datasetManager.CreateDataset(datasetName, createDatasetConfig)
@@ -284,6 +290,10 @@ func (handler *datasetHandler) getEntitiesHandler(c echo.Context) error {
 	dataset := handler.datasetManager.GetDataset(datasetName)
 	if dataset == nil {
 		return c.NoContent(http.StatusNotFound)
+	}
+
+	if dataset.IsVirtual() {
+		return echo.NewHTTPError(http.StatusNotImplemented, "virtual datasets only support /changes")
 	}
 
 	// check if we need to return JSON-LD
@@ -598,17 +608,12 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 		continuationToken := ""
 		var err error
 		if asJsonLd {
-			continuationToken, err = proxyDataset.StreamChanges(
-				since,
-				l,
-				latestOnly,
-				reverse,
-				func(entity *server.Entity) error {
-					_, _ = c.Response().Write([]byte(","))
-					jsonData, _ := json.Marshal(toJSONLD(entity))
-					_, _ = c.Response().Write(jsonData)
-					return nil
-				},
+			continuationToken, err = proxyDataset.StreamChanges(since, l, latestOnly, reverse, func(entity *server.Entity) error {
+				_, _ = c.Response().Write([]byte(","))
+				jsonData, _ := json.Marshal(toJSONLD(entity))
+				_, _ = c.Response().Write(jsonData)
+				return nil
+			},
 				preStream,
 			)
 			if err != nil {
@@ -620,6 +625,56 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 				_, _ = c.Response().Write(jsonData)
 				return nil
 			}, preStream)
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
+		}
+
+		if continuationToken != "" {
+			if asJsonLd {
+				_, _ = c.Response().Write([]byte(", " + makeJsonLdContinuationToken(continuationToken) + "]"))
+			} else {
+				_, _ = c.Response().Write([]byte(", {\"id\":\"@continuation\",\"token\":\"" + continuationToken + "\"}]"))
+			}
+		} else {
+			// write only array closing bracket
+			_, _ = c.Response().Write([]byte("]"))
+		}
+	} else if dataset.IsVirtual() {
+		virtualDataset := dataset.AsVirtualDataset(
+			handler.datasetManager,
+			func(d *server.VirtualDataset, params map[string]any, since string,
+				f func(entity *server.Entity) error) (string, error) {
+				l := d.Logger
+				jsQuery, err := jobs.NewJavascriptTransform(l, d.Transform, d.Store, d.DsManager)
+				if err != nil {
+					l.Warn("Unable to parse javascript query " + err.Error())
+					return "", err
+				}
+
+				return jsQuery.BuildEntities(params, since, f)
+			})
+		preStream()
+		// check if we are streaming json-ld
+		continuationToken := ""
+		var err error
+		if asJsonLd {
+			continuationToken, err = virtualDataset.StreamChanges(since, c.Request().Body, func(entity *server.Entity) error {
+				_, _ = c.Response().Write([]byte(","))
+				jsonData, _ := json.Marshal(toJSONLD(entity))
+				_, _ = c.Response().Write(jsonData)
+				return nil
+			})
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
+		} else {
+			continuationToken, err = virtualDataset.StreamChanges(since, c.Request().Body, func(entity *server.Entity) error {
+				_, _ = c.Response().Write([]byte(","))
+				jsonData, _ := json.Marshal(entity)
+				_, _ = c.Response().Write(jsonData)
+				return nil
+			})
 			if err != nil {
 				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 			}
@@ -745,6 +800,11 @@ func (handler *datasetHandler) processEntities(
 			handler.lookupAuth(dataset.ProxyConfig.AuthProviderName),
 		).ForwardEntities(c.Request().Body, c.Request().Header)
 	}
+
+	if dataset.IsVirtual() {
+		return echo.NewHTTPError(http.StatusNotImplemented, "virtual datasets are read-only")
+	}
+
 	// start new fullsync if requested
 	if fullSyncStart {
 		err2 := dataset.StartFullSyncWithLease(fullSyncID)

@@ -60,6 +60,7 @@ func NewDsManager(env *conf.Config, store *Store, eb EventBus) *DsManager {
 func (dsm *DsManager) NewDatasetEntity(
 	name string,
 	proxyDatasetConfig *ProxyDatasetConfig,
+	virtualDatasetConfig *VirtualDatasetConfig,
 	publicNamespaces []string,
 ) *Entity {
 	prefix, _ := dsm.store.NamespaceManager.AssertPrefixMappingForExpansion("http://data.mimiro.io/core/dataset/")
@@ -78,6 +79,11 @@ func (dsm *DsManager) NewDatasetEntity(
 		entity.Properties[prefix+":upstreamTransform"] = proxyDatasetConfig.UpstreamTransform
 	}
 
+	if virtualDatasetConfig != nil && virtualDatasetConfig.Transform != "" {
+		entity.References[rdfNamespacePrefix+":type"] = core + ":virtual-dataset"
+		entity.Properties[prefix+":transform"] = virtualDatasetConfig.Transform
+	}
+
 	if len(publicNamespaces) > 0 {
 		entity.Properties[prefix+":publicNamespaces"] = publicNamespaces
 	}
@@ -93,8 +99,9 @@ func (dsm *DsManager) storeEntity(dataset *Dataset, entity *Entity) error {
 }
 
 type CreateDatasetConfig struct {
-	ProxyDatasetConfig *ProxyDatasetConfig `json:"ProxyDatasetConfig"`
-	PublicNamespaces   []string            `json:"publicNamespaces"`
+	ProxyDatasetConfig   *ProxyDatasetConfig   `json:"ProxyDatasetConfig"`
+	VirtualDatasetConfig *VirtualDatasetConfig `json:"VirtualDatasetConfig"`
+	PublicNamespaces     []string              `json:"publicNamespaces"`
 }
 
 type UpdateDatasetConfig struct {
@@ -123,6 +130,7 @@ func (dsm *DsManager) CreateDataset(name string, createDatasetConfig *CreateData
 	if createDatasetConfig != nil {
 		ds.ProxyConfig = createDatasetConfig.ProxyDatasetConfig
 		ds.PublicNamespaces = createDatasetConfig.PublicNamespaces
+		ds.VirtualDatasetConfig = createDatasetConfig.VirtualDatasetConfig
 	}
 
 	jsonData, _ := json.Marshal(ds)
@@ -139,7 +147,7 @@ func (dsm *DsManager) CreateDataset(name string, createDatasetConfig *CreateData
 	dsm.eb.RegisterTopic(name)
 
 	// add the entity
-	ent := dsm.NewDatasetEntity(name, ds.ProxyConfig, ds.PublicNamespaces)
+	ent := dsm.NewDatasetEntity(name, ds.ProxyConfig, ds.VirtualDatasetConfig, ds.PublicNamespaces)
 
 	core := dsm.GetDataset(datasetCore)
 	err = dsm.storeEntity(core, ent)
@@ -269,7 +277,7 @@ func (dsm *DsManager) DeleteDataset(name string) error {
 	dsm.eb.UnregisterTopic(name) // unregister event-handler on this topic. Note that subscriptions are left.
 
 	// also delete the associated entity
-	entity, err2 := dsm.store.GetEntity(dsm.NewDatasetEntity(name, nil, nil).ID, []string{datasetCore}, true)
+	entity, err2 := dsm.store.GetEntity(dsm.NewDatasetEntity(name, nil, nil, nil).ID, []string{datasetCore}, true)
 	if err2 != nil {
 		return err2
 	}
