@@ -558,7 +558,11 @@ func (javascriptTransform *JavascriptTransform) BuildEntities(params map[string]
 
 	javascriptTransform.Runtime.Set("Emit", emit)
 
-	return buildFunc(params, since, -1) // return continuation and error
+	res, err := buildFunc(params, since, -1) // return continuation and error
+	if err != nil {
+		javascriptTransform.Logger.Errorf("build_entities failed: %v", err.Error())
+	}
+	return res, err
 }
 
 func (javascriptTransform *JavascriptTransform) transformEntities(
