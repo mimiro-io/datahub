@@ -20,13 +20,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/mimiro-io/datahub/internal/jobs"
 	"io"
 	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/mimiro-io/datahub/internal/jobs"
 
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
@@ -644,15 +645,16 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 		virtualDataset := dataset.AsVirtualDataset(
 			handler.datasetManager,
 			func(d *server.VirtualDataset, params map[string]any, since string,
-				f func(entity *server.Entity) error) (string, error) {
-				l := d.Logger
-				jsQuery, err := jobs.NewJavascriptTransform(l, d.Transform, d.Store, d.DsManager)
+				f func(entity *server.Entity) error,
+			) (string, error) {
+				log := d.Logger
+				jsQuery, err := jobs.NewJavascriptTransform(log, d.Transform, d.Store, d.DsManager)
 				if err != nil {
-					l.Warn("Unable to parse javascript query " + err.Error())
+					log.Warn("Unable to parse javascript query " + err.Error())
 					return "", err
 				}
 
-				return jsQuery.BuildEntities(params, since, f)
+				return jsQuery.BuildEntities(params, since, l, f)
 			})
 		preStream()
 		// check if we are streaming json-ld
@@ -836,7 +838,6 @@ func (handler *datasetHandler) processEntities(
 		}
 		return nil
 	})
-
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, server.AttemptStoreEntitiesErr(err).Error())
 	}

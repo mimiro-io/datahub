@@ -284,15 +284,15 @@ Since virtual datasets are not backed by a real data source, they are read-only.
 The transform script needs to implement a javascript function with the following signature:
 
 ```javascript
-function build_entities(params, since) {
-    const continuationToken = since + 5;
+function build_entities(params, since, limit) {
+    const continuationToken = since + (limit || 5);
     for (let i = since; i < continuationToken; i++) {
         Emit(NewEntity());
     }
     return continuationToken;
 }
 ```
-DataHub will allow users to POST any json object or array to the virtual dataset endpoint. The data will be passed to the build_entities function as the params argument.
+DataHub will allow users to send any json object or array to the virtual dataset endpoint in a GET request. The data will be passed to the build_entities function as the params argument.
 `since` request parameters are also forwarded to the javascript function.
 
 Any value that is returned from the function will be used as the continuation token in the constructed UDA batch response.
