@@ -547,7 +547,7 @@ func (javascriptTransform *JavascriptTransform) ExecuteQuery(resultWriter QueryR
 	return nil
 }
 
-func (javascriptTransform *JavascriptTransform) BuildEntities(params map[string]any, since string, emit func(entity *server.Entity) error) (string, error) {
+func (javascriptTransform *JavascriptTransform) BuildEntities(params map[string]any, since string, limit int, emit func(entity *server.Entity) error) (string, error) {
 	var buildFunc func(params map[string]any, since string, limit int) (string, error)
 	err := javascriptTransform.Runtime.ExportTo(javascriptTransform.Runtime.Get("build_entities"), &buildFunc)
 	if err != nil {
@@ -558,7 +558,7 @@ func (javascriptTransform *JavascriptTransform) BuildEntities(params map[string]
 
 	javascriptTransform.Runtime.Set("Emit", emit)
 
-	res, err := buildFunc(params, since, -1) // return continuation and error
+	res, err := buildFunc(params, since, limit) // return continuation and error
 	if err != nil {
 		javascriptTransform.Logger.Errorf("build_entities failed: %v", err.Error())
 	}
