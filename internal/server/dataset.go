@@ -454,7 +454,11 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 				case []interface{}:
 					refs = make([]string, len(v))
 					for i, v := range v {
-						refs[i] = v.(string)
+						if val, ok := v.(string); ok {
+							refs[i] = val
+						} else {
+							return newitems, fmt.Errorf("encountered nil in ref array, cannot store entity %v", e)
+						}
 					}
 				case nil:
 					return newitems, fmt.Errorf("encountered nil ref, cannot store entity %v", e)
@@ -535,18 +539,21 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 							return newitems, err
 						}
 
-						// get related
-						relatedid, _, err := ds.store.assertIDForURI(ref.(string), idCache)
-						if err != nil {
-							return newitems, err
-						}
+						// get related, but skip if it is not a string
+						refVal, ok := ref.(string)
+						if ok {
+							relatedid, _, err := ds.store.assertIDForURI(refVal, idCache)
+							if err != nil {
+								return newitems, err
+							}
 
-						if refs, ok := oldRefs[predid]; ok {
-							refs = append(refs, relatedid)
-							oldRefs[predid] = refs
-						} else {
-							refs := []uint64{relatedid}
-							oldRefs[predid] = refs
+							if refs, ok := oldRefs[predid]; ok {
+								refs = append(refs, relatedid)
+								oldRefs[predid] = refs
+							} else {
+								refs := []uint64{relatedid}
+								oldRefs[predid] = refs
+							}
 						}
 					}
 				}
@@ -597,7 +604,10 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 					case []interface{}:
 						refs = make([]string, len(v))
 						for i, val := range v {
-							refs[i] = val.(string)
+							var ok bool
+							if refs[i], ok = val.(string); !ok {
+								return newitems, fmt.Errorf("encountered nil ref in ref array, cannot store entity %v", e)
+							}
 						}
 					case nil:
 						return newitems, fmt.Errorf("encountered nil ref, cannot store entity %v", e)
