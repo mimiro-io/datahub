@@ -15,15 +15,17 @@
 package server
 
 import (
+	"encoding/binary"
+	"encoding/json"
 	"fmt"
-	"os"
-	"strconv"
-	"strings"
-
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
+	"os"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/mimiro-io/datahub/internal/conf"
 )
@@ -146,6 +148,72 @@ var _ = ginkgo.Describe("A Dataset", func() {
 		Expect(company3Seen).To(BeTrue(), "company-3 was not observed in relations")
 	})
 
+	ginkgo.It("Should not panic when storing an entity with a nil refs map", func() {
+		person := NewEntity(env.peopleNamespacePrefix+":person-1", 1)
+		person.References[env.peopleNamespacePrefix+":workedfor"] = nil
+		err := env.ds.StoreEntities([]*Entity{person})
+		Expect(err.Error()).To(ContainSubstring("encountered nil ref"), "Expected entity to be stored without error")
+		// store invalid entity anyway, and try to update it
+		entityIDBuffer := make([]byte, 24)
+		binary.BigEndian.PutUint16(entityIDBuffer, EntityIDToJSONIndexID)
+		binary.BigEndian.PutUint64(entityIDBuffer[2:], person.InternalID)
+		binary.BigEndian.PutUint32(entityIDBuffer[10:], env.ds.InternalID)
+		binary.BigEndian.PutUint64(entityIDBuffer[14:], uint64(time.Now().UnixNano()))
+		binary.BigEndian.PutUint16(entityIDBuffer[22:], uint16(0))
+
+		datasetEntitiesLatestVersionKey := make([]byte, 14)
+		binary.BigEndian.PutUint16(datasetEntitiesLatestVersionKey, DatasetLatestEntities)
+		binary.BigEndian.PutUint32(datasetEntitiesLatestVersionKey[2:], env.ds.InternalID)
+		binary.BigEndian.PutUint64(datasetEntitiesLatestVersionKey[6:], person.InternalID)
+
+		txn := env.ds.store.database.NewTransaction(true)
+		jsonData, _ := json.Marshal(person)
+		err = txn.Set(entityIDBuffer, jsonData)
+		Expect(err).To(BeNil())
+		err = txn.Set(datasetEntitiesLatestVersionKey, entityIDBuffer)
+		Expect(err).To(BeNil())
+		txn.Commit()
+
+		person.Properties[env.peopleNamespacePrefix+":Name"] = "person 1"
+		err = env.ds.StoreEntities([]*Entity{person})
+		Expect(err.Error()).To(ContainSubstring("encountered nil ref"), "Expected entity to be stored without error")
+	})
+	ginkgo.It("Should not panic when storing an entity with a nil array in refs map", func() {
+
+		person := NewEntity(env.peopleNamespacePrefix+":person-1", 1)
+		person.References[env.peopleNamespacePrefix+":workedfor"] = []any{
+			nil,
+			nil,
+		}
+		err := env.ds.StoreEntities([]*Entity{person})
+		Expect(err.Error()).To(ContainSubstring("encountered nil in ref array"), "Expected entity to be stored without error")
+
+		// store invalid entity anyway, and try to update it
+		entityIDBuffer := make([]byte, 24)
+		binary.BigEndian.PutUint16(entityIDBuffer, EntityIDToJSONIndexID)
+		binary.BigEndian.PutUint64(entityIDBuffer[2:], person.InternalID)
+		binary.BigEndian.PutUint32(entityIDBuffer[10:], env.ds.InternalID)
+		binary.BigEndian.PutUint64(entityIDBuffer[14:], uint64(time.Now().UnixNano()))
+		binary.BigEndian.PutUint16(entityIDBuffer[22:], uint16(0))
+
+		datasetEntitiesLatestVersionKey := make([]byte, 14)
+		binary.BigEndian.PutUint16(datasetEntitiesLatestVersionKey, DatasetLatestEntities)
+		binary.BigEndian.PutUint32(datasetEntitiesLatestVersionKey[2:], env.ds.InternalID)
+		binary.BigEndian.PutUint64(datasetEntitiesLatestVersionKey[6:], person.InternalID)
+
+		txn := env.ds.store.database.NewTransaction(true)
+		jsonData, _ := json.Marshal(person)
+		err = txn.Set(entityIDBuffer, jsonData)
+		Expect(err).To(BeNil())
+		err = txn.Set(datasetEntitiesLatestVersionKey, entityIDBuffer)
+		Expect(err).To(BeNil())
+		txn.Commit()
+
+		// remove invalid ref, and make sure we can store the entity and overwrite the invalid ref
+		delete(person.References, env.peopleNamespacePrefix+":workedfor")
+		err = env.ds.StoreEntities([]*Entity{person})
+		Expect(err).To(BeNil())
+	})
 	ginkgo.It("Should use it's publicNamespaces property for context", func() {
 		// first part: test that we get global namespace if nothing is overridden
 		_, _ = env.store.NamespaceManager.AssertPrefixMappingForExpansion(
