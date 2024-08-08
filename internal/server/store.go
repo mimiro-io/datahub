@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -68,8 +69,17 @@ type BadgerLogger struct { // we use this to implement the Badger Logger interfa
 	Logger *zap.SugaredLogger
 }
 
-func (bl BadgerLogger) Errorf(format string, v ...interface{})   { bl.Logger.Errorf(format, v...) }
-func (bl BadgerLogger) Infof(format string, v ...interface{})    { bl.Logger.Infof(format, v...) }
+func (bl BadgerLogger) Errorf(format string, v ...interface{}) { bl.Logger.Errorf(format, v...) }
+func (bl BadgerLogger) Infof(format string, v ...interface{}) {
+	// find parent in call stack
+	pc, _, _, _ := runtime.Caller(2)
+	f := runtime.FuncForPC(pc).Name()
+	if f == "github.com/dgraph-io/badger/v4.(*Stream).produceRanges" {
+		// a bit noisy this one
+		return
+	}
+	bl.Logger.Infof(format, v...)
+}
 func (bl BadgerLogger) Warningf(format string, v ...interface{}) { bl.Logger.Warnf(format, v...) }
 func (bl BadgerLogger) Debugf(format string, v ...interface{})   { bl.Logger.Debugf(format, v...) }
 
