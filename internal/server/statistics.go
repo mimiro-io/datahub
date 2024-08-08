@@ -40,6 +40,7 @@ type Statistics struct {
 }
 
 func (stats Statistics) GetStatistics(writer io.Writer, ctx context.Context) error {
+	stats.Logger.Infof("gathering counts for all datasets")
 	datasetName := ""
 	o := stats.perPrefixStats(ctx, INCOMING_REF_INDEX, datasetName)
 	merge(o, stats.perPrefixStats(ctx, OUTGOING_REF_INDEX, datasetName))
@@ -64,8 +65,10 @@ func (stats Statistics) GetStatistics(writer io.Writer, ctx context.Context) err
 }
 
 func (stats Statistics) GetStatisticsForDs(datasetName string, writer io.Writer, ctx context.Context) error {
-	o := stats.perPrefixStats(ctx, INCOMING_REF_INDEX, datasetName)
-	merge(o, stats.perPrefixStats(ctx, OUTGOING_REF_INDEX, datasetName))
+	stats.Logger.Infof("gathering counts for dataset %v", datasetName)
+	o := map[string]any{}
+	//o := stats.perPrefixStats(ctx, INCOMING_REF_INDEX, datasetName)
+	//merge(o, stats.perPrefixStats(ctx, OUTGOING_REF_INDEX, datasetName))
 	//merge(o, stats.perPrefixStats(ctx, URI_TO_ID_INDEX_ID, datasetName))
 	merge(o, stats.perPrefixStats(ctx, ENTITY_ID_TO_JSON_INDEX_ID, datasetName))
 	merge(o, stats.perPrefixStats(ctx, DATASET_ENTITY_CHANGE_LOG, datasetName))
@@ -150,12 +153,17 @@ func (stats Statistics) perPrefixStats(ctx context.Context, pt uint16, datasetNa
 						continue
 					}
 
-					ds, _ := stats.Store.datasetsByInternalID.Load(dsId)
+					dsN := "_"
+					ds, ok := stats.Store.datasetsByInternalID.Load(dsId)
+					if ok {
+						dsN = (ds.(*Dataset)).ID
+					}
 					delStr := ""
 					if deleted == 1 {
 						delStr = "-deleted"
 					}
-					cntName = fmt.Sprintf("%v:%v%v", cntName, (ds.(*Dataset)).ID, delStr)
+
+					cntName = fmt.Sprintf("%v:%v%v", cntName, dsN, delStr)
 
 				} else {
 					dsId := uint32(0)
@@ -197,7 +205,7 @@ func (stats Statistics) perPrefixStats(ctx context.Context, pt uint16, datasetNa
 
 	s.Orchestrate(ctx)
 	out := map[string]any{}
-	for k := range counts {
+	for k, v := range counts {
 		main, idxName, ds := "_", "_", "_"
 		tokens := strings.Split(k, ":")
 		if len(tokens) == 3 {
@@ -224,10 +232,10 @@ func (stats Statistics) perPrefixStats(ctx context.Context, pt uint16, datasetNa
 			idxMap[ds] = dsMap
 		}
 
-		dsMap["keys"] = counts[k]
+		dsMap["keys"] = v
 		dsMap["total-value-size"] = ByteCountIEC(valueSizes[k])
 		dsMap["total-key-size"] = ByteCountIEC(keySizes[k])
-		dsMap["avg-value-size"] = ByteCountIEC(valueSizes[k] / counts[k])
+		dsMap["avg-value-size"] = ByteCountIEC(valueSizes[k] / v)
 
 	}
 
