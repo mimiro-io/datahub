@@ -115,7 +115,9 @@ func (stats Statistics) perPrefixStats(ctx context.Context, pt uint16, datasetNa
 		binary.BigEndian.PutUint32(prefix[2:], dsFilter)
 	}
 	if dsFilter != 0 && pt == ENTITY_ID_TO_JSON_INDEX_ID {
+		prefix = make([]byte, 6)
 		binary.BigEndian.PutUint16(prefix, DATASET_ENTITY_CHANGE_LOG)
+		binary.BigEndian.PutUint32(prefix[2:], dsFilter)
 	}
 	s := stats.Store.database.NewStream()
 	s.Prefix = prefix
