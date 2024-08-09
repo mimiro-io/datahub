@@ -1,15 +1,19 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/ristretto/z"
 	"go.uber.org/zap"
 	"io"
 	"strings"
+	"sync"
+	"time"
 )
 
 const (
@@ -39,13 +43,33 @@ type Statistics struct {
 	Logger *zap.SugaredLogger
 }
 
+type keepAliveRoutine struct {
+	ticker *time.Ticker
+}
+
+func (k *keepAliveRoutine) Close() error {
+	k.ticker.Stop()
+	return nil
+}
+
+func keepAlive(writer io.Writer) io.Closer {
+	ticker := time.NewTicker(240 * time.Second)
+	go func() {
+		for range ticker.C {
+			writer.Write([]byte(" "))
+		}
+	}()
+	return &keepAliveRoutine{ticker: ticker}
+}
+
 func (stats Statistics) GetStatistics(writer io.Writer, ctx context.Context) error {
+	defer keepAlive(writer).Close()
 	stats.Logger.Infof("gathering counts for all datasets")
 	datasetName := ""
 	o := stats.perPrefixStats(ctx, INCOMING_REF_INDEX, datasetName)
 	merge(o, stats.perPrefixStats(ctx, OUTGOING_REF_INDEX, datasetName))
 	merge(o, stats.perPrefixStats(ctx, URI_TO_ID_INDEX_ID, datasetName))
-	//merge(o, stats.perPrefixStats(ctx, ENTITY_ID_TO_JSON_INDEX_ID, datasetName))
+	merge(o, stats.perPrefixStats(ctx, ENTITY_ID_TO_JSON_INDEX_ID, datasetName))
 	merge(o, stats.perPrefixStats(ctx, DATASET_ENTITY_CHANGE_LOG, datasetName))
 	merge(o, stats.perPrefixStats(ctx, SYS_DATASETS_ID, datasetName))
 	merge(o, stats.perPrefixStats(ctx, SYS_JOBS_ID, datasetName))
@@ -65,10 +89,11 @@ func (stats Statistics) GetStatistics(writer io.Writer, ctx context.Context) err
 }
 
 func (stats Statistics) GetStatisticsForDs(datasetName string, writer io.Writer, ctx context.Context) error {
+	defer keepAlive(writer).Close()
 	stats.Logger.Infof("gathering counts for dataset %v", datasetName)
-	o := map[string]any{}
-	//o := stats.perPrefixStats(ctx, INCOMING_REF_INDEX, datasetName)
-	//merge(o, stats.perPrefixStats(ctx, OUTGOING_REF_INDEX, datasetName))
+	//o := map[string]any{}
+	o := stats.perPrefixStats(ctx, INCOMING_REF_INDEX, datasetName)
+	merge(o, stats.perPrefixStats(ctx, OUTGOING_REF_INDEX, datasetName))
 	//merge(o, stats.perPrefixStats(ctx, URI_TO_ID_INDEX_ID, datasetName))
 	merge(o, stats.perPrefixStats(ctx, ENTITY_ID_TO_JSON_INDEX_ID, datasetName))
 	merge(o, stats.perPrefixStats(ctx, DATASET_ENTITY_CHANGE_LOG, datasetName))
@@ -114,7 +139,9 @@ func (stats Statistics) perPrefixStats(ctx context.Context, pt uint16, datasetNa
 		binary.BigEndian.PutUint16(prefix, pt)
 		binary.BigEndian.PutUint32(prefix[2:], dsFilter)
 	}
-	if dsFilter != 0 && pt == ENTITY_ID_TO_JSON_INDEX_ID {
+
+	jsonViaChanges := false
+	if jsonViaChanges && dsFilter != 0 && pt == ENTITY_ID_TO_JSON_INDEX_ID {
 		prefix = make([]byte, 6)
 		binary.BigEndian.PutUint16(prefix, DATASET_ENTITY_CHANGE_LOG)
 		binary.BigEndian.PutUint32(prefix[2:], dsFilter)
@@ -126,96 +153,108 @@ func (stats Statistics) perPrefixStats(ctx context.Context, pt uint16, datasetNa
 	counts := map[string]int64{}
 	keySizes := map[string]int64{}
 	valueSizes := map[string]int64{}
+	mapLock := sync.RWMutex{}
+	jsonKey := make([]byte, 4)
+	txn := stats.Store.database.NewTransaction(false)
+	defer txn.Discard()
+	s.KeyToList = func(key []byte, itr *badger.Iterator) (*pb.KVList, error) {
+		item := itr.Item()
+		k := item.Key()
+		valSize := item.ValueSize()
+		if jsonViaChanges && dsFilter != 0 && pt == ENTITY_ID_TO_JSON_INDEX_ID {
+			jk, err := item.ValueCopy(jsonKey)
+			if err != nil {
+				return nil, err
+			}
+			jsonItem, err := txn.Get(jk)
+			if err != nil {
+				return nil, err
+			}
+			k = jsonItem.Key()
+			valSize = jsonItem.ValueSize()
+		}
+
+		kv := &pb.KV{
+			//Key: y.Copy(k),
+			Key:   k,
+			Value: binary.BigEndian.AppendUint64(nil, uint64(valSize)),
+		}
+		return &pb.KVList{
+			Kv: []*pb.KV{kv},
+		}, nil
+	}
+	dsFilterBytes := make([]byte, 4)
+	empty := []byte{0, 0, 0, 0}
+	binary.BigEndian.PutUint32(dsFilterBytes, dsFilter)
 	s.Send = func(buf *z.Buffer) error {
+		mapLock.Lock()
+		defer mapLock.Unlock()
 		list, err := badger.BufferToKVList(buf)
 		if err != nil {
 			return err
 		}
-		stats.Store.database.View(func(txn *badger.Txn) error {
-			for _, kv := range list.Kv {
-				if kv.StreamDone {
-					return nil
-				}
-				// fmt.Printf("%+v\n\n", kv)
-				idx := kv.Key[:2]
-				idxNum := binary.BigEndian.Uint16(idx)
-				if pt == ENTITY_ID_TO_JSON_INDEX_ID {
-					idxNum = ENTITY_ID_TO_JSON_INDEX_ID
-				}
-				cntName := idxToStr(idxNum)
-				if cntName == "other" {
-					stats.Logger.Infof("Unknown index: %v", idxNum)
-				}
-
-				if pt == INCOMING_REF_INDEX || pt == OUTGOING_REF_INDEX {
-					deleted := binary.BigEndian.Uint16(kv.Key[34:36])
-					dsId := binary.BigEndian.Uint32(kv.Key[36:])
-
-					if dsFilter != 0 && dsFilter != dsId {
-						continue
-					}
-
-					dsN := "_"
-					ds, ok := stats.Store.datasetsByInternalID.Load(dsId)
-					if ok {
-						dsN = (ds.(*Dataset)).ID
-					}
-					delStr := ""
-					if deleted == 1 {
-						delStr = "-deleted"
-					}
-
-					cntName = fmt.Sprintf("%v:%v%v", cntName, dsN, delStr)
-
-				} else {
-					dsId := uint32(0)
-					if pt == DATASET_ENTITY_CHANGE_LOG || pt == DATASET_LATEST_ENTITIES {
-						dsId = binary.BigEndian.Uint32(kv.Key[2:6])
-					}
-					if pt == ENTITY_ID_TO_JSON_INDEX_ID {
-
-						item, err := txn.Get(kv.Value)
-						if err != nil {
-							return err
-						}
-						item.Value(func(val []byte) error {
-							kv.Key = kv.Value
-							kv.Value = val
-							return nil
-						})
-						dsId = binary.BigEndian.Uint32(kv.Key[10:14])
-					}
-
-					if dsFilter != 0 && dsId != 0 && dsFilter != dsId {
-						continue
-					}
-
-					ds, ok := stats.Store.datasetsByInternalID.Load(dsId)
-					if ok {
-						cntName = fmt.Sprintf("%v:%v", cntName, (ds.(*Dataset)).ID)
-					}
-				}
-
-				counts[cntName] += 1
-				keySizes[cntName] += int64(len(kv.Key))
-				valueSizes[cntName] += int64(len(kv.Value))
+		for _, kv := range list.Kv {
+			cntKey := make([]byte, 8)
+			if kv.StreamDone {
+				return nil
 			}
-			return nil
-		})
+			idx := kv.Key[:2]
+			copy(cntKey[0:2], idx)
+
+			if pt == INCOMING_REF_INDEX || pt == OUTGOING_REF_INDEX {
+				dsBytes := kv.Key[36:40]
+
+				if dsFilter != 0 && !bytes.Equal(dsFilterBytes, dsBytes) {
+					continue
+				}
+				copy(cntKey[2:6], dsBytes)
+				copy(cntKey[6:8], kv.Key[34:36]) // deleted
+				//deleted := binary.BigEndian.Uint16(kv.Key[34:36])
+			} else {
+				if pt == DATASET_ENTITY_CHANGE_LOG || pt == DATASET_LATEST_ENTITIES {
+					copy(cntKey[2:6], kv.Key[2:6])
+				}
+				if pt == ENTITY_ID_TO_JSON_INDEX_ID {
+					copy(cntKey[2:6], kv.Key[10:14])
+				}
+
+				if dsFilter != 0 && !bytes.Equal(cntKey[2:6], empty) && !bytes.Equal(dsFilterBytes, cntKey[2:6]) {
+					continue
+				}
+			}
+
+			sKey := string(cntKey)
+			counts[sKey] += 1
+			keySizes[sKey] += int64(len(kv.Key))
+			valueSizes[sKey] += int64(binary.BigEndian.Uint64(kv.Value))
+		}
 		return err
 	}
 
 	s.Orchestrate(ctx)
+	mapLock.RLock()
+	defer mapLock.RUnlock()
 	out := map[string]any{}
-	for k, v := range counts {
-		main, idxName, ds := "_", "_", "_"
-		tokens := strings.Split(k, ":")
-		if len(tokens) == 3 {
-			main, idxName, ds = tokens[0], tokens[1], tokens[2]
-		} else if len(tokens) == 2 {
+	del := []byte{0, 1}
+	for kS, v := range counts {
+		k := []byte(kS)
+		idx := binary.BigEndian.Uint16(k[:2])
+		dsId := binary.BigEndian.Uint32(k[2:6])
+		ds := ""
+		if dsO, dsOK := stats.Store.datasetsByInternalID.Load(dsId); dsOK {
+			ds = dsO.(*Dataset).ID
+		}
+		if bytes.Equal(k[6:8], del) { //deleted
+			ds += " (deleted)"
+		}
+
+		catAndIdx := idxToStr(idx)
+		main, idxName := "_", "_"
+		tokens := strings.Split(catAndIdx, ":")
+		if len(tokens) == 2 {
 			main, idxName = tokens[0], tokens[1]
 		} else {
-			main = k
+			main = catAndIdx
 		}
 		o, _ := out[main].(map[string]any)
 		if o == nil {
@@ -235,12 +274,11 @@ func (stats Statistics) perPrefixStats(ctx context.Context, pt uint16, datasetNa
 		}
 
 		dsMap["keys"] = v
-		dsMap["total-value-size"] = ByteCountIEC(valueSizes[k])
-		dsMap["total-key-size"] = ByteCountIEC(keySizes[k])
-		dsMap["avg-value-size"] = ByteCountIEC(valueSizes[k] / v)
+		dsMap["total-value-size"] = ByteCountIEC(valueSizes[kS])
+		dsMap["total-key-size"] = ByteCountIEC(keySizes[kS])
+		dsMap["avg-value-size"] = ByteCountIEC(valueSizes[kS] / v)
 
 	}
-
 	return out
 }
 
