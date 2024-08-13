@@ -41,7 +41,8 @@ func NewGarbageCollector(store *Store, env *conf.Config) *GarbageCollector {
 		env:    env,
 	}
 
-	gc.Start(context.Background())
+	// this is now orchestrated from service/scheduler/scheduler.go
+	//gc.Start(context.Background())
 
 	return gc
 }
@@ -85,7 +86,7 @@ again:
 	if garbageCollector.isCancelled() {
 		return errors.New("gc cancelled")
 	}
-	err := garbageCollector.store.database.RunValueLogGC(0.5)
+	err := garbageCollector.store.database.RunValueLogGC(0.3) // 30% of the value log can be discarded
 	if err == nil {
 		goto again
 	}

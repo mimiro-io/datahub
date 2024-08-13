@@ -1540,7 +1540,7 @@ func (s *Store) GetObject(collection CollectionIndex, id string, obj interface{}
 
 	err := json.Unmarshal(data, obj)
 	if err != nil {
-		s.logger.Errorw("GetObject error: %", err.Error())
+		s.logger.Errorw("GetObject error: ", err.Error())
 		obj = nil
 		return err
 	}

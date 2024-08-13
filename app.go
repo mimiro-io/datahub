@@ -24,6 +24,7 @@ import (
 	"github.com/mimiro-io/datahub/internal/jobs"
 	"github.com/mimiro-io/datahub/internal/security"
 	"github.com/mimiro-io/datahub/internal/server"
+	"github.com/mimiro-io/datahub/internal/service/scheduler"
 	"github.com/mimiro-io/datahub/internal/web"
 	"go.uber.org/zap"
 	"os"
@@ -49,11 +50,13 @@ type DatahubInstance struct {
 	securityServiceCore *security.ServiceCore
 	gc                  *server.GarbageCollector
 	backup              *server.BackupManager
+	updater             *scheduler.Scheduler
 }
 
 func (dhi *DatahubInstance) Start() error {
 	dhi.logger.Info("Starting data hub instance")
 
+	dhi.updater.Start()
 	// start web server
 	go func() {
 		err := dhi.webService.Start(context.Background())
@@ -87,6 +90,7 @@ func (dhi *DatahubInstance) Stop(ctx context.Context) error {
 	dhi.logger.Info("Data hub stopping")
 	dhi.webService.Stop(ctx)
 	dhi.gc.Stop(ctx)
+	dhi.updater.Stop(ctx)
 	dhi.scheduler.Stop(ctx)
 	dhi.store.Close()
 
@@ -139,6 +143,11 @@ func NewDatahubInstance(config *conf.Config) (*DatahubInstance, error) {
 	}
 
 	dhi.gc = server.NewGarbageCollector(dhi.store, dhi.config)
+	dhi.updater = scheduler.NewScheduler(
+		dhi.logger,
+		dhi.gc,
+		server.NewBadgerAccess(dhi.store, dhi.dsManager),
+	)
 	// dhi.gc.Start(context.Background())
 
 	// web service config from dhi (ideally we pass through the dhi here or interface)
