@@ -76,6 +76,11 @@ func newSchedulableTask(taskId string, immediateRun bool, logger *zap.SugaredLog
 
 func (s *schedulableTask) Run() {
 	s.lock.Lock()
+	if s.state == TaskStateRunning {
+		s.logger.Infof("Task %s is already running", s.ID())
+		s.lock.Unlock()
+		return
+	}
 	s.state = TaskStateRunning
 	s.lock.Unlock()
 
