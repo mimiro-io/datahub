@@ -54,7 +54,9 @@ func NewStatisticsUpdater(logger *zap.SugaredLogger, store store.BadgerStore) sc
 		ctx, cancel := context.WithCancel(context.Background())
 		stats.cancel = cancel
 		defer func() {
-			stats.cancel()
+			if stats.cancel != nil {
+				stats.cancel()
+			}
 			stats.cancel = nil
 		}()
 		stats.Logger.Infof("gathering counts for all datasets")
