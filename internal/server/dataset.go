@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -350,8 +349,7 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 
 		var previousEntityIDBuffer []byte
 		var prevEntity *Entity
-		var prevJSONData []byte
-
+		//var prevJSONData []byte
 		if !isnew {
 			if previousEntityIDBufferValue, err2 := rtxn.Get(datasetEntitiesLatestVersionKey); err2 == nil {
 				previousEntityIDBuffer, err2 = previousEntityIDBufferValue.ValueCopy(nil)
@@ -362,23 +360,26 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 				if err2 != nil {
 					return newitems, err2
 				}
-				prevJSONData, err2 = prevJSONDataValue.ValueCopy(nil)
+
 				_ = ds.store.statsdClient.Count("ds.read.bytes", prevJSONDataValue.ValueSize(), tags, 1)
 				if err2 != nil {
 					return newitems, err2
 				}
 				prevEntity = &Entity{}
-				err2 = json.Unmarshal(prevJSONData, prevEntity)
+				err2 = prevJSONDataValue.Value(func(val []byte) error {
+					err = json.Unmarshal(val, prevEntity)
+					if err != nil {
+						return err
+					}
+					if IsEntityEqual(val, jsonData, prevEntity, e) {
+						isDifferent = false
+					}
+					return nil
+				})
 				if err2 != nil {
 					return newitems, err2
 				}
-			}
-			if prevEntity != nil {
-				if len(prevJSONData) == jsonLength &&
-					reflect.DeepEqual(prevEntity.References, e.References) &&
-					reflect.DeepEqual(prevEntity.Properties, e.Properties) {
-					isDifferent = false
-				}
+
 			}
 			if prevLocalJSON, found := localLatests[rid]; found {
 				prevLocalEntity := &Entity{}
@@ -387,11 +388,10 @@ func (ds *Dataset) StoreEntitiesWithTransaction(
 				if err != nil {
 					return newitems, err
 				}
-				if len(prevLocalJSON) == jsonLength &&
-					reflect.DeepEqual(prevLocalEntity.References, e.References) &&
-					reflect.DeepEqual(prevLocalEntity.Properties, e.Properties) {
+				if IsEntityEqual(prevLocalJSON, jsonData, prevLocalEntity, e) {
 					isDifferentLocally = false
 				}
+
 			} else {
 				isDifferentLocally = false
 			}
