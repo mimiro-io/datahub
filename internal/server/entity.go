@@ -280,9 +280,11 @@ func IsEntityEqual(prevJson []byte, thisJson []byte, prevEntity *Entity, thisEnt
 			return false
 		}
 		v1, t1 := toJsonValue(v)
-		v2, _ := toJsonValue(thisVal)
-		if t1.Kind() == reflect.Slice && !reflect.DeepEqual(v1, v2) {
-			return false
+		v2, t2 := toJsonValue(thisVal)
+		if t1.Kind() == reflect.Slice || t2.Kind() == reflect.Slice {
+			if !reflect.DeepEqual(v1, v2) {
+				return false
+			}
 		} else if v1 != v2 {
 			return false
 		}
@@ -293,8 +295,8 @@ func IsEntityEqual(prevJson []byte, thisJson []byte, prevEntity *Entity, thisEnt
 		if !ok {
 			return false
 		}
-		v2, _ := toJsonValue(thisVal)
-		if t1.Kind() == reflect.Slice || t1.Kind() == reflect.Map {
+		v2, t2 := toJsonValue(thisVal)
+		if t1.Kind() == reflect.Slice || t1.Kind() == reflect.Map || t2.Kind() == reflect.Slice || t2.Kind() == reflect.Map {
 			if !reflect.DeepEqual(v1, v2) {
 				return false
 			}
