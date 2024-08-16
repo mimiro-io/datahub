@@ -9,7 +9,7 @@ import (
 func RegisterStatisticsHandler(e *echo.Echo, logger *zap.SugaredLogger, mw *Middleware, store *server.Store) {
 	log := logger.Named("web")
 
-	statistics := &server.Statistics{store, logger.Named("statistics")}
+	statistics := &server.Statistics{Store: store, Logger: logger.Named("statistics")}
 
 	e.GET("/statistics", func(c echo.Context) error {
 		return statistics.GetStatistics(c.Response())

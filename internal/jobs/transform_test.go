@@ -16,6 +16,7 @@ package jobs
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"strings"
 
 	"github.com/DataDog/datadog-go/v5/statsd"
@@ -94,7 +95,20 @@ var _ = Describe("A Javascript transformation", func() {
 		r, err := transform.transformEntities(&Runner{statsdClient: &statsd.NoOpClient{}}, entities, "")
 		Expect(err).To(BeNil())
 		Expect(len(r)).To(Equal(1))
-		Expect(r[0].Properties["b:output"]).To(Equal(entities[0].Properties["a:input"]))
+
+		expected := server.NewEntityFromMap(map[string]any{
+			"id": "1",
+			"props": map[string]any{
+				"a:input":  float64(6708238),
+				"b:output": float64(6708238),
+			},
+			"refs": map[string]any{},
+		})
+
+		prevJson, _ := json.Marshal(r[0])
+		thisJson, _ := json.Marshal(expected)
+		Expect(server.IsEntityEqual(prevJson, thisJson, r[0], expected)).To(BeTrue())
+		//Expect(r[0].Properties["b:output"]).To(Equal(entities[0].Properties["a:input"]))
 	})
 	It("Should produce type compatible numbers in nested entities", func() {
 		js := ` function transform_entities(entities) {
@@ -122,8 +136,21 @@ var _ = Describe("A Javascript transformation", func() {
 		r, _ := transform.transformEntities(&Runner{statsdClient: &statsd.NoOpClient{}}, entities, "")
 		Expect(len(r)).To(Equal(1))
 		// t.Logf("%+v", r[0])
-		Expect(r[0].Properties["b:output"].(*server.Entity).
-			Properties["b:num"]).To(Equal(entities[0].Properties["a:input"]))
+		expected := server.NewEntityFromMap(map[string]any{
+			"id": "1",
+			"props": map[string]any{
+				"a:input": float64(6708238),
+			},
+			"refs": map[string]any{},
+		})
+
+		expected.Properties["b:output"] = &server.Entity{Properties: map[string]any{"b:num": float64(6708238)}, References: map[string]any{}}
+
+		prevJson, _ := json.Marshal(r[0])
+		thisJson, _ := json.Marshal(expected)
+		Expect(server.IsEntityEqual(prevJson, thisJson, r[0], expected)).To(BeTrue())
+		//Expect(r[0].Properties["b:output"].(*server.Entity).
+		//	Properties["b:num"]).To(Equal(entities[0].Properties["a:input"]))
 	})
 	It("Should produce type compatible numbers in value array properties", func() {
 		js := ` function transform_entities(entities) {
@@ -151,10 +178,26 @@ var _ = Describe("A Javascript transformation", func() {
 		Expect(err).To(BeNil())
 		Expect(len(r)).To(Equal(1))
 		// t.Logf("%+v", r[0])
-		Expect(r[0].Properties["b:output"]).To(Equal([]interface{}{
-			entities[0].Properties["a:input"],
-			entities[0].Properties["a:input"],
-		}))
+
+		expected := server.NewEntityFromMap(map[string]any{
+			"id": "1",
+			"props": map[string]any{
+				"a:input": float64(6708238),
+				"b:output": []interface{}{
+					float64(6708238),
+					float64(6708238),
+				},
+			},
+			"refs": map[string]any{},
+		})
+
+		prevJson, _ := json.Marshal(r[0])
+		thisJson, _ := json.Marshal(expected)
+		Expect(server.IsEntityEqual(prevJson, thisJson, r[0], expected)).To(BeTrue())
+		//Expect(r[0].Properties["b:output"]).To(Equal([]interface{}{
+		//	entities[0].Properties["a:input"],
+		//	entities[0].Properties["a:input"],
+		//}))
 	})
 })
 

@@ -591,16 +591,16 @@ func (javascriptTransform *JavascriptTransform) transformEntities(
 		resultEntities = make([]*server.Entity, 0)
 		for _, e := range v {
 			if entity, ok := e.(*server.Entity); ok {
-				typeFix(entity)
+				//typeFix(entity)
 				resultEntities = append(resultEntities, entity)
 			} else {
 				return nil, fmt.Errorf("transform emitted invalid entity: %v", e)
 			}
 		}
 	case []*server.Entity:
-		for _, entity := range v {
-			typeFix(entity)
-		}
+		//for _, entity := range v {
+		//	typeFix(entity)
+		//}
 
 		resultEntities = v
 	default:
