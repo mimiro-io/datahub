@@ -223,6 +223,32 @@ var _ = ginkgo.Describe("the IsEntityEqual function",
 			})
 			Expect(IsEntityEqual(prevEntityJson, newEntityJson, prevEntity, newEntity)).To(BeFalse())
 		})
+		ginkgo.It("Should return true: nil values", func() {
+			newEntity, prevEntity, newEntityJson, prevEntityJson := newEntities(func(newEntity *Entity, prevEntity *Entity) {
+				prevEntity.Properties["ns0:prop1"] = nil
+				newEntity.Properties["ns0:prop1"] = nil
+			})
+			Expect(IsEntityEqual(prevEntityJson, newEntityJson, prevEntity, newEntity)).To(BeTrue())
+			newEntity, prevEntity, newEntityJson, prevEntityJson = newEntities(func(newEntity *Entity, prevEntity *Entity) {
+				prevEntity.Properties["ns0:prop1"] = []any{nil}
+				newEntity.Properties["ns0:prop1"] = []any{nil}
+			})
+			Expect(IsEntityEqual(prevEntityJson, newEntityJson, prevEntity, newEntity)).To(BeTrue())
+		})
+		ginkgo.It("Should return false: nil to int", func() {
+			newEntity, prevEntity, newEntityJson, prevEntityJson := newEntities(func(newEntity *Entity, prevEntity *Entity) {
+				prevEntity.Properties["ns0:prop1"] = nil
+				newEntity.Properties["ns0:prop1"] = 8
+			})
+			Expect(IsEntityEqual(prevEntityJson, newEntityJson, prevEntity, newEntity)).To(BeFalse())
+		})
+		ginkgo.It("Should return false: int to nil", func() {
+			newEntity, prevEntity, newEntityJson, prevEntityJson := newEntities(func(newEntity *Entity, prevEntity *Entity) {
+				prevEntity.Properties["ns0:prop1"] = 8
+				newEntity.Properties["ns0:prop1"] = nil
+			})
+			Expect(IsEntityEqual(prevEntityJson, newEntityJson, prevEntity, newEntity)).To(BeFalse())
+		})
 	})
 
 func BenchmarkIsEntityEqual(b *testing.B) {
