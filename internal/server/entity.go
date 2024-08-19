@@ -264,7 +264,10 @@ func toJsonValue(value any) (any, reflect.Type) {
 	case []map[string]any:
 		return v, vt.Type()
 	default:
-		return v, vt.Type()
+		if vt.IsValid() {
+			return v, vt.Type()
+		}
+		return v, reflect.TypeOf(0)
 	}
 }
 func IsEntityEqual(prevJson []byte, thisJson []byte, prevEntity *Entity, thisEntity *Entity) bool {
