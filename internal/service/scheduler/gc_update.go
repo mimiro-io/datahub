@@ -1,13 +1,14 @@
 package scheduler
 
 import (
+	"context"
 	"github.com/mimiro-io/datahub/internal/server"
 	"go.uber.org/zap"
 	"time"
 )
 
 func NewGCUpdate(logger *zap.SugaredLogger, gc *server.GarbageCollector) schedulable {
-	return newSchedulableTask("scheduled_gc", true, logger, func() RunResult {
+	t := newSchedulableTask("scheduled_gc", true, logger, func() RunResult {
 		ts := time.Now()
 		var err error
 		logger.Info("Starting to clean deleted datasets")
@@ -28,4 +29,9 @@ func NewGCUpdate(logger *zap.SugaredLogger, gc *server.GarbageCollector) schedul
 		logger.Infof("Finished badger gc after %v", time.Since(ts).Round(time.Millisecond))
 		return RunResult{state: RunResultSuccess, timestame: time.Now()}
 	})
+	t.OnStop = func(ctx context.Context) error {
+		logger.Info("Stopping garbage collector")
+		return gc.Stop(ctx)
+	}
+	return t
 }

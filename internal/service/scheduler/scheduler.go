@@ -40,8 +40,8 @@ func (s *Scheduler) Stop(ctx context.Context) {
 	s.cron.Stop()
 	for _, task := range s.cron.Entries() {
 		wg := sync.WaitGroup{}
+		wg.Add(1)
 		go func() {
-			wg.Add(1)
 			defer wg.Done()
 			task.Job.(schedulable).Stop(ctx)
 		}()
