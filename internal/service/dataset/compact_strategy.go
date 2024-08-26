@@ -32,7 +32,7 @@ type CompactionStrategy interface {
 	//
 	// if to be deleted... delete 5 key types for each change version:
 	// 1. json entry key
-	// 2. latestVersion key
+	// 2. NOT latestVersion key, but need to re-assign if we delete the latest version
 	// 3. incoming ref key
 	// 4. outgoing ref key
 	// 5. entity change log key

@@ -2,14 +2,17 @@ package dataset
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/dgraph-io/badger/v4"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/server"
 	"github.com/mimiro-io/datahub/internal/service/entity"
 	"github.com/mimiro-io/datahub/internal/service/store"
+	"github.com/mimiro-io/datahub/internal/service/types"
 	"go.uber.org/zap"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,7 +44,14 @@ func TestCompact(t *testing.T) {
 	// entities is a list of arrays where the first element
 	// is the entity id and the second is the deleted state.
 	// e.g. ["1", false] is an entity with id "1" and not deleted.
-	mkDs := func(name string, store *server.Store, entities ...[]any) {
+	// optionally, a third element can be added to specify properties
+	//	e.g. ["1", false, map[string]interface{}{"name": "John Doe"}]
+	//  or ["1", false, `{"name": "John Doe"}`]
+	// and a fourth element can be added to specify references.
+	// 	e.g. ["1", false, `{"name": "John Doe"}`, `{"ref1": "2"}`]
+	// or ["1", false, nil, map[string]interface{}{"ref1": "2"}]
+	mkDs := func(t *testing.T, name string, store *server.Store, entities ...[]any) {
+		t.Helper()
 		ds, _ := dsm.CreateDataset(name, nil)
 		pref, err := store.NamespaceManager.AssertPrefixMappingForExpansion("http://ns/")
 		if err != nil {
@@ -52,6 +62,30 @@ func TestCompact(t *testing.T) {
 			entity := server.NewEntity(strings.ReplaceAll(e[0].(string), "http://ns/", pref+":"), 0)
 			if len(e) > 1 {
 				entity.IsDeleted = e[1].(bool)
+			}
+			if len(e) > 2 && e[2] != nil {
+				if props, ok := e[2].(map[string]interface{}); ok {
+					entity.Properties = props
+				} else {
+					props := make(map[string]interface{})
+					err := json.Unmarshal([]byte(e[2].(string)), &props)
+					if err != nil {
+						t.Fatalf("error unmarshalling properties: %v", err)
+					}
+					entity.Properties = props
+				}
+			}
+			if len(e) > 3 && e[3] != nil {
+				if refs, ok := e[3].(map[string]interface{}); ok {
+					entity.References = refs
+				} else {
+					refs := make(map[string]interface{})
+					err := json.Unmarshal([]byte(e[3].(string)), &refs)
+					if err != nil {
+						t.Fatalf("error unmarshalling references: %v", err)
+					}
+					entity.References = refs
+				}
 			}
 			ents = append(ents, entity)
 		}
@@ -72,52 +106,68 @@ func TestCompact(t *testing.T) {
 			t.Fatalf("expected %d entities, got %d", len(expected), len(ents.Entities))
 		}
 		for i, e := range ents.Entities {
-			if e.ID != expected[i].([]any)[0] {
-				t.Errorf("expected entity id %s, got %s", expected[i].([]any)[0], e.ID)
+			// exp is an array with the elements [id, deleted, props, refs]. only id is mandatory
+			exp := expected[i].([]any)
+			if e.ID != exp[0] {
+				t.Errorf("expected entity id %s, got %s", exp[0], e.ID)
 			}
-			if e.IsDeleted != expected[i].([]any)[1] {
+			del := false
+			if len(exp) > 1 {
+				del = exp[1].(bool)
+			}
+			if e.IsDeleted != del {
 				t.Errorf("expected entity id %s to be deleted=%t, got deleted=%t",
-					expected[i].([]any)[0], expected[i].([]any)[1], e.IsDeleted)
+					exp[0], exp[1], e.IsDeleted)
+			}
+			if len(exp) > 2 {
+				refs := make(map[string]interface{})
+				err = json.Unmarshal([]byte(exp[2].(string)), &refs)
+				if err != nil {
+					t.Fatalf("error unmarshalling references: %v", err)
+				}
+				if !reflect.DeepEqual(e.References, refs) {
+					t.Errorf("expected references %v, got %v", refs, e.References)
+				}
 			}
 		}
 	}
 	t.Run("using DeduplicationStrategy", func(t *testing.T) {
 		t.Run("empty dataset", func(t *testing.T) {
 			defer setup()()
-			mkDs("people", store)
+			mkDs(t, "people", store)
 			Compact(ba, "people", DeduplicationStrategy)
 			checkChanges(t, store, "people", []any{})
 		})
 		t.Run("single changes dataset", func(t *testing.T) {
 			defer setup()()
-			mkDs("people", store,
-				[]any{"1", false},
+			mkDs(t, "people", store,
+				[]any{"1"},
 				[]any{"2", true},
-				[]any{"3", false})
+				[]any{"3"})
 			if err := Compact(ba, "people", DeduplicationStrategy); err != nil {
 				t.Fatalf("error compacting dataset: %v", err)
 			}
 			checkChanges(t, store, "people", []any{
-				[]any{"1", false},
+				[]any{"1"},
 				[]any{"2", true},
-				[]any{"3", false},
+				[]any{"3"},
 			})
 		})
-		t.Run("one complete entity dup", func(t *testing.T) {
+		t.Run("one entity duplicate", func(t *testing.T) {
 			defer setup()()
 			// create a dataset with 3 entities
-			mkDs("people", store,
-				[]any{"http://ns/1", false},
+			mkDs(t, "people", store,
+				[]any{"http://ns/1"},
 				[]any{"http://ns/2", true},
-				[]any{"http://ns/3", false})
+				[]any{"http://ns/3"})
 			// "hack" a duplicate entity into the dataset
-			dupEnt("people", "http://ns/1", ba, store, dsm, t)
+			duplicateEntityChange("people", "http://ns/1", ba, store, dsm, t)
 			// verify that the duplicate is present
 			checkChanges(t, store, "people", []any{
-				[]any{"ns3:1", false},
+				[]any{"ns3:1"},
 				[]any{"ns3:2", true},
-				[]any{"ns3:3", false},
-				[]any{"ns3:1", false},
+				[]any{"ns3:3"},
+				[]any{"ns3:1"},
 			})
 
 			// Now do the compaction
@@ -127,15 +177,188 @@ func TestCompact(t *testing.T) {
 
 			// verify that the duplicate is gone
 			checkChanges(t, store, "people", []any{
-				[]any{"ns3:1", false},
+				[]any{"ns3:1"},
 				[]any{"ns3:2", true},
-				[]any{"ns3:3", false},
+				[]any{"ns3:3"},
+			})
+		})
+		t.Run("many entity duplicates", func(t *testing.T) {
+			defer setup()()
+			// create a dataset with 3 entities
+			mkDs(t, "people", store,
+				[]any{"http://ns/1"},
+				[]any{"http://ns/2", true},
+				[]any{"http://ns/3"})
+			// "hack" a duplicate entity into the dataset
+			duplicateEntityChange("people", "http://ns/1", ba, store, dsm, t)
+			duplicateEntityChange("people", "http://ns/1", ba, store, dsm, t)
+			duplicateEntityChange("people", "http://ns/1", ba, store, dsm, t)
+			duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
+			duplicateEntityChange("people", "http://ns/1", ba, store, dsm, t)
+			duplicateEntityChange("people", "http://ns/1", ba, store, dsm, t)
+			duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
+			duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
+			duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
+			duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
+			duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
+			duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
+			duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
+
+			// Now do the compaction
+			if err := Compact(ba, "people", DeduplicationStrategy); err != nil {
+				t.Fatalf("error compacting dataset: %v", err)
+			}
+
+			// verify that the duplicate is gone
+			checkChanges(t, store, "people", []any{
+				[]any{"ns3:1"},
+				[]any{"ns3:2", true},
+				[]any{"ns3:3"},
+			})
+		})
+		t.Run("with duplicate ref in many versions", func(t *testing.T) {
+			t.Run("stored in different batches", func(t *testing.T) {
+				defer setup()()
+				// create a dataset with 3 entities
+				mkDs(t, "people", store,
+					[]any{"http://ns/1", false, nil, `{"ns3:ref1": "ns3:2"}`},
+					[]any{"http://ns/2", true},
+					[]any{"http://ns/3", false})
+				time.Sleep(1 * time.Millisecond) // make sure the txTime is different
+				mkDs(t, "people", store,
+					[]any{"http://ns/1", false, `{"p": "a"}`, `{"ns3:ref1": "ns3:2"}`},
+				)
+				time.Sleep(1 * time.Millisecond) // make sure the txTime is different
+				mkDs(t, "people", store,
+					[]any{"http://ns/1", false, `{"p": "b"}`, `{"ns3:ref1": "ns3:2"}`},
+				)
+
+				// verify that the duplicate is present
+				checkChanges(t, store, "people", []any{
+					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
+					[]any{"ns3:2", true},
+					[]any{"ns3:3", false},
+					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
+					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
+				})
+				if rcOut, rcIn := refCount(t, store, ba, "ns3:1", "ns3:ref1"); rcOut != 3 || rcIn != 3 {
+					t.Fatalf("expected 3 ref out and 3 ref in, got %d and %d", rcOut, rcIn)
+				}
+
+				// Now do the compaction
+				if err := Compact(ba, "people", DeduplicationStrategy); err != nil {
+					t.Fatalf("error compacting dataset: %v", err)
+				}
+
+				// verify that the duplicate is gone
+				checkChanges(t, store, "people", []any{
+					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
+					[]any{"ns3:2", true},
+					[]any{"ns3:3", false},
+					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
+					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
+				})
+
+				// in this case, all reference duplicates were in the same batch, therefore they have the same key (sam txTime).
+				if rcOut, rcIn := refCount(t, store, ba, "ns3:1", "ns3:ref1"); rcOut != 1 || rcIn != 1 {
+					t.Fatalf("expected 1 ref out and 1 ref in, got %d and %d", rcOut, rcIn)
+				}
+			})
+			t.Run("stored in same batch", func(t *testing.T) {
+				defer setup()()
+				// create a dataset with 3 entities
+				mkDs(t, "people", store,
+					[]any{"http://ns/1", false, nil, `{"ns3:ref1": "ns3:2"}`},
+					[]any{"http://ns/2", true},
+					[]any{"http://ns/1", false, `{"p": "a"}`, `{"ns3:ref1": "ns3:2"}`},
+					[]any{"http://ns/1", false, `{"p": "b"}`, `{"ns3:ref1": "ns3:2"}`},
+					[]any{"http://ns/3", false})
+
+				// verify that the duplicate is present
+				checkChanges(t, store, "people", []any{
+					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
+					[]any{"ns3:2", true},
+					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
+					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
+					[]any{"ns3:3", false},
+				})
+				if rcOut, rcIn := refCount(t, store, ba, "ns3:1", "ns3:ref1"); rcOut != 1 || rcIn != 1 {
+					t.Fatalf("expected 1 ref out and 1 ref in, got %d and %d", rcOut, rcIn)
+				}
+
+				// Now do the compaction
+				if err := Compact(ba, "people", DeduplicationStrategy); err != nil {
+					t.Fatalf("error compacting dataset: %v", err)
+				}
+
+				// verify that the duplicate is gone
+				checkChanges(t, store, "people", []any{
+					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
+					[]any{"ns3:2", true},
+					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
+					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
+					[]any{"ns3:3", false},
+				})
+
+				// in this case, all reference duplicates were in the same batch, therefore they have the same key (sam txTime).
+				if rcOut, rcIn := refCount(t, store, ba, "ns3:1", "ns3:ref1"); rcOut != 1 || rcIn != 1 {
+					t.Fatalf("expected 1 ref out and 1 ref in, got %d and %d", rcOut, rcIn)
+				}
 			})
 		})
 	})
 }
 
-func dupEnt(dataset string, entityID string, ba store.BadgerStore, store *server.Store, dsm *server.DsManager, t *testing.T) {
+func refCount(t *testing.T, s *server.Store, ba server.BadgerAccess, entityID string, predicate string) (int, int) {
+	t.Helper()
+	cntOut := 0
+	cntIn := 0
+	err := ba.GetDB().View(func(txn *badger.Txn) error {
+		pid, err := s.GetPredicateID(predicate, txn)
+		if err != nil {
+			t.Fatalf("error getting predicate id: %v", err)
+		}
+		internalEntityId, err := entity.Lookup{}.InternalIDForCURIE(txn, types.CURIE(entityID))
+		searchBuffer := make([]byte, 10)
+		binary.BigEndian.PutUint16(searchBuffer, server.OutgoingRefIndex)
+		binary.BigEndian.PutUint64(searchBuffer[2:], uint64(internalEntityId))
+		opts := badger.DefaultIteratorOptions
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		for it.Seek(searchBuffer); it.ValidForPrefix(searchBuffer); it.Next() {
+			k := it.Item().Key()
+			if binary.BigEndian.Uint64(k[18:26]) == pid {
+				cntOut++
+			}
+		}
+
+		searchBuffer = make([]byte, 2)
+		binary.BigEndian.PutUint16(searchBuffer, server.IncomingRefIndex)
+		it = txn.NewIterator(opts)
+		defer it.Close()
+		for it.Seek(searchBuffer); it.ValidForPrefix(searchBuffer); it.Next() {
+			k := it.Item().Key()
+			if binary.BigEndian.Uint64(k[26:34]) == pid && binary.BigEndian.Uint64(k[10:18]) == uint64(internalEntityId) {
+				cntIn++
+			}
+		}
+
+		// 0:2: incoming ref index, uint16
+		// 2:10: other entity id, uint64
+		// 10:18: this entity id, uint64
+		// 18:26: txn time, uint64
+		// 26:34: predicate, uint64
+		// 34:36: is deleted, uint16
+		// 36:40: dataset id, uint32
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("error getting predicate id: %v", err)
+	}
+	return cntOut, cntIn
+}
+
+func duplicateEntityChange(dataset string, entityID string, ba store.BadgerStore, store *server.Store, dsm *server.DsManager, t *testing.T) {
 	t.Helper()
 
 	ent, err := store.GetEntity(entityID, []string{dataset}, true)
@@ -206,5 +429,4 @@ func dupEnt(dataset string, entityID string, ba store.BadgerStore, store *server
 		return nil
 	})
 	wg.Wait()
-	time.Sleep(500 * time.Millisecond)
 }

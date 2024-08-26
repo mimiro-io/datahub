@@ -47,12 +47,10 @@ func (d *deduplicationStrategy) eval(
 		}
 
 		// 3.delete change log entry (need to iterate over all change versions, match value with json key)
-
 		del = append(del, d.findChangeLogKey(jsonKey, txn))
 		//
 		// 4.delete outgoing references
 		// 5.delete incoming references
-
 		refs, err := findRefs(e, jsonKey, txn, d.lookup)
 		if err != nil {
 			return nil, err
@@ -63,11 +61,23 @@ func (d *deduplicationStrategy) eval(
 		for k, stringOrArrayValue := range e.References {
 			if reflect.DeepEqual(d.prev.References[k], stringOrArrayValue) {
 				// reference is identical to previous version, so we can delete the current reference
+
+				// calculate the references to delete
 				refsToDel, err := processRefs(e, jsonKey, txn, d.lookup, stringOrArrayValue, k)
 				if err != nil {
 					return nil, err
 				}
-				del = append(del, refsToDel...)
+
+				// also calculate the references to delete for the previous version, for extra safety check
+				refsToDelPrev, err := processRefs(d.prev, d.prevJsonKey, txn, d.lookup, stringOrArrayValue, k)
+				if err != nil {
+					return nil, err
+				}
+				// only delete if the references have different txn times (they are not identical).
+				// if they are identical, they were stored in the same batch and there is only one ref key, we must keep it
+				if !reflect.DeepEqual(refsToDel, refsToDelPrev) {
+					del = append(del, refsToDel...)
+				}
 			}
 		}
 	}
