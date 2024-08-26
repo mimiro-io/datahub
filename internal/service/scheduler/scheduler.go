@@ -36,6 +36,9 @@ func (s *Scheduler) Start() error {
 }
 
 func (s *Scheduler) Stop(ctx context.Context) {
+	if s.stopped {
+		return
+	}
 	s.stopped = true
 	s.cron.Stop()
 	for _, task := range s.cron.Entries() {

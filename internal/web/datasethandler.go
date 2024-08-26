@@ -73,6 +73,8 @@ func RegisterDatasetHandler(
 	e.PATCH("/datasets/:dataset", handler.datasetUpdate, mw.authorizer(log, datahubWrite))
 	e.DELETE("/datasets/:dataset", handler.deleteDatasetHandler, mw.authorizer(log, datahubWrite))
 	e.DELETE("/datasets", handler.deleteAllDatasets, mw.authorizer(log, datahubWrite))
+
+	e.POST("/datasets/:dataset/compact", handler.datasetCompact, mw.authorizer(log, datahubWrite))
 }
 
 // datasetList
@@ -863,6 +865,20 @@ func (handler *datasetHandler) processEntities(
 	handler.eventBus.Emit(ctx, "dataset.core.Dataset", nil)
 
 	return c.NoContent(http.StatusOK)
+}
+
+func (handler *datasetHandler) datasetCompact(c echo.Context) error {
+	store := server.NewBadgerAccess(handler.store, handler.datasetManager)
+	dsID := c.Param("dataset")
+	if _, ok := store.LookupDatasetID(dsID); ok {
+		err := ds.Compact(store, dsID, ds.DeduplicationStrategy)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, errors.New("boink").Error())
+		}
+
+		return c.NoContent(http.StatusOK)
+	}
+	return echo.NewHTTPError(http.StatusNotFound, "dataset not found")
 }
 
 func decodeSince(since string) (types.DatasetOffset, error) {
