@@ -65,7 +65,7 @@ func (l Lookup) Details(id string, datasetNames []string) (map[string]interface{
 
 	rtxn := b.NewTransaction(false)
 	defer rtxn.Discard()
-	internalID, err := l.internalIDForCURIE(rtxn, curie)
+	internalID, err := l.InternalIDForCURIE(rtxn, curie)
 	if err != nil {
 		return nil, err
 	}

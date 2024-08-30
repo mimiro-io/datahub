@@ -44,7 +44,7 @@ func (l Lookup) asCURIE(id string) (types.CURIE, error) {
 	return "", fmt.Errorf("input %v is neither in CURIE format (prefix:value) nor a URI", id)
 }
 
-func (l Lookup) internalIDForCURIE(txn *badger.Txn, curie types.CURIE) (types.InternalID, error) {
+func (l Lookup) InternalIDForCURIE(txn *badger.Txn, curie types.CURIE) (types.InternalID, error) {
 	var rid uint64
 
 	// check if it exists already uri => id

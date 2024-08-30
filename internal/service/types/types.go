@@ -15,6 +15,7 @@
 package types
 
 type (
+	DatasetID         string
 	URI               string
 	CURIE             string
 	Prefix            string

@@ -89,7 +89,6 @@ func Run(env *conf.Config) {
 func (dhi *DatahubInstance) Stop(ctx context.Context) error {
 	dhi.logger.Info("Data hub stopping")
 	dhi.webService.Stop(ctx)
-	dhi.gc.Stop(ctx)
 	dhi.updater.Stop(ctx)
 	dhi.scheduler.Stop(ctx)
 	dhi.store.Close()

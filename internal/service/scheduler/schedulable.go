@@ -93,6 +93,10 @@ func (s *schedulableTask) Run() {
 		}()
 		res := s.run()
 		//TODO: store result in history
-		s.logger.Infof("Task %s completed with state %s in %s. Next run %v", s.ID(), res.state, time.Since(ts), s.sched.Next(time.Now()))
+		if s.sched != nil {
+			s.logger.Infof("Task %s completed with state %s in %s. Next run %v", s.ID(), res.state, time.Since(ts), s.sched.Next(time.Now()))
+		} else {
+			s.logger.Infof("Task %s completed with state %s in %s", s.ID(), res.state, time.Since(ts))
+		}
 	}()
 }

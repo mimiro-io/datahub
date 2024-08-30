@@ -127,6 +127,7 @@ func NewWebService(serviceContext *ServiceContext) (*WebService, error) {
 	RegisterProviderHandler(e, logger, mw, serviceContext.TokenProviders)
 	RegisterSecurityHandler(e, logger, mw, serviceContext.SecurityCore)
 	RegisterStatisticsHandler(e, logger, mw, store)
+	RegisterCompactionHandler(e, logger, mw, serviceContext.DatasetManager, store)
 	return webService, nil
 }
 

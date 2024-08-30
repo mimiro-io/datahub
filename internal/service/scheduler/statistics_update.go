@@ -44,6 +44,7 @@ func NewStatisticsUpdater(logger *zap.SugaredLogger, store store.BadgerStore) sc
 	stats := &Statistics{
 		badger: store,
 		Logger: logger,
+		done:   make(chan bool),
 	}
 
 	statsKey := make([]byte, 2)
@@ -52,7 +53,10 @@ func NewStatisticsUpdater(logger *zap.SugaredLogger, store store.BadgerStore) sc
 
 	t := newSchedulableTask("scheduled_stats_update", true, logger, func() RunResult {
 		ctx, cancel := context.WithCancel(context.Background())
-		stats.cancel = cancel
+		stats.cancel = func() {
+			cancel()
+			<-stats.done
+		}
 		defer func() {
 			if stats.cancel != nil {
 				stats.cancel()
@@ -60,7 +64,7 @@ func NewStatisticsUpdater(logger *zap.SugaredLogger, store store.BadgerStore) sc
 			stats.cancel = nil
 		}()
 		stats.Logger.Infof("gathering counts for all datasets")
-		o := stats.count(ctx)
+		o := stats.Count(ctx)
 		statBytes, err := json.Marshal(o)
 		if err != nil {
 			logger.Errorf("failed to marshal statistics: %v", err)
@@ -80,8 +84,7 @@ func NewStatisticsUpdater(logger *zap.SugaredLogger, store store.BadgerStore) sc
 
 	t.OnStop = func(ctx context.Context) error {
 		logger.Info("Stopping statistics updater")
-		return stats.Stop(ctx)
-
+		return fmt.Errorf("statistics updater stopped: %w", stats.Stop(ctx))
 	}
 	return t
 }
@@ -90,9 +93,10 @@ type Statistics struct {
 	badger store.BadgerStore
 	Logger *zap.SugaredLogger
 	cancel context.CancelFunc
+	done   chan bool
 }
 
-func (stats *Statistics) count(ctx context.Context) map[string]any {
+func (stats *Statistics) Count(ctx context.Context) map[string]any {
 	s := stats.badger.GetDB().NewStream()
 	//s.NumGo = 16
 	counts := map[string]int64{}
@@ -101,8 +105,12 @@ func (stats *Statistics) count(ctx context.Context) map[string]any {
 	mapLock := sync.RWMutex{}
 	txn := stats.badger.GetDB().NewTransaction(false)
 	defer txn.Discard()
+
 	s.KeyToList = func(key []byte, itr *badger.Iterator) (*pb.KVList, error) {
 		item := itr.Item()
+		if item.IsDeletedOrExpired() {
+			return nil, nil
+		}
 		kv := &pb.KV{
 			//Key: y.Copy(item.Key()),
 			Key:   item.Key(),
@@ -159,6 +167,9 @@ func (stats *Statistics) count(ctx context.Context) map[string]any {
 	}
 
 	s.Orchestrate(ctx)
+	if ctx.Done() != nil {
+		go func() { stats.done <- true }()
+	}
 	mapLock.RLock()
 	defer mapLock.RUnlock()
 	out := map[string]any{}

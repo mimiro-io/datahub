@@ -18,12 +18,9 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"time"
-
 	"github.com/dgraph-io/badger/v4"
-	"go.uber.org/zap"
-
 	"github.com/mimiro-io/datahub/internal/conf"
+	"go.uber.org/zap"
 )
 
 type GarbageCollector struct {
@@ -40,40 +37,7 @@ func NewGarbageCollector(store *Store, env *conf.Config) *GarbageCollector {
 		quit:   make(chan bool, 1),
 		env:    env,
 	}
-
-	// this is now orchestrated from service/scheduler/scheduler.go
-	//gc.Start(context.Background())
-
 	return gc
-}
-
-func (garbageCollector *GarbageCollector) Start(ctx context.Context) error {
-	if garbageCollector.env.GcOnStartup {
-		garbageCollector.logger.Info("Starting inital GC in background")
-		go func() {
-			ts := time.Now()
-			var err error
-			garbageCollector.logger.Info("Starting to clean deleted datasets")
-			err = garbageCollector.Cleandeleted()
-			if err != nil {
-				garbageCollector.logger.Warnf("cleaning of deleted datasets failed: %v", err.Error())
-				return
-			} else {
-				garbageCollector.logger.Infof("Finished cleaning of deleted datasets after %v", time.Since(ts).Round(time.Millisecond))
-			}
-			ts = time.Now()
-			garbageCollector.logger.Info("Starting badger gc")
-			err = garbageCollector.GC()
-			if err != nil {
-				garbageCollector.logger.Warn("badger gc failed: ", err)
-			} else {
-				garbageCollector.logger.Infof("Finished badger gc after %v", time.Since(ts).Round(time.Millisecond))
-			}
-		}()
-	} else {
-		garbageCollector.logger.Info("GC_ON_STARTUP disabled")
-	}
-	return nil
 }
 
 func (garbageCollector *GarbageCollector) Stop(ctx context.Context) error {

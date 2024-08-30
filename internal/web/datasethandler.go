@@ -73,6 +73,7 @@ func RegisterDatasetHandler(
 	e.PATCH("/datasets/:dataset", handler.datasetUpdate, mw.authorizer(log, datahubWrite))
 	e.DELETE("/datasets/:dataset", handler.deleteDatasetHandler, mw.authorizer(log, datahubWrite))
 	e.DELETE("/datasets", handler.deleteAllDatasets, mw.authorizer(log, datahubWrite))
+
 }
 
 // datasetList

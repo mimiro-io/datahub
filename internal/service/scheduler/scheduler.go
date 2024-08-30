@@ -18,8 +18,8 @@ type Scheduler struct {
 }
 
 func (s *Scheduler) Start() error {
-	s.cron.AddJob("0 19 * * *", NewStatisticsUpdater(s.logger, s.store))
-	s.cron.AddJob("0 2 * * *", NewGCUpdate(s.logger, s.gc))
+	s.cron.AddJob("0 2 * * *", NewStatisticsUpdater(s.logger, s.store))
+	s.cron.AddJob("0 19 * * *", NewGCUpdate(s.logger, s.gc))
 	s.cron.Start()
 	for _, e := range s.cron.Entries() {
 		task := e.Job.(schedulable)
@@ -36,12 +36,15 @@ func (s *Scheduler) Start() error {
 }
 
 func (s *Scheduler) Stop(ctx context.Context) {
+	if s.stopped {
+		return
+	}
 	s.stopped = true
 	s.cron.Stop()
 	for _, task := range s.cron.Entries() {
 		wg := sync.WaitGroup{}
+		wg.Add(1)
 		go func() {
-			wg.Add(1)
 			defer wg.Done()
 			task.Job.(schedulable).Stop(ctx)
 		}()

@@ -43,6 +43,12 @@ func SeekDataset(datasetID types.InternalDatasetID) []byte {
 	binary.BigEndian.PutUint32(searchBuffer[2:], uint32(datasetID))
 	return searchBuffer
 }
+func SeekLatestChanges(datasetID types.InternalDatasetID) []byte {
+	searchBuffer := make([]byte, 6)
+	binary.BigEndian.PutUint16(searchBuffer, server.DatasetLatestEntities)
+	binary.BigEndian.PutUint32(searchBuffer[2:], uint32(datasetID))
+	return searchBuffer
+}
 
 func SeekEntity(intenalEntityID types.InternalID) []byte {
 	entityLocatorPrefixBuffer := make([]byte, 10)
