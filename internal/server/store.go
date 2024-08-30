@@ -1032,7 +1032,7 @@ func (s *Store) GetRelatedAtTime(from *RelatedFrom, limit int) ([]qresult, *Rela
 			currentRID = 0
 			// tmpResult := make(map[[12]byte]result)
 
-			var prevResults map[uint64]qresult
+			var prevResults map[uint64]qresult = map[uint64]qresult{}
 			var prevDeleted bool
 			var prevDatasetID uint32
 			var dsSpillOver map[uint32]qresult

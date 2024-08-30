@@ -18,8 +18,8 @@ type Scheduler struct {
 }
 
 func (s *Scheduler) Start() error {
-	s.cron.AddJob("0 19 * * *", NewStatisticsUpdater(s.logger, s.store))
-	s.cron.AddJob("0 2 * * *", NewGCUpdate(s.logger, s.gc))
+	s.cron.AddJob("0 2 * * *", NewStatisticsUpdater(s.logger, s.store))
+	s.cron.AddJob("0 19 * * *", NewGCUpdate(s.logger, s.gc))
 	s.cron.Start()
 	for _, e := range s.cron.Entries() {
 		task := e.Job.(schedulable)

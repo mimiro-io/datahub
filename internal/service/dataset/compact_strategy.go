@@ -7,6 +7,7 @@ import (
 	"github.com/mimiro-io/datahub/internal/server"
 	"github.com/mimiro-io/datahub/internal/service/entity"
 	"github.com/mimiro-io/datahub/internal/service/types"
+	"go.uber.org/zap"
 )
 
 // CompactionStrategy is an interface that can be implemented to define a strategy for compacting datasets.
@@ -37,6 +38,10 @@ type CompactionStrategy interface {
 	// 4. outgoing ref key
 	// 5. entity change log key
 	eval(e *server.Entity, entityBytes []byte, jsonKey []byte, isFirstVersion bool, isLatestVersion bool, txn *badger.Txn) (*compactionInstruction, error)
+	stats() map[string]int
+	flush(txn *badger.Txn) ([][]byte, error)
+	SetLogger(logger *zap.SugaredLogger)
+	flushThreshold() int
 }
 
 type compactionInstruction struct {
@@ -44,13 +49,28 @@ type compactionInstruction struct {
 	RewriteKeys   [][]byte
 	RewriteValues [][]byte
 }
+
+func (i *compactionInstruction) append(instr *compactionInstruction) {
+	i.DeleteKeys = append(i.DeleteKeys, instr.DeleteKeys...)
+	i.RewriteKeys = append(i.RewriteKeys, instr.RewriteKeys...)
+	i.RewriteValues = append(i.RewriteValues, instr.RewriteValues...)
+}
+
+func (i *compactionInstruction) reset() {
+	i.DeleteKeys = make([][]byte, 0)
+	i.RewriteKeys = make([][]byte, 0)
+	i.RewriteValues = make([][]byte, 0)
+}
+
 type recordedStrategy struct{}
 type maxVersionStrategy struct{}
 
 var (
-	DeduplicationStrategy = &deduplicationStrategy{}
-	RecordedStrategy      = &recordedStrategy{}
-	MaxVersionStrategy    = &maxVersionStrategy{}
+	DeduplicationStrategy = func() CompactionStrategy {
+		return &deduplicationStrategy{counts: make(map[string]int), changeBuffer: make(map[[24]byte]byte)}
+	}
+	//RecordedStrategy      = func() CompactionStrategy { return &recordedStrategy{} }
+	//MaxVersionStrategy    = func() CompactionStrategy { return &maxVersionStrategy{} }
 )
 
 func mkLatestKey(jsonKey []byte) []byte {
@@ -101,6 +121,7 @@ func processRefs(
 			return nil, er
 		}
 
+		//fmt.Println("building refs for entity", ent.InternalID, "pred", k, "related", relatedid, "recorded", ent.Recorded)
 		// delete outgoing references
 		// 0:2: outgoing ref index, uint16
 		// 2:10: this entity id, uint64

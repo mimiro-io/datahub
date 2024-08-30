@@ -3,11 +3,13 @@ package dataset
 import (
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/dgraph-io/badger/v4"
 	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/server"
 	"github.com/mimiro-io/datahub/internal/service/entity"
+	"github.com/mimiro-io/datahub/internal/service/scheduler"
 	"github.com/mimiro-io/datahub/internal/service/store"
 	"github.com/mimiro-io/datahub/internal/service/types"
 	"go.uber.org/zap"
@@ -24,6 +26,8 @@ func TestCompact(t *testing.T) {
 	var store *server.Store
 	var dsm *server.DsManager
 	var ba server.BadgerAccess
+	var compactor *CompactionWorker
+	log := zap.NewNop().Sugar()
 	testCnt := 0
 	setup := func() func() {
 		storeLocation := "./test_service_dataset_compact_" + strconv.Itoa(testCnt)
@@ -36,6 +40,7 @@ func TestCompact(t *testing.T) {
 		store = server.NewStore(env, &statsd.NoOpClient{})
 		dsm = server.NewDsManager(env, store, server.NoOpBus())
 		ba = server.NewBadgerAccess(store, dsm)
+		compactor = NewCompactor(store, dsm, log)
 		return func() {
 			store.Close()
 			os.RemoveAll(storeLocation)
@@ -57,6 +62,7 @@ func TestCompact(t *testing.T) {
 		if err != nil {
 			t.Fatalf("error asserting prefix mapping: %v", err)
 		}
+		_, _ = store.NamespaceManager.AssertPrefixMappingForExpansion("http://ns2/")
 		var ents []*server.Entity
 		for _, e := range entities {
 			entity := server.NewEntity(strings.ReplaceAll(e[0].(string), "http://ns/", pref+":"), 0)
@@ -98,14 +104,16 @@ func TestCompact(t *testing.T) {
 	checkChanges := func(t *testing.T, store *server.Store, dataset string, expected []any) {
 		t.Helper()
 		ds := dsm.GetDataset(dataset)
-		ents, err := ds.GetChanges(0, 1000, false)
+		changes, err := ds.GetChanges(0, 1000, false)
 		if err != nil {
 			t.Fatalf("error getting changes")
 		}
-		if len(ents.Entities) != len(expected) {
-			t.Fatalf("expected %d entities, got %d", len(expected), len(ents.Entities))
+		latests, err := ds.GetEntities("", 1000)
+		if len(changes.Entities) != len(expected) {
+			t.Fatalf("expected %d entities, got %d", len(expected), len(changes.Entities))
 		}
-		for i, e := range ents.Entities {
+		var latestSeen map[string]bool = make(map[string]bool)
+		for i, e := range changes.Entities {
 			// exp is an array with the elements [id, deleted, props, refs]. only id is mandatory
 			exp := expected[i].([]any)
 			if e.ID != exp[0] {
@@ -119,9 +127,19 @@ func TestCompact(t *testing.T) {
 				t.Errorf("expected entity id %s to be deleted=%t, got deleted=%t",
 					exp[0], exp[1], e.IsDeleted)
 			}
-			if len(exp) > 2 {
+			if len(exp) > 2 && exp[2] != nil {
+				props := make(map[string]interface{})
+				err = json.Unmarshal([]byte(exp[2].(string)), &props)
+				if err != nil {
+					t.Fatalf("error unmarshalling properties: %v", err)
+				}
+				if !reflect.DeepEqual(e.Properties, props) {
+					t.Errorf("expected properties %v, got %v", props, e.Properties)
+				}
+			}
+			if len(exp) > 3 && exp[3] != nil {
 				refs := make(map[string]interface{})
-				err = json.Unmarshal([]byte(exp[2].(string)), &refs)
+				err = json.Unmarshal([]byte(exp[3].(string)), &refs)
 				if err != nil {
 					t.Fatalf("error unmarshalling references: %v", err)
 				}
@@ -129,184 +147,312 @@ func TestCompact(t *testing.T) {
 					t.Errorf("expected references %v, got %v", refs, e.References)
 				}
 			}
+
+			for _, l := range latests.Entities {
+				if l.InternalID == e.InternalID {
+					latestSeen[e.ID] = true
+				}
+			}
+		}
+		for _, l := range latests.Entities {
+			if _, ok := latestSeen[l.ID]; !ok {
+				t.Errorf("latest entity %s not found in changes", l.ID)
+			}
 		}
 	}
-	t.Run("using DeduplicationStrategy", func(t *testing.T) {
-		t.Run("empty dataset", func(t *testing.T) {
-			defer setup()()
-			mkDs(t, "people", store)
-			Compact(ba, "people", DeduplicationStrategy)
-			checkChanges(t, store, "people", []any{})
-		})
-		t.Run("single changes dataset", func(t *testing.T) {
-			defer setup()()
-			mkDs(t, "people", store,
-				[]any{"1"},
-				[]any{"2", true},
-				[]any{"3"})
-			if err := Compact(ba, "people", DeduplicationStrategy); err != nil {
-				t.Fatalf("error compacting dataset: %v", err)
+	t.Run("using deduplication", func(t *testing.T) {
+		for _, flushThreshold := range []int{1, 2, 100000} {
+			strat := func() CompactionStrategy {
+				s := DeduplicationStrategy()
+				s.(*deduplicationStrategy).flushAfter = flushThreshold
+				return s
 			}
-			checkChanges(t, store, "people", []any{
-				[]any{"1"},
-				[]any{"2", true},
-				[]any{"3"},
-			})
-		})
-		t.Run("one entity duplicate", func(t *testing.T) {
-			defer setup()()
-			// create a dataset with 3 entities
-			mkDs(t, "people", store,
-				[]any{"http://ns/1"},
-				[]any{"http://ns/2", true},
-				[]any{"http://ns/3"})
-			// "hack" a duplicate entity into the dataset
-			duplicateEntityChange("people", "http://ns/1", ba, store, dsm, t)
-			// verify that the duplicate is present
-			checkChanges(t, store, "people", []any{
-				[]any{"ns3:1"},
-				[]any{"ns3:2", true},
-				[]any{"ns3:3"},
-				[]any{"ns3:1"},
-			})
+			t.Run("with flush threshold "+strconv.Itoa(flushThreshold), func(t *testing.T) {
 
-			// Now do the compaction
-			if err := Compact(ba, "people", DeduplicationStrategy); err != nil {
-				t.Fatalf("error compacting dataset: %v", err)
-			}
-
-			// verify that the duplicate is gone
-			checkChanges(t, store, "people", []any{
-				[]any{"ns3:1"},
-				[]any{"ns3:2", true},
-				[]any{"ns3:3"},
-			})
-		})
-		t.Run("many entity duplicates", func(t *testing.T) {
-			defer setup()()
-			// create a dataset with 3 entities
-			mkDs(t, "people", store,
-				[]any{"http://ns/1"},
-				[]any{"http://ns/2", true},
-				[]any{"http://ns/3"})
-			// "hack" a duplicate entity into the dataset
-			duplicateEntityChange("people", "http://ns/1", ba, store, dsm, t)
-			duplicateEntityChange("people", "http://ns/1", ba, store, dsm, t)
-			duplicateEntityChange("people", "http://ns/1", ba, store, dsm, t)
-			duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
-			duplicateEntityChange("people", "http://ns/1", ba, store, dsm, t)
-			duplicateEntityChange("people", "http://ns/1", ba, store, dsm, t)
-			duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
-			duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
-			duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
-			duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
-			duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
-			duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
-			duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
-
-			// Now do the compaction
-			if err := Compact(ba, "people", DeduplicationStrategy); err != nil {
-				t.Fatalf("error compacting dataset: %v", err)
-			}
-
-			// verify that the duplicate is gone
-			checkChanges(t, store, "people", []any{
-				[]any{"ns3:1"},
-				[]any{"ns3:2", true},
-				[]any{"ns3:3"},
-			})
-		})
-		t.Run("with duplicate ref in many versions", func(t *testing.T) {
-			t.Run("stored in different batches", func(t *testing.T) {
-				defer setup()()
-				// create a dataset with 3 entities
-				mkDs(t, "people", store,
-					[]any{"http://ns/1", false, nil, `{"ns3:ref1": "ns3:2"}`},
-					[]any{"http://ns/2", true},
-					[]any{"http://ns/3", false})
-				time.Sleep(1 * time.Millisecond) // make sure the txTime is different
-				mkDs(t, "people", store,
-					[]any{"http://ns/1", false, `{"p": "a"}`, `{"ns3:ref1": "ns3:2"}`},
-				)
-				time.Sleep(1 * time.Millisecond) // make sure the txTime is different
-				mkDs(t, "people", store,
-					[]any{"http://ns/1", false, `{"p": "b"}`, `{"ns3:ref1": "ns3:2"}`},
-				)
-
-				// verify that the duplicate is present
-				checkChanges(t, store, "people", []any{
-					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
-					[]any{"ns3:2", true},
-					[]any{"ns3:3", false},
-					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
-					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
+				t.Run("empty dataset", func(t *testing.T) {
+					defer setup()()
+					mkDs(t, "people", store)
+					compactor.compact("people", strat())
+					checkChanges(t, store, "people", []any{})
 				})
-				if rcOut, rcIn := refCount(t, store, ba, "ns3:1", "ns3:ref1"); rcOut != 3 || rcIn != 3 {
-					t.Fatalf("expected 3 ref out and 3 ref in, got %d and %d", rcOut, rcIn)
-				}
+				t.Run("single changes dataset", func(t *testing.T) {
+					defer setup()()
+					mkDs(t, "people", store,
+						[]any{"1"},
+						[]any{"2", true},
+						[]any{"3"})
+					if err := compactor.compact("people", strat()); err != nil {
+						t.Fatalf("error compacting dataset: %v", err)
+					}
+					checkChanges(t, store, "people", []any{
+						[]any{"1"},
+						[]any{"2", true},
+						[]any{"3"},
+					})
+				})
+				t.Run("one entity duplicate", func(t *testing.T) {
+					defer setup()()
+					// create a dataset with 3 entities
+					mkDs(t, "people", store,
+						[]any{"http://ns/1"},
+						[]any{"http://ns/2", true},
+						[]any{"http://ns/3"})
+					// "hack" a duplicate entity into the dataset.  datahub prevents this from happening but older versions of datahub did not.
+					duplicateEntityChange("people", "http://ns/1", ba, store, dsm, t)
+					// verify that the duplicate is present
+					checkChanges(t, store, "people", []any{
+						[]any{"ns3:1"},
+						[]any{"ns3:2", true},
+						[]any{"ns3:3"},
+						[]any{"ns3:1"},
+					})
 
-				// Now do the compaction
-				if err := Compact(ba, "people", DeduplicationStrategy); err != nil {
-					t.Fatalf("error compacting dataset: %v", err)
-				}
+					// Now do the compaction
+					if err := compactor.compact("people", strat()); err != nil {
+						t.Fatalf("error compacting dataset: %v", err)
+					}
 
-				// verify that the duplicate is gone
-				checkChanges(t, store, "people", []any{
-					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
-					[]any{"ns3:2", true},
-					[]any{"ns3:3", false},
-					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
-					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
+					// verify that the duplicate is gone
+					checkChanges(t, store, "people", []any{
+						[]any{"ns3:1"},
+						[]any{"ns3:2", true},
+						[]any{"ns3:3"},
+					})
+				})
+				t.Run("many entity duplicates", func(t *testing.T) {
+					defer setup()()
+					// create a dataset with 3 entities
+					mkDs(t, "people", store,
+						[]any{"http://ns/1", false, `{"ns3:name": "John Doe"}`, `{"ns3:ref1": "ns3:2"}`},
+						[]any{"http://ns/2", true},
+						[]any{"http://ns/3"})
+					// "hack" a duplicate entity into the dataset
+					duplicateEntityChange("people", "http://ns/1", ba, store, dsm, t)
+					duplicateEntityChange("people", "http://ns/1", ba, store, dsm, t)
+					duplicateEntityChange("people", "http://ns/1", ba, store, dsm, t)
+					duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
+					duplicateEntityChange("people", "http://ns/1", ba, store, dsm, t)
+					duplicateEntityChange("people", "http://ns/1", ba, store, dsm, t)
+					duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
+					duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
+					duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
+					duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
+					duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
+					duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
+					duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
+
+					// count refs for entity 1 before compaction
+					if rcOut, rcIn := refCount(t, store, ba, "ns3:1", "ns3:ref1"); rcOut != 6 || rcIn != 6 {
+						t.Fatalf("expected 6 ref out and 6 ref in for entity 1, got %d and %d", rcOut, rcIn)
+					}
+					// Now do the compaction
+					if err := compactor.compact("people", strat()); err != nil {
+						t.Fatalf("error compacting dataset: %v", err)
+					}
+
+					// verify that the duplicate is gone
+					checkChanges(t, store, "people", []any{
+						[]any{"ns3:1", false, `{"ns3:name": "John Doe"}`, `{"ns3:ref1": "ns3:2"}`},
+						[]any{"ns3:2", true},
+						[]any{"ns3:3"},
+					})
+					// count refs for entity 1 after compaction
+					if rcOut, rcIn := refCount(t, store, ba, "ns3:1", "ns3:ref1"); rcOut != 1 || rcIn != 1 {
+						t.Fatalf("expected 1 ref out and 1 ref in, got %d and %d", rcOut, rcIn)
+					}
+				})
+				t.Run("with duplicate ref in many versions", func(t *testing.T) {
+					t.Run("stored in different batches", func(t *testing.T) {
+						defer setup()()
+						// create a dataset with 3 entities
+						mkDs(t, "people", store,
+							[]any{"http://ns/1", false, nil, `{"ns3:ref1": "ns3:2", "ns4:r1": "ns4:2"}`},
+							[]any{"http://ns/2", true},
+							[]any{"http://ns/3", false})
+						time.Sleep(1 * time.Millisecond) // make sure the txTime is different
+						mkDs(t, "people", store,
+							[]any{"http://ns/1", false, `{"p": "a"}`, `{"ns3:ref1": "ns3:2", "ns4:r1": "ns4:2"}`},
+						)
+						time.Sleep(1 * time.Millisecond) // make sure the txTime is different
+						mkDs(t, "people", store,
+							[]any{"http://ns/1", false, `{"p": "b"}`, `{"ns3:ref1": "ns3:2", "ns4:r1": "ns4:2"}`},
+						)
+
+						// verify that the duplicate is present
+						checkChanges(t, store, "people", []any{
+							[]any{"ns3:1", false, nil, `{"ns3:ref1":"ns3:2", "ns4:r1":"ns4:2"}`},
+							[]any{"ns3:2", true},
+							[]any{"ns3:3", false},
+							[]any{"ns3:1", false, nil, `{"ns3:ref1":"ns3:2", "ns4:r1":"ns4:2"}`},
+							[]any{"ns3:1", false, nil, `{"ns3:ref1":"ns3:2", "ns4:r1":"ns4:2"}`},
+						})
+						if rcOut, rcIn := refCount(t, store, ba, "ns3:1", "ns3:ref1"); rcOut != 3 || rcIn != 3 {
+							t.Fatalf("expected 3 ref out and 3 ref in, got %d and %d", rcOut, rcIn)
+						}
+						if rcOut, rcIn := refCount(t, store, ba, "ns3:1", "ns4:r1"); rcOut != 3 || rcIn != 3 {
+							t.Fatalf("expected 3 ref out and 3 ref in, got %d and %d", rcOut, rcIn)
+						}
+
+						newStats := getStats(t, ba, store, log)
+						peopleIncoming := newStats["refs"].(map[string]any)["INCOMING_REF_INDEX"].(map[string]any)["people"].(map[string]any)
+						peopleOutgoing := newStats["refs"].(map[string]any)["OUTGOING_REF_INDEX"].(map[string]any)["people"].(map[string]any)
+						if peopleIncoming["keys"] != 6.0 {
+							t.Fatalf("expected 6 incoming ref keys, got %.0f", peopleIncoming["keys"])
+						}
+						if peopleOutgoing["keys"] != 6.0 {
+							t.Fatalf("expected 6 outgoing ref keys, got %.0f", peopleOutgoing["keys"])
+						}
+
+						// query for the entity before the compaction
+						checkQuery(t, store, "ns3:1", "ns3:ref1", false, "ns3:2")
+						checkQuery(t, store, "ns3:2", "ns3:ref1", true, "ns3:1")
+
+						// Now do the compaction
+						if err := compactor.compact("people", strat()); err != nil {
+							t.Fatalf("error compacting dataset: %v", err)
+						}
+
+						// query for the entity after the compaction
+						checkQuery(t, store, "ns3:1", "ns3:ref1", false, "ns3:2")
+						checkQuery(t, store, "ns3:2", "ns3:ref1", true, "ns3:1")
+						// verify that the duplicate is gone
+						checkChanges(t, store, "people", []any{
+							[]any{"ns3:1", false, nil, `{"ns3:ref1":"ns3:2", "ns4:r1":"ns4:2"}`},
+							[]any{"ns3:2", true},
+							[]any{"ns3:3", false},
+							[]any{"ns3:1", false, nil, `{"ns3:ref1":"ns3:2", "ns4:r1":"ns4:2"}`},
+							[]any{"ns3:1", false, nil, `{"ns3:ref1":"ns3:2", "ns4:r1":"ns4:2"}`},
+						})
+
+						// in this case, all reference duplicates were in the same batch, therefore they have the same key (sam txTime).
+						if rcOut, rcIn := refCount(t, store, ba, "ns3:1", "ns3:ref1"); rcOut != 1 || rcIn != 1 {
+							t.Fatalf("expected 1 ref out and 1 ref in, got %d and %d", rcOut, rcIn)
+						}
+						if rcOut, rcIn := refCount(t, store, ba, "ns3:1", "ns4:r1"); rcOut != 1 || rcIn != 1 {
+							t.Fatalf("expected 1 ref out and 1 ref in, got %d and %d", rcOut, rcIn)
+						}
+						newStats = getStats(t, ba, store, log)
+						peopleIncoming = newStats["refs"].(map[string]any)["INCOMING_REF_INDEX"].(map[string]any)["people"].(map[string]any)
+						peopleOutgoing = newStats["refs"].(map[string]any)["OUTGOING_REF_INDEX"].(map[string]any)["people"].(map[string]any)
+						if peopleIncoming["keys"] != 2.0 {
+							t.Fatalf("expected 2 incoming ref keys, got %.0f", peopleIncoming["keys"])
+						}
+						if peopleOutgoing["keys"] != 2.0 {
+							t.Fatalf("expected 2 outgoing ref keys, got %.0f", peopleOutgoing["keys"])
+						}
+					})
+					t.Run("stored in same batch", func(t *testing.T) {
+						defer setup()()
+						// create a dataset with 3 entities
+						mkDs(t, "people", store,
+							[]any{"http://ns/1", false, nil, `{"ns3:ref1": "ns3:2"}`},
+							[]any{"http://ns/2", true},
+							[]any{"http://ns/1", false, `{"p": "a"}`, `{"ns3:ref1": "ns3:2"}`},
+							[]any{"http://ns/1", false, `{"p": "b"}`, `{"ns3:ref1": "ns3:2"}`},
+							[]any{"http://ns/3", false})
+
+						// verify that the duplicate is present
+						checkChanges(t, store, "people", []any{
+							[]any{"ns3:1", false, nil, `{"ns3:ref1":"ns3:2"}`},
+							[]any{"ns3:2", true},
+							[]any{"ns3:1", false, nil, `{"ns3:ref1":"ns3:2"}`},
+							[]any{"ns3:1", false, nil, `{"ns3:ref1":"ns3:2"}`},
+							[]any{"ns3:3", false},
+						})
+						if rcOut, rcIn := refCount(t, store, ba, "ns3:1", "ns3:ref1"); rcOut != 1 || rcIn != 1 {
+							t.Fatalf("expected 1 ref out and 1 ref in, got %d and %d", rcOut, rcIn)
+						}
+						newStats := getStats(t, ba, store, log)
+						peopleIncoming := newStats["refs"].(map[string]any)["INCOMING_REF_INDEX"].(map[string]any)["people"].(map[string]any)
+						peopleOutgoing := newStats["refs"].(map[string]any)["OUTGOING_REF_INDEX"].(map[string]any)["people"].(map[string]any)
+						if peopleIncoming["keys"] != 1.0 {
+							t.Fatalf("expected 1 incoming ref keys, got %.0f", peopleIncoming["keys"])
+						}
+						if peopleOutgoing["keys"] != 1.0 {
+							t.Fatalf("expected 1 outgoing ref keys, got %.0f", peopleOutgoing["keys"])
+						}
+
+						// query for the entity before the compaction
+						checkQuery(t, store, "ns3:1", "ns3:ref1", false, "ns3:2")
+						checkQuery(t, store, "ns3:2", "ns3:ref1", true, "ns3:1")
+
+						// Now do the compaction. it should not have to do anything since all refs have same txn time
+						if err := compactor.compact("people", strat()); err != nil {
+							t.Fatalf("error compacting dataset: %v", err)
+						}
+
+						// query for the entity after the compaction
+						checkQuery(t, store, "ns3:1", "ns3:ref1", false, "ns3:2")
+						checkQuery(t, store, "ns3:2", "ns3:ref1", true, "ns3:1")
+						// verify that the duplicate is gone
+						checkChanges(t, store, "people", []any{
+							[]any{"ns3:1", false, nil, `{"ns3:ref1":"ns3:2"}`},
+							[]any{"ns3:2", true},
+							[]any{"ns3:1", false, nil, `{"ns3:ref1":"ns3:2"}`},
+							[]any{"ns3:1", false, nil, `{"ns3:ref1":"ns3:2"}`},
+							[]any{"ns3:3", false},
+						})
+
+						// in this case, all reference duplicates were in the same batch, therefore they have the same key (sam txTime).
+						if rcOut, rcIn := refCount(t, store, ba, "ns3:1", "ns3:ref1"); rcOut != 1 || rcIn != 1 {
+							t.Fatalf("expected 1 ref out and 1 ref in, got %d and %d", rcOut, rcIn)
+						}
+						newStats = getStats(t, ba, store, log)
+						peopleIncoming = newStats["refs"].(map[string]any)["INCOMING_REF_INDEX"].(map[string]any)["people"].(map[string]any)
+						peopleOutgoing = newStats["refs"].(map[string]any)["OUTGOING_REF_INDEX"].(map[string]any)["people"].(map[string]any)
+						if peopleIncoming["keys"] != 1.0 {
+							t.Fatalf("expected 1 incoming ref keys, got %.0f", peopleIncoming["keys"])
+						}
+						if peopleOutgoing["keys"] != 1.0 {
+							t.Fatalf("expected 1 outgoing ref keys, got %.0f", peopleOutgoing["keys"])
+						}
+
+					})
 				})
 
-				// in this case, all reference duplicates were in the same batch, therefore they have the same key (sam txTime).
-				if rcOut, rcIn := refCount(t, store, ba, "ns3:1", "ns3:ref1"); rcOut != 1 || rcIn != 1 {
-					t.Fatalf("expected 1 ref out and 1 ref in, got %d and %d", rcOut, rcIn)
-				}
+				// TODO: try to cancel/abort mid compaction, make sure no change is semi-deleted (transactional integrity)
 			})
-			t.Run("stored in same batch", func(t *testing.T) {
-				defer setup()()
-				// create a dataset with 3 entities
-				mkDs(t, "people", store,
-					[]any{"http://ns/1", false, nil, `{"ns3:ref1": "ns3:2"}`},
-					[]any{"http://ns/2", true},
-					[]any{"http://ns/1", false, `{"p": "a"}`, `{"ns3:ref1": "ns3:2"}`},
-					[]any{"http://ns/1", false, `{"p": "b"}`, `{"ns3:ref1": "ns3:2"}`},
-					[]any{"http://ns/3", false})
-
-				// verify that the duplicate is present
-				checkChanges(t, store, "people", []any{
-					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
-					[]any{"ns3:2", true},
-					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
-					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
-					[]any{"ns3:3", false},
-				})
-				if rcOut, rcIn := refCount(t, store, ba, "ns3:1", "ns3:ref1"); rcOut != 1 || rcIn != 1 {
-					t.Fatalf("expected 1 ref out and 1 ref in, got %d and %d", rcOut, rcIn)
-				}
-
-				// Now do the compaction
-				if err := Compact(ba, "people", DeduplicationStrategy); err != nil {
-					t.Fatalf("error compacting dataset: %v", err)
-				}
-
-				// verify that the duplicate is gone
-				checkChanges(t, store, "people", []any{
-					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
-					[]any{"ns3:2", true},
-					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
-					[]any{"ns3:1", false, `{"ns3:ref1":"ns3:2"}`},
-					[]any{"ns3:3", false},
-				})
-
-				// in this case, all reference duplicates were in the same batch, therefore they have the same key (sam txTime).
-				if rcOut, rcIn := refCount(t, store, ba, "ns3:1", "ns3:ref1"); rcOut != 1 || rcIn != 1 {
-					t.Fatalf("expected 1 ref out and 1 ref in, got %d and %d", rcOut, rcIn)
-				}
-			})
-		})
+		}
 	})
+}
+
+func checkQuery(t *testing.T, store *server.Store, from string, via string, inverse bool, expectedID string) {
+	t.Helper()
+	queryResult, err := store.GetManyRelatedEntities([]string{from}, via, inverse, nil, false)
+	if err != nil {
+		t.Fatalf("error querying for related entities: %v", err)
+	}
+	if len(queryResult) != 1 {
+		t.Fatalf("expected 1 related entity, got %d", len(queryResult))
+	}
+	if queryResult[0][2].(*server.Entity).ID != expectedID {
+		t.Fatalf("expected related entity id %s, got %s", expectedID, queryResult[0][2].(*server.Entity).ID)
+	}
+}
+
+func getStats(t *testing.T, ba server.BadgerAccess, store *server.Store, log *zap.SugaredLogger) map[string]any {
+	t.Helper()
+	//ba.GetDB().Flatten(4)
+	//time.Sleep(10 * time.Second)
+	su := scheduler.NewStatisticsUpdater(log, ba)
+	su.Run()
+	for su.State() != scheduler.TaskStateScheduled {
+		fmt.Println("waiting for stats update")
+		time.Sleep(100 * time.Millisecond)
+	}
+	sr := &server.Statistics{
+		Store:  store,
+		Logger: log,
+	}
+	stringWriter := &strings.Builder{}
+	sr.GetStatistics(stringWriter)
+	var o map[string]any
+	err := json.Unmarshal([]byte(stringWriter.String()), &o)
+	if err != nil {
+		t.Fatalf("error unmarshalling stats: %v", err)
+	}
+
+	return o
 }
 
 func refCount(t *testing.T, s *server.Store, ba server.BadgerAccess, entityID string, predicate string) (int, int) {
@@ -361,6 +507,7 @@ func refCount(t *testing.T, s *server.Store, ba server.BadgerAccess, entityID st
 func duplicateEntityChange(dataset string, entityID string, ba store.BadgerStore, store *server.Store, dsm *server.DsManager, t *testing.T) {
 	t.Helper()
 
+	time.Sleep(1 * time.Millisecond) // make sure the txTime is different
 	ent, err := store.GetEntity(entityID, []string{dataset}, true)
 	if err != nil {
 		t.Fatalf("error getting entity: %v", err)

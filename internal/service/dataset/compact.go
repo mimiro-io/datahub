@@ -8,15 +8,48 @@ import (
 	"github.com/mimiro-io/datahub/internal/server"
 	"github.com/mimiro-io/datahub/internal/service/store"
 	"github.com/mimiro-io/datahub/internal/service/types"
+	"go.uber.org/zap"
+	"time"
 )
 
-func Compact(bs store.BadgerStore, datasetID string, strategy CompactionStrategy) error {
+type CompactionWorker struct {
+	bs      store.BadgerStore
+	logger  *zap.SugaredLogger
+	running bool
+}
 
-	dsId, b := bs.LookupDatasetID(datasetID)
+func NewCompactor(store *server.Store, dsm *server.DsManager, logger *zap.SugaredLogger) *CompactionWorker {
+	bs := server.NewBadgerAccess(store, dsm)
+	return &CompactionWorker{
+		bs:     bs,
+		logger: logger.Named("compaction-worker"),
+	}
+}
+func (c *CompactionWorker) CompactAsync(datasetID string, strategy CompactionStrategy) error {
+	if !c.running {
+		c.running = true
+		go func() {
+			defer func() {
+				c.running = false
+			}()
+			err := c.compact(datasetID, strategy)
+			if err != nil {
+				c.logger.Errorf("compaction failed: %v", err)
+			}
+		}()
+		return nil
+	}
+	return fmt.Errorf("there is already a compaction running. try again later")
+}
+
+func (c *CompactionWorker) compact(datasetID string, strategy CompactionStrategy) error {
+	startTs := time.Now()
+	strategy.SetLogger(c.logger)
+	dsId, b := c.bs.LookupDatasetID(datasetID)
 	if !b {
 		return fmt.Errorf("dataset %s not found", datasetID)
 	}
-	txn := bs.GetDB().NewTransaction(false)
+	txn := c.bs.GetDB().NewTransaction(false)
 	defer txn.Discard()
 
 	// 1. go through these:
@@ -30,21 +63,36 @@ func Compact(bs store.BadgerStore, datasetID string, strategy CompactionStrategy
 	it := txn.NewIterator(opts)
 	defer it.Close()
 
+	ts := time.Now()
+	cnt := 0
+	ops := &compactionInstruction{}
 	for it.Seek(seekLatestChanges); it.ValidForPrefix(seekLatestChanges); it.Next() {
 		latestKey := it.Item().Key()
 		internalEntityID := types.InternalID(binary.BigEndian.Uint64(latestKey[6:14]))
 
 		// 2. for each entity id, go through change versions in given dataset (chronologically)
-		err := forEntity(bs, dsId, internalEntityID, txn, strategy)
+		err := c.forEntity(dsId, internalEntityID, txn, strategy, ops)
 		if err != nil {
 			return err
 		}
-	}
+		cnt++
+		//keysToBeDeleted = append(keysToBeDeleted, newKeys...)
+		if time.Since(ts) > 15*time.Second {
+			ts = time.Now()
+			c.logger.Infof("compacting dataset %v, processed %v entities, removed keys so far: %v", datasetID, cnt, strategy.stats())
+		}
 
+	}
+	_, err4 := flushDeletes(c.bs, ops, true, strategy)
+	if err4 != nil {
+		return err4
+	}
+	c.logger.Infof("compacted dataset %s in %v, removed keys: %v", datasetID, time.Since(startTs), strategy.stats())
 	return nil
 }
 
-func forEntity(bs store.BadgerStore, dsId types.InternalDatasetID, internalEntityID types.InternalID, txn *badger.Txn, strategy CompactionStrategy) error {
+func (c *CompactionWorker) forEntity(dsId types.InternalDatasetID, internalEntityID types.InternalID, txn *badger.Txn,
+	strategy CompactionStrategy, ops *compactionInstruction) error {
 	entityLocatorPrefixBuffer := store.SeekEntityChanges(dsId, internalEntityID)
 	opts1 := badger.DefaultIteratorOptions
 	opts1.PrefetchValues = false
@@ -53,7 +101,6 @@ func forEntity(bs store.BadgerStore, dsId types.InternalDatasetID, internalEntit
 	defer entityLocatorIterator.Close()
 
 	isFirstChange := true
-	var keysToBeDeleted [][]byte
 	changeEval := func(jsonBytes []byte, jsonKey []byte, isFirstChange bool, isLastChange bool) error {
 		e, err := toEntity(jsonBytes)
 		if err != nil {
@@ -66,13 +113,13 @@ func forEntity(bs store.BadgerStore, dsId types.InternalDatasetID, internalEntit
 		if instr == nil {
 			return nil
 		}
-		keysToBeDeleted = append(keysToBeDeleted, instr.DeleteKeys...)
+		ops.append(instr)
 
-		err3 := doReWrites(instr, bs)
-		if err3 != nil {
-			return err3
+		reset, err4 := flushDeletes(c.bs, ops, false, strategy)
+		if reset {
+			ops.reset()
 		}
-		return flushDeletes(bs, keysToBeDeleted, isLastChange)
+		return err4
 	}
 	var jsonKey []byte
 	var jsonBytes []byte
@@ -98,51 +145,49 @@ func forEntity(bs store.BadgerStore, dsId types.InternalDatasetID, internalEntit
 		}
 	}
 	// eval last change
-	return changeEval(jsonBytes, jsonKey, isFirstChange, true)
-}
-
-// depending on strategy, we may need to rewrite value.
-// typically when the latest version of an entity is not the one we want to keep. in that case we need to rewrite the
-// latest key to point to the correct version of the entity
-func doReWrites(instr *compactionInstruction, bs store.BadgerStore) error {
-	if instr.RewriteKeys != nil {
-		err3 := bs.GetDB().Update(func(txn *badger.Txn) error {
-			for i, key := range instr.RewriteKeys {
-				err := txn.Set(key, instr.RewriteValues[i])
-				if err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-		if err3 != nil {
-			return err3
-		}
-	}
-	return nil
+	err = changeEval(jsonBytes, jsonKey, isFirstChange, true)
+	return err
 }
 
 // for efficiency, we flush deletes in batches
-func flushDeletes(bs store.BadgerStore, deleted [][]byte, finalFlush bool) error {
-	if !finalFlush && len(deleted) < 1000 {
-		return nil
+func flushDeletes(bs store.BadgerStore, ops *compactionInstruction, finalFlush bool, strategy CompactionStrategy) (bool, error) {
+	if !finalFlush && len(ops.DeleteKeys) < strategy.flushThreshold() {
+		return false, nil
 	}
-	if len(deleted) > 0 {
-		err := bs.GetDB().Update(func(txn *badger.Txn) error {
-			for _, key := range deleted {
+	err := bs.GetDB().Update(func(txn *badger.Txn) error {
+		bufferedKeys, err := strategy.flush(txn)
+		if err != nil {
+			return err
+		}
+		all := append(ops.DeleteKeys, bufferedKeys...)
+		for _, key := range all {
+			_, testErr := txn.Get(key)
+			if testErr != nil {
+				// if dataset was compacted before using dedup strat, we may have already deleted ref keys
+				if (key[1] == 3) || (key[1] == 2) { // refs
+					strategy.stats()["refs"]--
+				}
+			} else {
 				e := txn.Delete(key)
 				if e != nil {
 					return e
 				}
 			}
-			return nil
-		})
-		if err != nil {
-			return err
 		}
-		deleted = make([][]byte, 0)
+		//fmt.Println("deleted", len(all), "keys")
+		for i, key := range ops.RewriteKeys {
+			err2 := txn.Set(key, ops.RewriteValues[i])
+			if err2 != nil {
+				return err2
+			}
+		}
+		//fmt.Println("rewritten", len(ops.RewriteKeys), "keys")
+		return nil
+	})
+	if err != nil {
+		return false, err
 	}
-	return nil
+	return true, nil
 }
 
 func toRefs(stringOrArrayValue any) ([]string, error) {

@@ -2151,6 +2151,7 @@ If you don't provide a schedule, the default schedule is "_/5 _ \* \* \*", aka e
 If this is true, then the backup will use rsync for it's backup. rsync must be installed, and on the path for this to work.
 If this is false, the Badger DB native backup will be used instead.
 
+
 #### Logging profile
 
 Logging is a little bit special, in the fact that we need to set it up earlier than we read the configuration variables.
@@ -2247,3 +2248,51 @@ A payload with the following data is sent to the OPA service with the request:
 ```
 
 Note that the backing implementation of the OPA ruleset is outside of the scope of this documentation, and is in practice up to the OPA service maintainer in your organization. However the functions and their return values are not optional, and must confirm.
+
+
+## Maintenance
+
+### statistics
+
+Datahub has a statistics endpoint that can be used to monitor the size of datasets in the Datahub.
+It is available at `/statistics`. In the list of datasets, the sizes are shown in bytes. There is one
+generated dataset entry called `all`, which is the sum of all datasets.
+
+It is also possible to narrow down statistics to a specific dataset by adding the dataset name to the URL, e.g. `/statistics/people`.
+
+The `mim` CLI also has a command to get statistics for a dataset:
+
+```shell
+mim stats list
+```
+or to get the largest datasets in different storage categories:
+```shell
+mim stats top
+```
+
+Note that the statistics are not real-time, but are updated regularly in a background process.
+
+### Compaction
+
+Sometimes datasets accumulate a lot of historic data that is no longer needed.
+This can be removed by compacting the dataset. The compaction process can be controlled by applying different
+compaction strategies.
+
+Currently, only one compaction strategy is supported, `deduplicate`. This strategy will compact the dataset by removing all
+successive duplicate versions of each entity in a dataset, while retaining timeline correctness.
+Entities are considered duplicates if they have the same ID, deletion status, properties, and the same references.
+The `deduplicate` strategy will also compact reference indexes, even when entity versions otherwise are not duplicates.
+For example, if all versions of an entity have the same rdf type reference, the reference index will only contain that information once after compaction.
+
+To trigger a compaction. `POST` to the endpoint `/compaction` with the following payload:
+
+```json
+{
+    "dataset": "people",
+    "strategy": "deduplicate"
+}
+```
+The request will return immediately, while the compaction process will run in the background. Follow logs to see compaction progress.
+
+Note that disk space is not freed up immediately after compaction. For a time, the space is kept allocated for reuse, but
+eventually the disk space may be released.
