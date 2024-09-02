@@ -90,7 +90,7 @@ func (d *deduplicationStrategy) eval(
 		}
 		del = append(del, refs...)
 		d.counts["refs"] += len(refs)
-	} else {
+	} else if e.IsDeleted == d.prev.IsDeleted {
 		// if the entity is not equal to the previous entity, we can still check for just reference duplicates
 		for k, stringOrArrayValue := range e.References {
 			if reflect.DeepEqual(d.prev.References[k], stringOrArrayValue) {
