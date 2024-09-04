@@ -39,6 +39,7 @@ type ProxyDatasetConfig struct {
 	UpstreamTransform   string `json:"upstreamTransform"`
 	DownstreamTransform string `json:"downstreamTransform"`
 	AuthProviderName    string `json:"authProviderName"`
+	TimeoutSeconds      int    `json:"timeoutSeconds"`
 }
 
 type VirtualDatasetConfig struct {

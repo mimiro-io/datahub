@@ -77,6 +77,7 @@ func (dsm *DsManager) NewDatasetEntity(
 		entity.Properties[prefix+":authProviderName"] = proxyDatasetConfig.AuthProviderName
 		entity.Properties[prefix+":downstreamTransform"] = proxyDatasetConfig.DownstreamTransform
 		entity.Properties[prefix+":upstreamTransform"] = proxyDatasetConfig.UpstreamTransform
+		entity.Properties[prefix+":timeoutSeconds"] = proxyDatasetConfig.TimeoutSeconds
 	}
 
 	if virtualDatasetConfig != nil && virtualDatasetConfig.Transform != "" {
