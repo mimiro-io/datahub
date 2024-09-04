@@ -264,10 +264,23 @@ By setting up proxy datasets for the database layer, data hub can make the data 
 without having to load the data.
 
 Proxy datasets need the base Url of the proxied remote dataset as configuration. Optionally a security provider can
-be referenced if the remote dataset requires authentication. See (security providers)[#Working_with_security_providers]
+be referenced, if the remote dataset requires authentication. See (security providers)[#Working_with_security_providers]
+It is also possible to set a request timeout for the proxy dataset, if omitted the default timeout is unlimited.
 
+To create a proxy dataset, use the following command:
+```shell
+> curl -XPOST \
+  --header "Content-Type: application/json" \
+  --data '{"ProxyDatasetConfig": {"remoteUrl": "https://dsurl", "proxyAuthProvider": "providerName", "timeoutSeconds": 10}}' \
+  http://datahub/datasets/dataset-name
 ```
-> mim dataset create test.people --proxy=true --proxyRemoteUrl=https://url --proxyAuthProvider=authProviderName
+
+or using the `mim` CLI:
+```shell
+> mim dataset create test.people \
+    --proxy=true \
+    --proxyRemoteUrl=https://remote/datasets/name \
+    --proxyAuthProvider=authProviderName
 
 SUCCESS  Dataset has been created
 ```
@@ -306,7 +319,6 @@ curl -XPOST \
   --header "Content-Type: application/json" \
   --data '{"virtualDatasetConfig": { "transform": "BASE64-ENCODED-TRANSFORMATION-SCRIPT" } }' \
   http://datahub/datasets/dataset-name
-
 ```
 
 

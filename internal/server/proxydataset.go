@@ -79,7 +79,7 @@ func (d *ProxyDataset) StreamEntitiesRaw(
 	}
 	uri.RawQuery = q.Encode()
 	fullURI := uri.String()
-	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+	ctx, cancel := d.newHttpContext()
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, "GET", fullURI, nil)
 	if err != nil {
@@ -126,6 +126,17 @@ func (d *ProxyDataset) StreamEntitiesRaw(
 	return cont.Properties["token"].(string), nil
 }
 
+func (d *ProxyDataset) newHttpContext() (context.Context, context.CancelFunc) {
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if d.TimeoutSeconds > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), time.Duration(d.TimeoutSeconds)*time.Second)
+	} else {
+		ctx, cancel = context.WithCancel(context.Background())
+	}
+	return ctx, cancel
+}
+
 func (d *ProxyDataset) StreamEntities(from string, limit int, f func(*Entity) error, preStream func() error) (string, error) {
 	uri, err := url.Parse(d.RemoteEntitiesURL)
 	if err != nil {
@@ -140,7 +151,7 @@ func (d *ProxyDataset) StreamEntities(from string, limit int, f func(*Entity) er
 	}
 	uri.RawQuery = q.Encode()
 	fullUri := uri.String()
-	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+	ctx, cancel := d.newHttpContext()
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, "GET", fullUri, nil)
 	if err != nil {
@@ -216,7 +227,7 @@ func (d *ProxyDataset) StreamChangesRaw(
 
 	uri.RawQuery = q.Encode()
 	fullURI := uri.String()
-	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+	ctx, cancel := d.newHttpContext()
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, "GET", fullURI, nil)
 	if err != nil {
@@ -284,7 +295,7 @@ func (d *ProxyDataset) StreamChanges(since string, limit int, latestOnly bool, r
 
 	uri.RawQuery = q.Encode()
 	fullUri := uri.String()
-	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+	ctx, cancel := d.newHttpContext()
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, "GET", fullUri, nil)
 	if err != nil {
@@ -325,7 +336,7 @@ func (d *ProxyDataset) StreamChanges(since string, limit int, latestOnly bool, r
 }
 
 func (d *ProxyDataset) ForwardEntities(sourceBody io.ReadCloser, sourceHeader http.Header) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+	ctx, cancel := d.newHttpContext()
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, "POST", d.RemoteEntitiesURL, sourceBody)
 	for k, v := range sourceHeader {
