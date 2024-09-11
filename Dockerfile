@@ -1,4 +1,4 @@
-FROM golang:1.21 AS builder_src
+FROM golang:1.23 AS builder_src
 
 COPY jemalloc-install.sh .
 RUN apt-get update -y

@@ -828,8 +828,9 @@ func (ds *Dataset) GetChangesWatermark() (uint64, error) {
 	var waterMark uint64
 
 	err := ds.store.database.View(func(btxn *badger.Txn) error {
-		txn := InstrumentedTxn(btxn, ds.store)
+		//txn := InstrumentedTxn(btxn, ds.store)
 		searchBuffer := make([]byte, 7)
+		txn := btxn
 		binary.BigEndian.PutUint16(searchBuffer, DatasetEntityChangeLog)
 		binary.BigEndian.PutUint32(searchBuffer[2:], ds.InternalID)
 		searchBuffer[6] = 0xFF
