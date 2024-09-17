@@ -161,16 +161,16 @@ func TestCompact(t *testing.T) {
 		}
 	}
 	t.Run("using deduplication", func(t *testing.T) {
-		//for _, flushThreshold := range []int{1, 2, 100000} {
-		if true {
-			flushThreshold := 1
+		for _, flushThreshold := range []int{1, 2, 100000} {
+			//if true {
+			//	flushThreshold := 1
 			strat := func() CompactionStrategy {
 				s := DeduplicationStrategy()
 				s.(*deduplicationStrategy).flushAfter = flushThreshold
 				return s
 			}
-			//t.Run("with flush threshold "+strconv.Itoa(flushThreshold), func(t *testing.T) {
-			t.Run("with flush threshold 1", func(t *testing.T) {
+			t.Run("with flush threshold "+strconv.Itoa(flushThreshold), func(t *testing.T) {
+				//t.Run("with flush threshold 1", func(t *testing.T) {
 
 				t.Run("empty dataset", func(t *testing.T) {
 					defer setup()()
@@ -595,7 +595,7 @@ func TestCompact(t *testing.T) {
 						if peopleOutgoing["keys"] != 2.0 {
 							t.Fatalf("expected 2 outgoing ref keys, got %.0f", peopleOutgoing["keys"])
 						}
-					
+
 						// again do point in time queries
 						// outgoing
 						checkRelatedAtPointInTime(times[0]-int64(1*time.Second), t, store, "ns3:1", "ns3:ref1", false, []string{})
@@ -620,8 +620,6 @@ func TestCompact(t *testing.T) {
 						checkRelatedAtPointInTime(times[6]+int64(1*time.Second), t, store, "ns3:3", "ns3:ref1", true, []string{"ns3:1"})
 					})
 				})
-
-				// TODO: try to cancel/abort mid compaction, make sure no change is semi-deleted (transactional integrity)
 			})
 		}
 	})
