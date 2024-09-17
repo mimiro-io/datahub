@@ -3,6 +3,7 @@ package dataset
 import (
 	"encoding/binary"
 	"fmt"
+
 	"github.com/dgraph-io/badger/v4"
 	"github.com/mimiro-io/datahub/internal/server"
 	"github.com/mimiro-io/datahub/internal/service/entity"
@@ -62,26 +63,28 @@ func (i *compactionInstruction) reset() {
 	i.RewriteValues = make([][]byte, 0)
 }
 
-type recordedStrategy struct{}
-type maxVersionStrategy struct{}
-
-var (
-	DeduplicationStrategy = func() CompactionStrategy {
-		return &deduplicationStrategy{counts: make(map[string]int), changeBuffer: make(map[[24]byte]byte)}
-	}
-	//RecordedStrategy      = func() CompactionStrategy { return &recordedStrategy{} }
-	//MaxVersionStrategy    = func() CompactionStrategy { return &maxVersionStrategy{} }
+type (
+	recordedStrategy   struct{}
+	maxVersionStrategy struct{}
 )
 
+var DeduplicationStrategy = func() CompactionStrategy {
+	return &deduplicationStrategy{counts: make(map[string]int), changeBuffer: make(map[[24]byte]byte)}
+}
+
+// RecordedStrategy      = func() CompactionStrategy { return &recordedStrategy{} }
+// MaxVersionStrategy    = func() CompactionStrategy { return &maxVersionStrategy{} }
+
 func mkLatestKey(jsonKey []byte) []byte {
-	//2:6, dataset id
-	//6:14 entity id)
+	// 2:6, dataset id
+	// 6:14 entity id)
 	datasetEntitiesLatestVersionKey := make([]byte, 14)
 	binary.BigEndian.PutUint16(datasetEntitiesLatestVersionKey, server.DatasetLatestEntities)
 	copy(datasetEntitiesLatestVersionKey[2:], jsonKey[10:14])
 	copy(datasetEntitiesLatestVersionKey[6:], jsonKey[2:10])
 	return datasetEntitiesLatestVersionKey
 }
+
 func findRefs(ent *server.Entity, jsonKey []byte, txn *badger.Txn, lookup entity.Lookup) ([][]byte, error) {
 	refsToDel := make([][]byte, 0)
 	for k, stringOrArrayValue := range ent.References {
@@ -121,7 +124,7 @@ func processRefs(
 			return nil, er
 		}
 
-		//fmt.Println("building refs for entity", ent.InternalID, "pred", k, "related", relatedid, "recorded", ent.Recorded)
+		// fmt.Println("building refs for entity", ent.InternalID, "pred", k, "related", relatedid, "recorded", ent.Recorded)
 		// delete outgoing references
 		// 0:2: outgoing ref index, uint16
 		// 2:10: this entity id, uint64
