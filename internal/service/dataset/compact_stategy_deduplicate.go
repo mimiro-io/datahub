@@ -3,11 +3,12 @@ package dataset
 import (
 	"bytes"
 	"encoding/binary"
+	"reflect"
+
 	"github.com/dgraph-io/badger/v4"
 	"github.com/mimiro-io/datahub/internal/server"
 	"github.com/mimiro-io/datahub/internal/service/entity"
 	"go.uber.org/zap"
-	"reflect"
 )
 
 type deduplicationStrategy struct {
@@ -50,7 +51,8 @@ func (d *deduplicationStrategy) eval(
 	jsonKey []byte,
 	isFirstVersion bool,
 	isLatestVersion bool,
-	txn *badger.Txn) (*compactionInstruction, error) {
+	txn *badger.Txn,
+) (*compactionInstruction, error) {
 	// if this is the first version of the entity, we just need to keep it
 	if isFirstVersion {
 		d.prevJsonKey = jsonKey
@@ -76,8 +78,8 @@ func (d *deduplicationStrategy) eval(
 		}
 
 		// 3.delete change log entry (need to iterate over all change versions, match value with json key)
-		//ts := time.Now()
-		//del = append(del, d.findChangeLogKeys(jsonKey, txn, false)...)
+		// ts := time.Now()
+		// del = append(del, d.findChangeLogKeys(jsonKey, txn, false)...)
 		d.changeBuffer[[24]byte(jsonKey)] = 1
 		d.counts["changeLog"]++
 		//fmt.Printf("findChangeLogKeys took: %v\n", time.Since(ts))
@@ -113,7 +115,6 @@ func (d *deduplicationStrategy) eval(
 				if len(refsToDel) == len(refsToDelPrev) {
 					identical = true
 					for i, ref := range refsToDel {
-
 						if !bytes.Equal(ref, refsToDelPrev[i]) {
 							identical = false
 							break
