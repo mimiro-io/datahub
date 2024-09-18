@@ -3,6 +3,14 @@ package dataset
 import (
 	"encoding/binary"
 	"encoding/json"
+	"os"
+	"reflect"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/dgraph-io/badger/v4"
 	"github.com/mimiro-io/datahub/internal/conf"
@@ -12,13 +20,6 @@ import (
 	"github.com/mimiro-io/datahub/internal/service/store"
 	"github.com/mimiro-io/datahub/internal/service/types"
 	"go.uber.org/zap"
-	"os"
-	"reflect"
-	"strconv"
-	"strings"
-	"sync"
-	"testing"
-	"time"
 )
 
 func TestCompact(t *testing.T) {
@@ -161,8 +162,8 @@ func TestCompact(t *testing.T) {
 	}
 	t.Run("using deduplication", func(t *testing.T) {
 		for _, flushThreshold := range []int{1, 2, 100000} {
-			//	if true {
-			//flushThreshold := 1
+			//if true {
+			//	flushThreshold := 1
 			strat := func() CompactionStrategy {
 				s := DeduplicationStrategy()
 				s.(*deduplicationStrategy).flushAfter = flushThreshold
@@ -186,6 +187,8 @@ func TestCompact(t *testing.T) {
 					if err := compactor.compact("people", strat()); err != nil {
 						t.Fatalf("error compacting dataset: %v", err)
 					}
+
+					// no change expected
 					checkChanges(t, store, "people", []any{
 						[]any{"1"},
 						[]any{"2", true},
@@ -243,10 +246,32 @@ func TestCompact(t *testing.T) {
 					duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
 					duplicateEntityChange("people", "http://ns/2", ba, store, dsm, t)
 
+					checkChanges(t, store, "people", []any{
+						[]any{"ns3:1", false, `{"ns3:name": "John Doe"}`, `{"ns3:ref1": "ns3:2"}`},
+						[]any{"ns3:2", true},
+						[]any{"ns3:3"},
+						[]any{"ns3:1", false, `{"ns3:name": "John Doe"}`, `{"ns3:ref1": "ns3:2"}`},
+						[]any{"ns3:1", false, `{"ns3:name": "John Doe"}`, `{"ns3:ref1": "ns3:2"}`},
+						[]any{"ns3:1", false, `{"ns3:name": "John Doe"}`, `{"ns3:ref1": "ns3:2"}`},
+						[]any{"ns3:2", true},
+						[]any{"ns3:1", false, `{"ns3:name": "John Doe"}`, `{"ns3:ref1": "ns3:2"}`},
+						[]any{"ns3:1", false, `{"ns3:name": "John Doe"}`, `{"ns3:ref1": "ns3:2"}`},
+						[]any{"ns3:2", true},
+						[]any{"ns3:2", true},
+						[]any{"ns3:2", true},
+						[]any{"ns3:2", true},
+						[]any{"ns3:2", true},
+						[]any{"ns3:2", true},
+						[]any{"ns3:2", true},
+					})
+
 					// count refs for entity 1 before compaction
 					if rcOut, rcIn := refCount(t, store, ba, "ns3:1", "ns3:ref1"); rcOut != 6 || rcIn != 6 {
 						t.Fatalf("expected 6 ref out and 6 ref in for entity 1, got %d and %d", rcOut, rcIn)
 					}
+
+					checkQuery(t, store, "ns3:1", "ns3:ref1", false, "ns3:2")
+					checkQuery(t, store, "ns3:2", "ns3:ref1", true, "ns3:1")
 					// Now do the compaction
 					if err := compactor.compact("people", strat()); err != nil {
 						t.Fatalf("error compacting dataset: %v", err)
@@ -262,6 +287,8 @@ func TestCompact(t *testing.T) {
 					if rcOut, rcIn := refCount(t, store, ba, "ns3:1", "ns3:ref1"); rcOut != 1 || rcIn != 1 {
 						t.Fatalf("expected 1 ref out and 1 ref in, got %d and %d", rcOut, rcIn)
 					}
+					checkQuery(t, store, "ns3:1", "ns3:ref1", false, "ns3:2")
+					checkQuery(t, store, "ns3:2", "ns3:ref1", true, "ns3:1")
 				})
 				t.Run("with duplicate ref in many versions", func(t *testing.T) {
 					t.Run("stored in different batches", func(t *testing.T) {
@@ -348,7 +375,7 @@ func TestCompact(t *testing.T) {
 							t.Fatalf("expected 1 ref out and 1 ref in, got %d and %d", rcOut, rcIn)
 						}
 						if rcOut, rcIn := refCount(t, store, ba, "ns3:2", "ns4:r1"); rcOut != 2 || rcIn != 2 {
-							//t.Fatalf("expected 2 ref out and 2 ref in, got %d and %d", rcOut, rcIn)
+							// t.Fatalf("expected 2 ref out and 2 ref in, got %d and %d", rcOut, rcIn)
 						}
 						newStats = getStats(t, ba, store, log)
 						peopleIncoming = newStats["refs"].(map[string]any)["INCOMING_REF_INDEX"].(map[string]any)["people"].(map[string]any)
@@ -430,20 +457,21 @@ func TestCompact(t *testing.T) {
 						if peopleOutgoing["keys"] != 1.0 {
 							t.Fatalf("expected 1 outgoing ref keys, got %.0f", peopleOutgoing["keys"])
 						}
-
 					})
 					t.Run("with alternating delete state", func(t *testing.T) {
 						defer setup()()
+						var times []int64
 						for _, e := range [][]any{
-							[]any{"http://ns/1", false, nil, `{"ns3:ref1": ["ns3:2", "ns3:3"]}`},
-							[]any{"http://ns/1", false, `{"p": "a"}`, `{"ns3:ref1": ["ns3:2", "ns3:3"]}`},
-							[]any{"http://ns/1", true, `{"p": "b"}`, `{"ns3:ref1": ["ns3:2", "ns3:3"]}`},
-							[]any{"http://ns/1", true, `{"p": "c"}`, `{"ns3:ref1": ["ns3:2", "ns3:3"]}`},
-							[]any{"http://ns/1", true, `{"p": "d"}`, `{"ns3:ref1": ["ns3:2", "ns3:3"]}`},
-							[]any{"http://ns/1", false, `{"p": "e"}`, `{"ns3:ref1": ["ns3:2", "ns3:3"]}`},
-							[]any{"http://ns/1", false, `{"p": "f"}`, `{"ns3:ref1": ["ns3:2", "ns3:3"]}`},
+							{"http://ns/1", false, nil, `{"ns3:ref1": ["ns3:2", "ns3:3"]}`},
+							{"http://ns/1", false, `{"p": "a"}`, `{"ns3:ref1": ["ns3:2", "ns3:3"]}`},
+							{"http://ns/1", true, `{"p": "b"}`, `{"ns3:ref1": ["ns3:2", "ns3:3"]}`},
+							{"http://ns/1", true, `{"p": "c"}`, `{"ns3:ref1": ["ns3:2", "ns3:3"]}`},
+							{"http://ns/1", true, `{"p": "d"}`, `{"ns3:ref1": ["ns3:2", "ns3:3"]}`},
+							{"http://ns/1", false, `{"p": "e"}`, `{"ns3:ref1": ["ns3:2", "ns3:3"]}`},
+							{"http://ns/1", false, `{"p": "f"}`, `{"ns3:ref1": ["ns3:2", "ns3:3"]}`},
 						} {
 							mkDs(t, "people", store, e)
+							times = append(times, time.Now().UnixNano())
 							time.Sleep(1 * time.Millisecond) // make sure the txTime is different
 						}
 
@@ -491,6 +519,29 @@ func TestCompact(t *testing.T) {
 						}
 						checkQuery(t, store, "ns3:2", "ns3:ref1", true, "ns3:1")
 						checkQuery(t, store, "ns3:3", "ns3:ref1", true, "ns3:1")
+
+						// also do point in time queries
+						// outgoing
+						checkRelatedAtPointInTime(times[0]-int64(1*time.Second), t, store, "ns3:1", "ns3:ref1", false, []string{})
+						checkRelatedAtPointInTime(times[0], t, store, "ns3:1", "ns3:ref1", false, []string{"ns3:3", "ns3:2"})
+						checkRelatedAtPointInTime(times[1], t, store, "ns3:1", "ns3:ref1", false, []string{"ns3:3", "ns3:2"})
+						checkRelatedAtPointInTime(times[2], t, store, "ns3:1", "ns3:ref1", false, []string{})
+						checkRelatedAtPointInTime(times[3], t, store, "ns3:1", "ns3:ref1", false, []string{})
+						checkRelatedAtPointInTime(times[4], t, store, "ns3:1", "ns3:ref1", false, []string{})
+						checkRelatedAtPointInTime(times[5], t, store, "ns3:1", "ns3:ref1", false, []string{"ns3:3", "ns3:2"})
+						checkRelatedAtPointInTime(times[6], t, store, "ns3:1", "ns3:ref1", false, []string{"ns3:3", "ns3:2"})
+						checkRelatedAtPointInTime(times[6]+int64(1*time.Second), t, store, "ns3:1", "ns3:ref1", false, []string{"ns3:3", "ns3:2"})
+
+						// incoming
+						checkRelatedAtPointInTime(times[0]-int64(1*time.Second), t, store, "ns3:3", "ns3:ref1", true, nil)
+						checkRelatedAtPointInTime(times[0], t, store, "ns3:3", "ns3:ref1", true, []string{"ns3:1"})
+						checkRelatedAtPointInTime(times[1], t, store, "ns3:3", "ns3:ref1", true, []string{"ns3:1"})
+						checkRelatedAtPointInTime(times[2], t, store, "ns3:3", "ns3:ref1", true, []string{})
+						checkRelatedAtPointInTime(times[3], t, store, "ns3:3", "ns3:ref1", true, []string{})
+						checkRelatedAtPointInTime(times[4], t, store, "ns3:3", "ns3:ref1", true, []string{})
+						checkRelatedAtPointInTime(times[5], t, store, "ns3:3", "ns3:ref1", true, []string{"ns3:1"})
+						checkRelatedAtPointInTime(times[6], t, store, "ns3:3", "ns3:ref1", true, []string{"ns3:1"})
+						checkRelatedAtPointInTime(times[6]+int64(1*time.Second), t, store, "ns3:3", "ns3:ref1", true, []string{"ns3:1"})
 
 						// Now do the compaction. it should not have to do anything since all refs have same txn time
 						if err := compactor.compact("people", strat()); err != nil {
@@ -544,13 +595,84 @@ func TestCompact(t *testing.T) {
 						if peopleOutgoing["keys"] != 2.0 {
 							t.Fatalf("expected 2 outgoing ref keys, got %.0f", peopleOutgoing["keys"])
 						}
+
+						// again do point in time queries
+						// outgoing
+						checkRelatedAtPointInTime(times[0]-int64(1*time.Second), t, store, "ns3:1", "ns3:ref1", false, []string{})
+						checkRelatedAtPointInTime(times[0], t, store, "ns3:1", "ns3:ref1", false, []string{"ns3:3", "ns3:2"})
+						checkRelatedAtPointInTime(times[1], t, store, "ns3:1", "ns3:ref1", false, []string{"ns3:3", "ns3:2"})
+						checkRelatedAtPointInTime(times[2], t, store, "ns3:1", "ns3:ref1", false, []string{})
+						checkRelatedAtPointInTime(times[3], t, store, "ns3:1", "ns3:ref1", false, []string{})
+						checkRelatedAtPointInTime(times[4], t, store, "ns3:1", "ns3:ref1", false, []string{})
+						checkRelatedAtPointInTime(times[5], t, store, "ns3:1", "ns3:ref1", false, []string{"ns3:3", "ns3:2"})
+						checkRelatedAtPointInTime(times[6], t, store, "ns3:1", "ns3:ref1", false, []string{"ns3:3", "ns3:2"})
+						checkRelatedAtPointInTime(times[6]+int64(1*time.Second), t, store, "ns3:1", "ns3:ref1", false, []string{"ns3:3", "ns3:2"})
+
+						// incoming
+						checkRelatedAtPointInTime(times[0]-int64(1*time.Second), t, store, "ns3:3", "ns3:ref1", true, nil)
+						checkRelatedAtPointInTime(times[0], t, store, "ns3:3", "ns3:ref1", true, []string{"ns3:1"})
+						checkRelatedAtPointInTime(times[1], t, store, "ns3:3", "ns3:ref1", true, []string{"ns3:1"})
+						checkRelatedAtPointInTime(times[2], t, store, "ns3:3", "ns3:ref1", true, []string{})
+						checkRelatedAtPointInTime(times[3], t, store, "ns3:3", "ns3:ref1", true, []string{})
+						checkRelatedAtPointInTime(times[4], t, store, "ns3:3", "ns3:ref1", true, []string{})
+						checkRelatedAtPointInTime(times[5], t, store, "ns3:3", "ns3:ref1", true, []string{"ns3:1"})
+						checkRelatedAtPointInTime(times[6], t, store, "ns3:3", "ns3:ref1", true, []string{"ns3:1"})
+						checkRelatedAtPointInTime(times[6]+int64(1*time.Second), t, store, "ns3:3", "ns3:ref1", true, []string{"ns3:1"})
 					})
 				})
-
-				// TODO: try to cancel/abort mid compaction, make sure no change is semi-deleted (transactional integrity)
 			})
 		}
 	})
+}
+
+func checkRelatedAtPointInTime(when int64, t *testing.T, store *server.Store, from string, via string, inverse bool, expected []string) {
+	t.Helper()
+	fromEntity, err := store.GetEntity(from, nil, true)
+	if err != nil {
+		t.Fatalf("error getting from entity: %v", err)
+	}
+	var expEntities []*server.Entity
+	for _, e := range expected {
+		expEntity, err := store.GetEntity(e, nil, true)
+		if err != nil {
+			t.Fatalf("error getting to entity: %v", err)
+		}
+		expEntities = append(expEntities, expEntity)
+	}
+	entityInternalId := fromEntity.InternalID
+	// 1. build a RelatedFrom query input
+	searchBuffer := make([]byte, 10)
+	if inverse {
+		binary.BigEndian.PutUint16(searchBuffer, server.IncomingRefIndex)
+	} else {
+		binary.BigEndian.PutUint16(searchBuffer, server.OutgoingRefIndex)
+	}
+	binary.BigEndian.PutUint64(searchBuffer[2:], entityInternalId)
+
+	predID, err := store.GetPredicateID(via, nil)
+	if err != nil {
+		t.Fatalf("error getting predicate id: %v", err)
+	}
+	relatedFrom := &server.RelatedFrom{
+		RelationIndexFromKey: searchBuffer,
+		Predicate:            predID,
+		Inverse:              inverse,
+		Datasets:             nil,
+		At:                   when,
+	}
+	qresult, _, err := store.GetRelatedAtTime(relatedFrom, 100)
+	if err != nil {
+		t.Fatalf("error getting related entities: %v", err)
+	}
+	if len(qresult) != len(expEntities) {
+		t.Fatalf("expected %d related entities, got %d", len(expEntities), len(qresult))
+	}
+	for i, e := range qresult {
+		if e.EntityID != expEntities[i].InternalID {
+			t.Fatalf("expected related entity id %v, got %v", expEntities[i].InternalID, e.EntityID)
+		}
+	}
+
 }
 
 func checkQuery(t *testing.T, store *server.Store, from string, via string, inverse bool, expectedID string) {
@@ -569,12 +691,12 @@ func checkQuery(t *testing.T, store *server.Store, from string, via string, inve
 
 func getStats(t *testing.T, ba server.BadgerAccess, store *server.Store, log *zap.SugaredLogger) map[string]any {
 	t.Helper()
-	//ba.GetDB().Flatten(4)
-	//time.Sleep(10 * time.Second)
+	// ba.GetDB().Flatten(4)
+	// time.Sleep(10 * time.Second)
 	su := scheduler.NewStatisticsUpdater(log, ba)
 	su.Run()
 	for su.State() != scheduler.TaskStateScheduled {
-		//fmt.Println("waiting for stats update")
+		// fmt.Println("waiting for stats update")
 		time.Sleep(100 * time.Millisecond)
 	}
 	sr := &server.Statistics{
@@ -682,7 +804,7 @@ func duplicateEntityChange(dataset string, entityID string, ba store.BadgerStore
 		}
 		return nil
 	})
-	//latestKey := mkLatestKey(jsonKey)
+	// latestKey := mkLatestKey(jsonKey)
 
 	ent.IsDeleted = !ent.IsDeleted
 	ds.StoreEntities([]*server.Entity{ent})

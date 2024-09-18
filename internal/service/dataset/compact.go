@@ -4,12 +4,13 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"time"
+
 	"github.com/dgraph-io/badger/v4"
 	"github.com/mimiro-io/datahub/internal/server"
 	"github.com/mimiro-io/datahub/internal/service/store"
 	"github.com/mimiro-io/datahub/internal/service/types"
 	"go.uber.org/zap"
-	"time"
 )
 
 type CompactionWorker struct {
@@ -25,6 +26,7 @@ func NewCompactor(store *server.Store, dsm *server.DsManager, logger *zap.Sugare
 		logger: logger.Named("compaction-worker"),
 	}
 }
+
 func (c *CompactionWorker) CompactAsync(datasetID string, strategy CompactionStrategy) error {
 	if !c.running {
 		c.running = true
@@ -53,10 +55,10 @@ func (c *CompactionWorker) compact(datasetID string, strategy CompactionStrategy
 	defer txn.Discard()
 
 	// 1. go through these:
-	//datasetEntitiesLatestVersionKey := make([]byte, 14)
-	//binary.BigEndian.PutUint16(datasetEntitiesLatestVersionKey, DatasetLatestEntities)
-	//binary.BigEndian.PutUint32(datasetEntitiesLatestVersionKey[2:], ds.InternalID)
-	//binary.BigEndian.PutUint64(datasetEntitiesLatestVersionKey[6:], rid)
+	// datasetEntitiesLatestVersionKey := make([]byte, 14)
+	// binary.BigEndian.PutUint16(datasetEntitiesLatestVersionKey, DatasetLatestEntities)
+	// binary.BigEndian.PutUint32(datasetEntitiesLatestVersionKey[2:], ds.InternalID)
+	// binary.BigEndian.PutUint64(datasetEntitiesLatestVersionKey[6:], rid)
 	seekLatestChanges := store.SeekLatestChanges(dsId)
 	opts := badger.DefaultIteratorOptions
 	opts.Prefix = seekLatestChanges
@@ -76,23 +78,24 @@ func (c *CompactionWorker) compact(datasetID string, strategy CompactionStrategy
 			return err
 		}
 		cnt++
-		//keysToBeDeleted = append(keysToBeDeleted, newKeys...)
+		// keysToBeDeleted = append(keysToBeDeleted, newKeys...)
 		if time.Since(ts) > 15*time.Second {
 			ts = time.Now()
 			c.logger.Infof("compacting dataset %v, processed %v entities, removed keys so far: %v", datasetID, cnt, strategy.stats())
 		}
 
 	}
-	_, err4 := flushDeletes(c.bs, ops, true, strategy)
-	if err4 != nil {
-		return err4
+	_, err := flushDeletes(c.bs, ops, true, strategy)
+	if err != nil {
+		return err
 	}
 	c.logger.Infof("compacted dataset %s in %v, removed keys: %v", datasetID, time.Since(startTs), strategy.stats())
 	return nil
 }
 
 func (c *CompactionWorker) forEntity(dsId types.InternalDatasetID, internalEntityID types.InternalID, txn *badger.Txn,
-	strategy CompactionStrategy, ops *compactionInstruction) error {
+	strategy CompactionStrategy, ops *compactionInstruction,
+) error {
 	entityLocatorPrefixBuffer := store.SeekEntityChanges(dsId, internalEntityID)
 	opts1 := badger.DefaultIteratorOptions
 	opts1.PrefetchValues = false
@@ -174,14 +177,14 @@ func flushDeletes(bs store.BadgerStore, ops *compactionInstruction, finalFlush b
 				}
 			}
 		}
-		//fmt.Println("deleted", len(all), "keys")
+		// fmt.Println("deleted", len(all), "keys")
 		for i, key := range ops.RewriteKeys {
 			err2 := txn.Set(key, ops.RewriteValues[i])
 			if err2 != nil {
 				return err2
 			}
 		}
-		//fmt.Println("rewritten", len(ops.RewriteKeys), "keys")
+		// fmt.Println("rewritten", len(ops.RewriteKeys), "keys")
 		return nil
 	})
 	if err != nil {
