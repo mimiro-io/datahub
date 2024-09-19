@@ -591,7 +591,7 @@ func (javascriptTransform *JavascriptTransform) transformEntities(
 		resultEntities = make([]*server.Entity, 0)
 		for _, e := range v {
 			if entity, ok := e.(*server.Entity); ok {
-				//typeFix(entity)
+				// typeFix(entity)
 				resultEntities = append(resultEntities, entity)
 			} else {
 				return nil, fmt.Errorf("transform emitted invalid entity: %v", e)
@@ -728,7 +728,7 @@ func (httpTransform *HTTPTransform) transformEntities(
 		shim := &EgdmNamespaceManagerShim{}
 		shim.nsManager = httpTransform.NamespaceManager
 		shim.localContext = egdm.NewNamespaceContext()
-		parser := egdm.NewEntityParser(shim)
+		parser := egdm.NewEntityParser(shim) //.WithExpandURIs().WithCompressURIs()
 		ec, err := parser.LoadEntityCollection(bytes.NewReader(body))
 		if err != nil {
 			return nil, err
@@ -780,6 +780,10 @@ func (e EgdmNamespaceManagerShim) StorePrefixExpansionMapping(prefix string, exp
 
 func (e EgdmNamespaceManagerShim) IsFullUri(value string) bool {
 	return e.localContext.IsFullUri(value)
+}
+
+func (e EgdmNamespaceManagerShim) DoesExpansionExistForPrefix(prefix string) bool {
+	return e.localContext.DoesExpansionExistForPrefix(prefix)
 }
 
 func (e EgdmNamespaceManagerShim) GetFullURI(value string) (string, error) {

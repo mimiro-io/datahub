@@ -20,8 +20,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/mimiro-io/datahub/internal/conf"
-	egdm "github.com/mimiro-io/entity-graph-data-model"
 	"io"
 	"net/http"
 	"net/url"
@@ -30,6 +28,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mimiro-io/datahub/internal/conf"
+	egdm "github.com/mimiro-io/entity-graph-data-model"
 
 	"github.com/labstack/echo/v4"
 	"github.com/mimiro-io/datahub"
@@ -860,7 +861,7 @@ var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
 			Expect(rArr).NotTo(BeZero())
 			result := rArr[1].([]any)
 			Expect(len(result)).To(Equal(5))
-			//fmt.Println(string(body))
+			// fmt.Println(string(body))
 			Expect(result[4].([]any)[2].(map[string]any)["id"]).To(Equal("ns3:3"))
 			Expect(result[4].([]any)[2].(map[string]any)["props"].(map[string]any)["http://data.mimiro.io/core/partials"]).To(HaveLen(1))
 			Expect(result[4].([]any)[2].(map[string]any)["props"].(map[string]any)["http://data.mimiro.io/core/partials"]).To(HaveLen(1))
@@ -1113,6 +1114,8 @@ var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
 		Describe("Should execute transform on GET /changes for virtual datasets", Ordered, func() {
 			It("without since", func() {
 				res, err := http.Get(virtualDsURL + "/changes")
+				// as bug workaround, call twice to get all namespaces (https://github.com/mimiro-io/datahub/issues/324)
+				res, err = http.Get(virtualDsURL + "/changes")
 				Expect(err).To(BeNil())
 				Expect(res).NotTo(BeZero())
 				Expect(res.StatusCode).To(Equal(http.StatusOK))
