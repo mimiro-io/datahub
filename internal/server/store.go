@@ -43,6 +43,33 @@ type qresult struct {
 	Time        uint64
 	DatasetID   uint32
 }
+type MetaContext struct {
+	QueriedDatasets map[uint32]struct{}
+	TransactionSink map[string]struct{}
+}
+
+func (c *MetaContext) RegisterTransactionSink(dataset string) {
+	if c != nil {
+		c.TransactionSink[dataset] = struct{}{}
+	}
+}
+
+func (c *MetaContext) RegisterQuerySideInput(datasetid uint32) {
+	if c != nil {
+		c.QueriedDatasets[datasetid] = struct{}{}
+	}
+}
+
+func (c *MetaContext) Add(meta *MetaContext) {
+	if c != nil {
+		for k, v := range meta.QueriedDatasets {
+			c.QueriedDatasets[k] = v
+		}
+		for k, v := range meta.TransactionSink {
+			c.TransactionSink[k] = v
+		}
+	}
+}
 
 // Store data structure
 type Store struct {
@@ -57,18 +84,44 @@ type Store struct {
 	statsdClient         statsd.ClientInterface // datadog metrics
 	idseq                *badger.Sequence       // sequence used for assigning ids to uris
 	idtxn                *badger.Txn            // rolling txn for ids
-	idmux                sync.Mutex
+	idmux                sync.Locker
 	fullsyncLeaseTimeout time.Duration
 	blockCacheSize       int64
 	valueLogFileSize     int64
 	maxCompactionLevels  int
 	SlowLogThreshold     time.Duration
+	MetaCtx              *MetaContext
 }
 
 type BadgerLogger struct { // we use this to implement the Badger Logger interface
 	Logger *zap.SugaredLogger
 }
 
+func NewContextualStore(store *Store) *Store {
+	return &Store{
+		database:             store.database,
+		datasets:             store.datasets,
+		datasetsByInternalID: store.datasetsByInternalID,
+		deletedDatasets:      store.deletedDatasets,
+		storeLocation:        store.storeLocation,
+		nextDatasetID:        store.nextDatasetID,
+		NamespaceManager:     store.NamespaceManager,
+		logger:               store.logger.Named("contextual-store"),
+		statsdClient:         store.statsdClient,
+		idseq:                store.idseq,
+		idtxn:                store.idtxn,
+		idmux:                store.idmux,
+		fullsyncLeaseTimeout: store.fullsyncLeaseTimeout,
+		blockCacheSize:       store.blockCacheSize,
+		valueLogFileSize:     store.valueLogFileSize,
+		maxCompactionLevels:  store.maxCompactionLevels,
+		SlowLogThreshold:     store.SlowLogThreshold,
+		MetaCtx: &MetaContext{
+			QueriedDatasets: make(map[uint32]struct{}),
+			TransactionSink: make(map[string]struct{}),
+		},
+	}
+}
 func (bl BadgerLogger) Errorf(format string, v ...interface{}) { bl.Logger.Errorf(format, v...) }
 func (bl BadgerLogger) Infof(format string, v ...interface{}) {
 	// find parent in call stack
@@ -102,6 +155,7 @@ func NewStore(env *conf.Config, statsdClient statsd.ClientInterface) *Store {
 		valueLogFileSize:     env.ValueLogFileSize,
 		maxCompactionLevels:  env.MaxCompactionLevels,
 		SlowLogThreshold:     env.SlowLogThreshold,
+		idmux:                &sync.Mutex{},
 	}
 	store.NamespaceManager = NewNamespaceManager(store)
 
@@ -703,6 +757,7 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 							return nil, errors.New("dataset not found")
 						}
 					}
+					s.MetaCtx.RegisterQuerySideInput(previousDatasetID)
 					partials = append(partials, e)
 				} else {
 					hasDeleted = true
@@ -739,6 +794,7 @@ func (s *Store) GetEntityAtPointInTimeWithInternalID(
 				}
 			}
 
+			s.MetaCtx.RegisterQuerySideInput(previousDatasetID)
 			partials = append(partials, e)
 		} else {
 			hasDeleted = true
@@ -1622,6 +1678,7 @@ func (s *Store) ExecuteTransaction(transaction *Transaction) error {
 			return errors.New("no dataset " + k)
 		}
 		datasets[k] = dataset.(*Dataset)
+		s.MetaCtx.RegisterTransactionSink(k)
 
 		dataset.(*Dataset).WriteLock.Lock()
 		// release lock at end regardless

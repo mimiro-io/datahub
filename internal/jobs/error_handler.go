@@ -111,6 +111,10 @@ type wrappedTransform struct {
 	jobId                 string
 }
 
+func (w *wrappedTransform) EndStoreContext(s string) error {
+	return w.EndStoreContext(s)
+}
+
 type wrappedSink struct {
 	s                     Sink
 	failingEntityHandlers []failingEntityHandler

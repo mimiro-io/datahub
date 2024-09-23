@@ -217,6 +217,11 @@ var _ = Describe("A pipeline", func() {
 		Expect(err).To(BeNil(), "no result is retrieved")
 
 		Expect(len(result.Entities)).To(Equal(1), "incorrect number of entities retrieved")
+
+		// transform uses txn to write to another dataset, check that dataset is in job meta
+		ctxMeta := &server.MetaContext{}
+		Expect(store.GetObject(server.JobMetaIndex, "sync-datasetsource-to-datasetsink-with-js", ctxMeta)).To(BeNil())
+		Expect(ctxMeta.TransactionSink).To(HaveKey("NewProducts"))
 	})
 
 	It("Should fullsync to an HttpDatasetSink", func() {
