@@ -39,6 +39,7 @@ type Transform interface {
 	GetConfig() map[string]interface{}
 	transformEntities(runner *Runner, entities []*server.Entity, jobTag string) ([]*server.Entity, error)
 	getParallelism() int
+	EndStoreContext(string) error
 }
 
 // these are upper cased to prevent the user from accidentally redefining them
@@ -196,7 +197,8 @@ func (s *Scheduler) parseTransform(config *JobConfiguration) (Transform, error) 
 			case "JavascriptTransform":
 				code64, ok := transformConfig["Code"]
 				if ok && code64 != "" {
-					transform, err := NewJavascriptTransform(s.Logger, code64.(string), s.Store, s.DatasetManager)
+					transformStore := server.NewContextualStore(s.Store)
+					transform, err := NewJavascriptTransform(s.Logger, code64.(string), transformStore, s.DatasetManager)
 					if err != nil {
 						return nil, err
 					}
@@ -278,11 +280,33 @@ type JavascriptTransform struct {
 	DatasetManager    *server.DsManager
 }
 
+func (javascriptTransform *JavascriptTransform) EndStoreContext(id string) error {
+	// TODO: this should be a transaction?
+	meta := javascriptTransform.Store.MetaCtx
+
+	oldMeta := &server.MetaContext{
+		QueriedDatasets: make(map[uint32]struct{}),
+		TransactionSink: make(map[string]struct{}),
+	}
+	err := javascriptTransform.Store.GetObject(server.JobMetaIndex, id, oldMeta)
+	if err != nil {
+		return err
+	}
+
+	oldMeta.Add(meta)
+	err = javascriptTransform.Store.StoreObject(server.JobMetaIndex, id, oldMeta)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (javascriptTransform *JavascriptTransform) DatasetChanges(
 	datasetName string,
 	since uint64,
 	limit int,
 ) (*server.Changes, error) {
+	//TODO: register dataset as lineage item?
 	dataset := javascriptTransform.DatasetManager.GetDataset(datasetName)
 	if dataset == nil {
 		return nil, errors.New("dataset not found: " + datasetName)
@@ -649,6 +673,11 @@ type HTTPTransform struct {
 	TimeOut          float64                  // set timeout for http-transform
 	SupportContext   bool                     // indicates if this transform supports context
 	NamespaceManager *server.NamespaceManager // the store
+}
+
+func (httpTransform *HTTPTransform) EndStoreContext(string) error {
+	// nothing to do
+	return nil
 }
 
 func (httpTransform *HTTPTransform) getParallelism() int {

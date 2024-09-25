@@ -154,6 +154,13 @@ func (pipeline *FullSyncPipeline) sync(job *job, ctx context.Context) (int, erro
 		return entCnt, err
 	}
 
+	if pipeline.transform != nil {
+		err = pipeline.transform.EndStoreContext(job.id)
+		if err != nil {
+			return entCnt, err
+		}
+	}
+
 	//Do not store syncState when the target is an http sink.
 	//Since we use entities for httpsinks, the continuation tokens are base64 strings and not compatible with incremental tokens
 	//
@@ -333,5 +340,11 @@ func (pipeline *IncrementalPipeline) sync(job *job, ctx context.Context) (int, e
 		}
 	}
 
+	if pipeline.transform != nil {
+		err = pipeline.transform.EndStoreContext(job.id)
+		if err != nil {
+			return entCnt, err
+		}
+	}
 	return entCnt, nil
 }

@@ -83,6 +83,11 @@ var _ = Describe("Over time, a pipeline", func() {
 		checkEntities("homer_1", "Mimiro_1", "")
 		checkChange(0, "homer_1", "Mimiro_1", "")
 		assertChangeCount(1)
+
+		// transform queries company, check that it is in job meta
+		ctxMeta := &server.MetaContext{}
+		Expect(store.GetObject(server.JobMetaIndex, "sync-datasetsource-to-datasetsink-with-js-and-query", ctxMeta)).To(BeNil())
+		Expect(ctxMeta.QueriedDatasets).To(HaveKey(companies.InternalID))
 	})
 	It("Should produce consistent output for changes in dependency dataset", func() {
 		ns, employees, people, companies := setupDatasets(store, dsm)

@@ -38,6 +38,7 @@ const (
 	ContentIndex       CollectionIndex = 15
 	StoreNextDatasetID CollectionIndex = 16
 	LoginProviderIndex CollectionIndex = 17
+	JobMetaIndex       CollectionIndex = 18
 )
 
 var (
