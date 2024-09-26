@@ -44,6 +44,7 @@ const (
 var (
 	JobResultIndexBytes     = uint16ToBytes(JobResultIndex)
 	JobConfigsIndexBytes    = uint16ToBytes(JobConfigIndex)
+	JobMetaIndexBytes       = uint16ToBytes(JobMetaIndex)
 	ContentIndexBytes       = uint16ToBytes(ContentIndex)
 	StoreNextDatasetIDBytes = uint16ToBytes(StoreNextDatasetID)
 	LoginProviderIndexBytes = uint16ToBytes(LoginProviderIndex)
