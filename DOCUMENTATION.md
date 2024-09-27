@@ -1834,6 +1834,43 @@ mim transform import simple-job --file=transform1.js
 
 NOTE: The transform_entities function must be exported when using the above command. However, when generating and inserting base64 script the function MUST NOT be exported. We aim to fix this.
 
+## Lineage
+
+With jobs being the primary way of moving data around in the data hub, they form a lineage graph for datasets.
+Sinks are the end of the line for a dataset, and sources are the start. Transform queries are additional inputs and
+transform transactions are additional outputs.
+
+The lineage graph can be queried using the lineage API.
+
+### Lineage API
+
+Get only lineage nodes directly connected to a single dataset
+```
+GET /lineage/{dataset}
+```
+
+Get the complete lineage graph
+```
+GET /lineage
+```
+
+The response format is a list of graph edges. Callers can use this to for example build a graphviz visualization of the lineage.
+
+```javascript
+[
+    { "From": "source-dataset", "To": "sink-dataset", "Type": "copy" },
+    { "From": "source-dataset", "To": "sink-dataset", "Type": "transform" },
+    { "From": "other-dataset", "To": "sink-dataset", "Type": "transform-hop" }
+]
+
+```
+
+The `Type` of an edge can be one of the following:
+- `copy` - the sink dataset is a copy of the source dataset
+- `transform` - the sink dataset is the result of a transform of the source dataset
+- `transform-hop` - the sink dataset enriched with data from the `From` dataset in a transform
+
+
 ## Configuration
 
 The Datahub can be configured in several ways, but it should work for testing purposes without any setup needed. However, once you are ready to deploy into a production environment, you need to configure security as a minimum.
