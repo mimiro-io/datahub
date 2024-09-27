@@ -11,7 +11,7 @@ func RegisterLineageHandler(e *echo.Echo, logger *zap.SugaredLogger, mw *Middlew
 
 	lineage := dataset.NewLineageBuilder(store, datasetManager, logger.Named("lineage"))
 	log := logger.Named("web")
-	e.GET("/lineage/{dataset}", func(c echo.Context) error {
+	e.GET("/lineage/:dataset", func(c echo.Context) error {
 		datasetName := c.Param("dataset")
 		if datasetName == "" {
 			return echo.NewHTTPError(400, "dataset name is required")
