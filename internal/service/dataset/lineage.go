@@ -192,7 +192,7 @@ func fromToAs(jobConfig *jobs.JobConfiguration) ([]string, string, string) {
 		t = "transform"
 	}
 
-	if jobConfig.Source["Type"] == "DatasetSource" {
+	if jobConfig.Source["Type"] == "DatasetSource" || jobConfig.Source["Type"] == "MultiSource" {
 		from = []string{jobConfig.Source["Name"].(string)}
 	}
 	if jobConfig.Source["Type"] == "HttpDatasetSource" {

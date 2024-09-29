@@ -1226,6 +1226,30 @@ var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
 			})
 		})
 	})
+	Describe("the /lineage endpoint", Ordered, func() {
+		It("can get complete lineage", func() {
+			res, err := http.Get("http://localhost:24997/lineage")
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			b, _ := io.ReadAll(res.Body)
+			m := map[string]interface{}{}
+			_ = json.Unmarshal(b, &m)
+			Expect(m).To(BeEquivalentTo(map[string]interface{}{}))
+		})
+		It("cannot get dataset lineage of unknown dataset", func() {
+			res, err := http.Get("http://localhost:24997/lineage/unknown")
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(404))
+		})
+		It("can get lineage of dataset", func() {
+			res, err := http.Get("http://localhost:24997/lineage/bananas")
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+		})
+	})
 })
 
 func bananaRelations(rels ...bananaRel) string {
