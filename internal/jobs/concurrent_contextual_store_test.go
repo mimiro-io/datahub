@@ -106,9 +106,9 @@ func TestContextualStore(t *testing.T) {
 			js := `
 			function transform_entities(entities) {
 				for (e of entities) {
-					AssertNamespacePrefix("http://data.mimiro.io/people/"+GetId(e)+"/");
+					var p = AssertNamespacePrefix("http://data.mimiro.io/people/"+GetId(e)+"/");
 					e.Properties["name"] = "Marge "+GetId(e);
-					e.References["r"] = "http://data.mimiro.io/addresses/"+GetId(e)+"/123";
+					e.References["r"] = p+":123";
 					var txn = NewTransaction();
 					var newentities = [];
 					newentities.push(e);
@@ -163,9 +163,9 @@ func TestContextualStore(t *testing.T) {
 			js := `
 			function transform_entities(entities) {
 				for (e of entities) {
-					AssertNamespacePrefix("http://data.mimiro.io/cars/"+GetId(e)+"/");
+					var p = AssertNamespacePrefix("http://data.mimiro.io/cars/"+GetId(e)+"/");
 					e.Properties["name"] = "BMW "+GetId(e);
-					e.References["r"] = "http://data.mimiro.io/parking/"+GetId(e)+"/123";
+					e.References["r"] = p+":123";
 					var txn = NewTransaction();
 					var newentities = [];
 					newentities.push(e);
@@ -268,6 +268,11 @@ func TestContextualStore(t *testing.T) {
 		idsToUris := stats.get("urimap", "ID_TO_URI_INDEX_ID", "other", "keys")
 		if idsToUris != 203007.0 {
 			t.Fatalf("expected 203007 idsToUris, got %v", idsToUris)
+		}
+
+		nsCtx := store.GetGlobalContext(false)
+		if len(nsCtx.Namespaces) != 2004 {
+			t.Fatalf("expected 2004 namespace, got %v", len(nsCtx.Namespaces))
 		}
 	})
 }
