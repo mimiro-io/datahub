@@ -18,7 +18,7 @@ import (
 )
 
 func TestContextualStore(t *testing.T) {
-	//t.Skip("Skipping this test as it is resource intensive, uncomment this skip to run the test when needed")
+	t.Skip("Skipping this test as it is resource intensive, uncomment this skip to run the test when needed")
 	testCnt := 0
 	var storeLocation string
 	var scheduler *Scheduler
