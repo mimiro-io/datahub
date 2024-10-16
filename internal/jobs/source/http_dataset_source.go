@@ -73,16 +73,7 @@ func (httpDatasetSource *HTTPDatasetSource) ReadEntities(ctx context.Context, si
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// set up a transport with sane defaults, but with a default content timeout of 0 (infinite)
-	netTransport := &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout: 5 * time.Second,
-		}).DialContext,
-		TLSHandshakeTimeout: 5 * time.Second,
-	}
-	netClient := &http.Client{
-		Transport: netTransport,
-	}
+	netClient := httpClient()
 
 	// security
 	if httpDatasetSource.TokenProvider != nil {
@@ -143,6 +134,35 @@ func (httpDatasetSource *HTTPDatasetSource) ReadEntities(ctx context.Context, si
 	}
 
 	return nil
+}
+
+var globalHttpClient *http.Client
+
+// use common http client for all http sources, to reuse connections
+func httpClient() *http.Client {
+	if globalHttpClient == nil {
+		// set up a transport with sane defaults, but with a default content timeout of 0 (infinite)
+		netTransport := &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout: 5 * time.Second,
+				// keep connections alive a short time
+				KeepAliveConfig: net.KeepAliveConfig{
+					Enable:   true,
+					Idle:     15 * time.Second,
+					Interval: 15 * time.Second,
+					Count:    3,
+				},
+			}).DialContext,
+			TLSHandshakeTimeout: 5 * time.Second,
+			MaxIdleConnsPerHost: 1000,
+			MaxConnsPerHost:     1000,
+		}
+		netClient := &http.Client{
+			Transport: netTransport,
+		}
+		globalHttpClient = netClient
+	}
+	return globalHttpClient
 }
 
 func (httpDatasetSource *HTTPDatasetSource) GetConfig() map[string]interface{} {
