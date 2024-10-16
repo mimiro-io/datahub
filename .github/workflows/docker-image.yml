@@ -120,7 +120,6 @@ jobs:
 
   Docker_ARM64:
     runs-on: ARM64
-    if: false # skip this build temporarily, until we have a compatible runner
     outputs:
       image_tag: ${{ steps.image_tag.outputs.image_tag }}
 
