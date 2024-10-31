@@ -858,7 +858,8 @@ func (s *Store) GetManyRelatedEntities(
 	predicate string,
 	inverse bool,
 	datasets []string,
-	mergePartials bool) ([][]any, error) {
+	mergePartials bool,
+) ([][]any, error) {
 	res, err := s.GetManyRelatedEntitiesBatch(startPoints, predicate, inverse, datasets, 0, mergePartials)
 	if err != nil {
 		return nil, err
@@ -885,7 +886,8 @@ func (s *Store) GetManyRelatedEntitiesBatch(
 	predicate string,
 	inverse bool,
 	datasets []string,
-	limit int, mergePartials bool) (RelatedEntitiesQueryResult, error) {
+	limit int, mergePartials bool,
+) (RelatedEntitiesQueryResult, error) {
 	queryTime := time.Now().UnixNano()
 	from, err := s.ToRelatedFrom(startPoints, predicate, inverse, datasets, queryTime)
 	if err != nil {
@@ -1054,7 +1056,8 @@ func (s *Store) getRelated(
 	startPoint string,
 	predicate string,
 	inverse bool,
-	datasets []string, mergePartials bool) ([]RelatedEntityResult, error) {
+	datasets []string, mergePartials bool,
+) ([]RelatedEntityResult, error) {
 	res, err := s.GetManyRelatedEntitiesBatch([]string{startPoint}, predicate, inverse, datasets, 0, mergePartials)
 	return res.Relations, err
 }
@@ -1172,7 +1175,6 @@ func (s *Store) GetRelatedAtTime(from *RelatedFrom, limit int) ([]qresult, *Rela
 					if currentRID != 0 && !prevDeleted {
 						for _, prevResult := range prevResults {
 							if prevResult.DatasetID == prevDatasetID {
-
 								dsSpillOver[prevDatasetID] = prevResult
 							}
 						}
@@ -1666,7 +1668,23 @@ func (s *Store) IterateObjectsRaw(prefix []byte, processJSON func([]byte) error)
 }
 
 type Transaction struct {
-	DatasetEntities map[string][]*Entity
+	DatasetEntities  map[string][]*Entity
+	assertedDatasets map[string]bool
+}
+
+func (t *Transaction) AssertDataset(dataset string) {
+	if t.assertedDatasets == nil {
+		t.assertedDatasets = make(map[string]bool)
+	}
+	t.assertedDatasets[dataset] = true
+}
+
+func (t *Transaction) AssertedDatasets() []string {
+	var datasets []string
+	for k := range t.assertedDatasets {
+		datasets = append(datasets, k)
+	}
+	return datasets
 }
 
 func (s *Store) ExecuteTransaction(transaction *Transaction) error {
