@@ -306,11 +306,14 @@ func (javascriptTransform *JavascriptTransform) DatasetChanges(
 	since uint64,
 	limit int,
 ) (*server.Changes, error) {
-	//TODO: register dataset as lineage item?
 	dataset := javascriptTransform.DatasetManager.GetDataset(datasetName)
 	if dataset == nil {
 		return nil, errors.New("dataset not found: " + datasetName)
 	}
+
+	// register in lineage, only has effect if in a job context
+	// TODO: should this be a dedicated lineage type? separate from side input?
+	javascriptTransform.Store.MetaCtx.RegisterQuerySideInput(dataset.InternalID)
 
 	changes, err := dataset.GetChanges(since, limit, true)
 	return changes, err
@@ -360,6 +363,12 @@ func (javascriptTransform *JavascriptTransform) NewTransaction() *server.Transac
 }
 
 func (javascriptTransform *JavascriptTransform) ExecuteTransaction(txn *server.Transaction) error {
+	for _, assertedDataset := range txn.AssertedDatasets() {
+		_, err := javascriptTransform.DatasetManager.CreateDataset(assertedDataset, nil)
+		if err != nil {
+			return err
+		}
+	}
 	return javascriptTransform.Store.ExecuteTransaction(txn)
 }
 

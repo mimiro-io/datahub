@@ -71,6 +71,163 @@ var _ = Describe("A pipeline", func() {
 		_ = os.RemoveAll(storeLocation)
 	})
 
+	It("Should fail internal js transform with txn writing if target dataset does not exist", func() {
+		// populate dataset with some entities
+		ds, _ := dsm.CreateDataset("Products", nil)
+		_, _ = dsm.CreateDataset("NewProducts", nil)
+
+		entities := make([]*server.Entity, 1)
+		entity := server.NewEntity("http://data.mimiro.io/people/homer", 0)
+		entity.Properties["name"] = "homer"
+		entities[0] = entity
+
+		err := ds.StoreEntities(entities)
+		Expect(err).To(BeNil(), "entities are stored")
+
+		// transform js
+		js := `
+			function transform_entities(entities) {
+				for (e of entities) {
+					var txn = NewTransaction();
+					var newentities = [];
+					newentities.push(e);
+					txn.DatasetEntities["NewProducts"] = newentities;
+					txn.DatasetEntities["ProductAudit"] = newentities;
+					ExecuteTransaction(txn);
+				}
+				return entities;
+			}
+			`
+		jscriptEnc := base64.StdEncoding.EncodeToString([]byte(js))
+
+		// define job
+		jobJSON := `
+		{
+			"id" : "sync-datasetsource-to-datasetsink-with-js",
+			"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
+			"source" : {
+				"Type" : "DatasetSource",
+				"Name" : "Products"
+			},
+			"transform" : {
+				"Type" : "JavascriptTransform",
+				"Code" : "` + jscriptEnc + `"
+			},
+			"sink" : {
+				"Type" : "DevNullSink"
+			}
+		}`
+		jobConfig, _ := scheduler.Parse([]byte(jobJSON))
+		pipeline, err := scheduler.toPipeline(jobConfig, JobTypeIncremental)
+		Expect(err).To(BeNil(), "pipeline is parsed")
+
+		job := &job{
+			id:       jobConfig.ID,
+			pipeline: pipeline,
+			schedule: jobConfig.Triggers[0].Schedule,
+			runner:   runner,
+			dsm:      dsm,
+		}
+
+		job.Run()
+
+		// check number of entities in target dataset
+		peopleDataset := dsm.GetDataset("NewProducts")
+		Expect(peopleDataset).NotTo(BeNil(), "expected dataset is not present")
+
+		result, err := peopleDataset.GetEntities("", 50)
+		Expect(err).To(BeNil(), "no result is retrieved")
+
+		Expect(len(result.Entities)).To(Equal(0), "should not have written anything")
+
+		// load job run result and check for error
+
+		lastRun := &jobResult{}
+		_ = job.runner.store.GetObject(server.JobResultIndex, job.id, lastRun)
+		Expect(lastRun.LastError).To(ContainSubstring("no dataset ProductAudit"))
+	})
+	It("Should support internal js transform with txn creating datasets", func() {
+		// populate dataset with some entities
+		ds, _ := dsm.CreateDataset("Products", nil)
+		_, _ = dsm.CreateDataset("NewProducts", nil)
+		Expect(dsm.GetDataset("ProductAudit")).To(BeNil(), "ProductAudit dataset should not exist")
+
+		entities := make([]*server.Entity, 1)
+		entity := server.NewEntity("http://data.mimiro.io/people/homer", 0)
+		entity.Properties["name"] = "homer"
+		entities[0] = entity
+
+		err := ds.StoreEntities(entities)
+		Expect(err).To(BeNil(), "entities are stored")
+
+		// transform js
+		js := `
+			function transform_entities(entities) {
+				for (e of entities) {
+					var txn = NewTransaction();
+
+					// instruct the transaction to create a new dataset
+					txn.AssertDataset("ProductAudit");
+
+					var newentities = [];
+					newentities.push(e);
+					txn.DatasetEntities["NewProducts"] = newentities;
+					txn.DatasetEntities["ProductAudit"] = newentities;
+					ExecuteTransaction(txn);
+				}
+				return entities;
+			}
+			`
+		jscriptEnc := base64.StdEncoding.EncodeToString([]byte(js))
+
+		// define job
+		jobJSON := `
+		{
+			"id" : "sync-datasetsource-to-datasetsink-with-js",
+			"triggers": [{"triggerType": "cron", "jobType": "incremental", "schedule": "@every 2s"}],
+			"source" : {
+				"Type" : "DatasetSource",
+				"Name" : "Products"
+			},
+			"transform" : {
+				"Type" : "JavascriptTransform",
+				"Code" : "` + jscriptEnc + `"
+			},
+			"sink" : {
+				"Type" : "DevNullSink"
+			}
+		}`
+		jobConfig, _ := scheduler.Parse([]byte(jobJSON))
+		pipeline, err := scheduler.toPipeline(jobConfig, JobTypeIncremental)
+		Expect(err).To(BeNil(), "pipeline is parsed")
+
+		job := &job{
+			id:       jobConfig.ID,
+			pipeline: pipeline,
+			schedule: jobConfig.Triggers[0].Schedule,
+			runner:   runner,
+			dsm:      dsm,
+		}
+
+		job.Run()
+
+		// check number of entities in target dataset
+		peopleDataset := dsm.GetDataset("NewProducts")
+		Expect(peopleDataset).NotTo(BeNil(), "expected dataset is not present")
+
+		result, err := peopleDataset.GetEntities("", 50)
+		Expect(err).To(BeNil(), "no result is retrieved")
+
+		Expect(len(result.Entities)).To(Equal(1), "incorrect number of entities retrieved")
+
+		auditDataset := dsm.GetDataset("ProductAudit")
+		Expect(auditDataset).NotTo(BeNil(), "expected dataset is not present")
+
+		result, err = auditDataset.GetEntities("", 50)
+		Expect(err).To(BeNil(), "no result is retrieved")
+
+		Expect(len(result.Entities)).To(Equal(1), "incorrect number of entities retrieved")
+	})
 	It("Should support internal js transform with txn writing to several datasets", func() {
 		// populate dataset with some entities
 		ds, _ := dsm.CreateDataset("Products", nil)
