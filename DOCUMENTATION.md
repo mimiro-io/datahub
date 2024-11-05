@@ -1773,6 +1773,26 @@ function transform_entities(entities) {
 
 `NewTransaction()` is used to create a new transaction object. A transaction can then be executed using the ExecuteTransaction function. Note that this function simply returns an empty transaction data structure. It does not open a transaction.
 
+#### AssertDataset
+
+`AssertDataset(datasettname)` can be used to assert the existence of a transaction sink.
+If the dataset does not already exists, it is created when `ExecuteTransaction(txn)` is invoked
+on the transaction that has the assertion.
+
+```javascript
+function transform_entities(entities) {
+    var newEntities = [];
+    for (e of entities) {
+        newEntities.push(e);
+    }
+    var txn = NewTransaction();
+    txn.AssertDataset("NewProducts");
+    txn.DatasetEntities["NewProducts"] = newEntities;
+    ExecuteTransaction(txn);
+    return entities;
+}
+```
+
 #### ExecuteTransaction
 
 `ExecuteTransaction(txn)` is used to execute a transaction. The following example shows how to use both NewTransaction and ExecuteTransaction in a transform.
