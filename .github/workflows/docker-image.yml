@@ -96,6 +96,9 @@ jobs:
 
       - name: Trivy vulnerability scan
         uses: aquasecurity/trivy-action@master
+        env:
+          TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db,public.ecr.aws/aquasecurity/trivy-db
+          TRIVY_JAVA_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-java-db,public.ecr.aws/aquasecurity/trivy-java-db
         with:
           image-ref: "${{ steps.image_tag.outputs.image_tag }}"
           format: "table"
@@ -202,6 +205,9 @@ jobs:
 
       - name: Trivy vulnerability scan
         uses: aquasecurity/trivy-action@master
+        env:
+          TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db,public.ecr.aws/aquasecurity/trivy-db
+          TRIVY_JAVA_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-java-db,public.ecr.aws/aquasecurity/trivy-java-db
         with:
           image-ref: "${{ steps.image_tag.outputs.image_tag }}"
           format: "table"
