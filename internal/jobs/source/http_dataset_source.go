@@ -37,6 +37,7 @@ type HTTPDatasetSource struct {
 	TokenProvider  security.Provider // for use in token auth
 	Store          *server.Store
 	Logger         *zap.SugaredLogger
+	Timeout        time.Duration
 }
 
 func (httpDatasetSource *HTTPDatasetSource) StartFullSync() {
@@ -73,7 +74,7 @@ func (httpDatasetSource *HTTPDatasetSource) ReadEntities(ctx context.Context, si
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	netClient := httpClient()
+	netClient := httpClient(httpDatasetSource.Timeout)
 
 	// security
 	if httpDatasetSource.TokenProvider != nil {
@@ -119,7 +120,6 @@ func (httpDatasetSource *HTTPDatasetSource) ReadEntities(ctx context.Context, si
 		}
 		return nil
 	})
-
 	if err != nil {
 		return err
 	}
@@ -136,15 +136,18 @@ func (httpDatasetSource *HTTPDatasetSource) ReadEntities(ctx context.Context, si
 	return nil
 }
 
-var globalHttpClient *http.Client
+var globalHttpClients map[time.Duration]*http.Client
 
 // use common http client for all http sources, to reuse connections
-func httpClient() *http.Client {
-	if globalHttpClient == nil {
+func httpClient(timeout time.Duration) *http.Client {
+	if globalHttpClients == nil {
+		globalHttpClients = make(map[time.Duration]*http.Client)
+	}
+	if globalHttpClients[timeout] == nil {
 		// set up a transport with sane defaults, but with a default content timeout of 0 (infinite)
 		netTransport := &http.Transport{
 			DialContext: (&net.Dialer{
-				Timeout: 5 * time.Second,
+				Timeout: timeout,
 				// keep connections alive a short time
 				KeepAliveConfig: net.KeepAliveConfig{
 					Enable:   true,
@@ -153,16 +156,16 @@ func httpClient() *http.Client {
 					Count:    3,
 				},
 			}).DialContext,
-			TLSHandshakeTimeout: 5 * time.Second,
+			TLSHandshakeTimeout: timeout,
 			MaxIdleConnsPerHost: 1000,
 			MaxConnsPerHost:     1000,
 		}
 		netClient := &http.Client{
 			Transport: netTransport,
 		}
-		globalHttpClient = netClient
+		globalHttpClients[timeout] = netClient
 	}
-	return globalHttpClient
+	return globalHttpClients[timeout]
 }
 
 func (httpDatasetSource *HTTPDatasetSource) GetConfig() map[string]interface{} {
