@@ -6,15 +6,16 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/badger/v4/pb"
-	"github.com/dgraph-io/ristretto/z"
-	"github.com/mimiro-io/datahub/internal/service/store"
-	"github.com/mimiro-io/datahub/internal/service/types"
-	"go.uber.org/zap"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/ristretto/v2/z"
+	"github.com/mimiro-io/datahub/internal/service/store"
+	"github.com/mimiro-io/datahub/internal/service/types"
+	"go.uber.org/zap"
 )
 
 const (
@@ -40,7 +41,6 @@ const (
 )
 
 func NewStatisticsUpdater(logger *zap.SugaredLogger, store store.BadgerStore) schedulable {
-
 	stats := &Statistics{
 		badger: store,
 		Logger: logger,
@@ -74,7 +74,6 @@ func NewStatisticsUpdater(logger *zap.SugaredLogger, store store.BadgerStore) sc
 		err = store.GetDB().Update(func(txn *badger.Txn) error {
 			return txn.Set(statsKey, statBytes)
 		})
-
 		if err != nil {
 			logger.Errorf("failed to store statistics: %v", err)
 			return RunResult{state: RunResultFailed, timestame: time.Now()}
@@ -98,7 +97,7 @@ type Statistics struct {
 
 func (stats *Statistics) Count(ctx context.Context) map[string]any {
 	s := stats.badger.GetDB().NewStream()
-	//s.NumGo = 16
+	// s.NumGo = 16
 	counts := map[string]int64{}
 	keySizes := map[string]int64{}
 	valueSizes := map[string]int64{}
@@ -112,7 +111,7 @@ func (stats *Statistics) Count(ctx context.Context) map[string]any {
 			return nil, nil
 		}
 		kv := &pb.KV{
-			//Key: y.Copy(item.Key()),
+			// Key: y.Copy(item.Key()),
 			Key:   item.Key(),
 			Value: binary.BigEndian.AppendUint64(nil, uint64(item.ValueSize())),
 		}
@@ -183,7 +182,7 @@ func (stats *Statistics) Count(ctx context.Context) map[string]any {
 		if dsName, ok := stats.badger.LookupDatasetName(types.InternalDatasetID(dsId)); ok {
 			ds = dsName
 		}
-		if bytes.Equal(k[6:8], del) { //deleted
+		if bytes.Equal(k[6:8], del) { // deleted
 			ds += " (deleted)"
 		}
 
@@ -227,9 +226,9 @@ func (stats *Statistics) Count(ctx context.Context) map[string]any {
 		dsMap["keys"] = v
 		dsMap["size-keys"] = keySizes[kS]
 		dsMap["size-values"] = valueSizes[kS]
-		//dsMap["total-value-size"] = map[string]any{"size": ByteCountIEC(valueSizes[kS]), "raw": valueSizes[kS]}
-		//dsMap["total-key-size"] = map[string]any{"size": ByteCountIEC(keySizes[kS]), "raw": keySizes[kS]}
-		//dsMap["avg-value-size"] = map[string]any{"size": ByteCountIEC(valueSizes[kS] / v), "raw": valueSizes[kS] / v}
+		// dsMap["total-value-size"] = map[string]any{"size": ByteCountIEC(valueSizes[kS]), "raw": valueSizes[kS]}
+		// dsMap["total-key-size"] = map[string]any{"size": ByteCountIEC(keySizes[kS]), "raw": keySizes[kS]}
+		// dsMap["avg-value-size"] = map[string]any{"size": ByteCountIEC(valueSizes[kS] / v), "raw": valueSizes[kS] / v}
 		if allMap != nil {
 			allMap["keys"] = allMap["keys"].(int64) + v
 			allMap["size-keys"] = allMap["size-keys"].(int64) + keySizes[kS]
