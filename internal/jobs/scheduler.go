@@ -602,6 +602,12 @@ func (s *Scheduler) parseSource(jobConfig *JobConfiguration) (source.Source, err
 				src := &source.HTTPDatasetSource{}
 				src.Store = s.Store
 				src.Logger = s.Runner.logger.Named("HttpDatasetSource")
+				timeout, ok := sourceConfig["TimeoutSeconds"]
+				if ok {
+					src.Timeout = time.Duration(int(timeout.(float64))) * time.Second
+				} else {
+					src.Timeout = 5 * time.Second
+				}
 				endpoint, ok := sourceConfig["Url"]
 				if ok && endpoint != "" {
 					src.Endpoint = endpoint.(string)
