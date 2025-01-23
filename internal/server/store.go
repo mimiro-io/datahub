@@ -89,6 +89,7 @@ type Store struct {
 	blockCacheSize       int64
 	valueLogFileSize     int64
 	maxCompactionLevels  int
+	flattenOnStart       bool
 	SlowLogThreshold     time.Duration
 	MetaCtx              *MetaContext
 }
@@ -115,6 +116,7 @@ func NewContextualStore(store *Store) *Store {
 		blockCacheSize:       store.blockCacheSize,
 		valueLogFileSize:     store.valueLogFileSize,
 		maxCompactionLevels:  store.maxCompactionLevels,
+		flattenOnStart:       store.flattenOnStart,
 		SlowLogThreshold:     store.SlowLogThreshold,
 		MetaCtx: &MetaContext{
 			QueriedDatasets: make(map[uint32]struct{}),
@@ -154,6 +156,7 @@ func NewStore(env *conf.Config, statsdClient statsd.ClientInterface) *Store {
 		blockCacheSize:       env.BlockCacheSize,
 		valueLogFileSize:     env.ValueLogFileSize,
 		maxCompactionLevels:  env.MaxCompactionLevels,
+		flattenOnStart:       env.FlattenOnStart,
 		SlowLogThreshold:     env.SlowLogThreshold,
 		idmux:                &sync.Mutex{},
 	}
@@ -467,6 +470,16 @@ func (s *Store) Open() error {
 	db, err := badger.Open(opts)
 	if err != nil {
 		s.logger.Error(err)
+	}
+
+	if s.flattenOnStart {
+		s.logger.Info("Flattening store")
+		numWorkers := runtime.NumCPU() - 1
+		err = db.Flatten(numWorkers)
+		if err != nil {
+			s.logger.Error(fmt.Errorf("flattening failed: %w", err))
+		}
+		s.logger.Info("Flattening done")
 	}
 
 	// if new storage, create unique storage id file. BackupManager can use this id to ensure it does not overwrite
@@ -1092,7 +1105,7 @@ func (s *Store) GetRelatedAtTime(from *RelatedFrom, limit int) ([]qresult, *Rela
 			currentRID = 0
 			// tmpResult := make(map[[12]byte]result)
 
-			var prevResults map[uint64]qresult = map[uint64]qresult{}
+			var prevResults = map[uint64]qresult{}
 			var prevDeleted bool
 			var prevDatasetID uint32
 			var dsSpillOver map[uint32]qresult
