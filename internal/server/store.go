@@ -1404,11 +1404,14 @@ func (s *Store) commitIDTxn() error {
 		return nil
 	}
 
+	defer func() {
+		s.idtxn.Discard()
+		s.idtxn = nil
+	}()
 	err := s.idtxn.Commit()
 	if err != nil {
 		return err
 	}
-	s.idtxn = nil
 	return nil
 }
 
