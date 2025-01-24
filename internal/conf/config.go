@@ -82,6 +82,7 @@ func load(basePath string) (*Config, error) {
 		BlockCacheSize:          viper.GetInt64("BLOCK_CACHE_SIZE"),
 		ValueLogFileSize:        viper.GetInt64("VALUE_LOG_FILE_SIZE"),
 		MaxCompactionLevels:     viper.GetInt("MAX_COMPACTION_LEVELS"),
+		FlattenOnStart:          viper.GetBool("FLATTEN_ON_START"),
 		AdminUserName:           viper.GetString("ADMIN_USERNAME"),
 		AdminPassword:           viper.GetString("ADMIN_PASSWORD"),
 		NodeID:                  viper.GetString("NODE_ID"),
@@ -152,7 +153,7 @@ func parse(basePath string, logger *zap.SugaredLogger) error {
 	viper.SetConfigType("env")
 	viper.SetConfigName(configFile)
 	viper.AddConfigPath(path)
-	
+
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			// Config file not found; ignore error if desired

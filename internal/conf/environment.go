@@ -37,6 +37,7 @@ type Config struct {
 	BlockCacheSize          int64
 	ValueLogFileSize        int64
 	MaxCompactionLevels     int
+	FlattenOnStart          bool
 	AdminUserName           string
 	AdminPassword           string
 	NodeID                  string

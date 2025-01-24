@@ -1926,6 +1926,11 @@ The Datahub supports reporting metrics trough a StatsD server. This is turned of
 
 Can be used to override Badger's default 7 LSM levels. When more that 1.1TB disk space usage are exceeded or expected to be exceeded, 8 compaction levels are needed.
 
+`FLATTEN_ON_START`
+
+boolean flag to make datahub flatten the database on start. This is useful when you have deleted a lot of data in the database and you want to release some disk space.
+Should only be set temporarily, as it slows startup time down considerably.
+
 #### Securing the Data Hub
 
 There are two main security models for the data hub.
