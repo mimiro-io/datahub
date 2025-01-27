@@ -1038,7 +1038,8 @@ func NewMockService() MockService {
 		}
 		datasetName := "people"
 		result.RecordedEntities[datasetName] = append(result.RecordedEntities[datasetName], entities...)
-		return context.NoContent(http.StatusOK)
+		// return 204 in this one mock endpoint, to make sure not only 200 is handled
+		return context.NoContent(http.StatusNoContent)
 	})
 
 	return result
@@ -1076,7 +1077,7 @@ func setupScheduler(storeLocation string) (*Scheduler, *server.Store, *Runner, *
 	// undo redirect of stdout after successful init of fx and jobrunner
 	os.Stdout = oldStd
 	// err := lc.Start(context.Background())
-	//if err != nil {
+	// if err != nil {
 	// 	Fail(err.Error())
 	// }
 	// add basic auth provider called local
