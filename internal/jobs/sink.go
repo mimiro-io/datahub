@@ -297,7 +297,7 @@ func (httpDatasetSink *httpDatasetSink) processEntities(runner *Runner, entities
 		return err
 	}
 
-	if res.StatusCode != 200 {
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		return handleHTTPError(res)
 	}
 
