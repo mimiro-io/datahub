@@ -398,6 +398,26 @@ var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
 			}
 		})
 
+		It("should reject requests when ongoing fullsync with empty fsid (job run)", func() {
+			// first batch with "start" header
+			payload := strings.NewReader(bananasFromTo(4, 4, false))
+			ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ := http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-start", "true")
+			req.Header.Add("universal-data-api-full-sync-id", "") // simulate job run, empty fsid
+			_, _ = http.DefaultClient.Do(req)
+			cancel()
+
+			// try to add id 5 without sync-id. should  be rejected
+			payload = strings.NewReader(bananasFromTo(5, 5, false))
+			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
+			res, err := http.DefaultClient.Do(req)
+			Expect(err).To(BeNil())
+			cancel()
+			Expect(res.StatusCode).To(Equal(409), "request should be rejected because fullsync is going on")
+		})
+
 		It("should keep fullsync requests with same sync-id in parallel", func() {
 			// only send IDs 4 through 16 in batches as fullsync
 			// 1-3 and 17-20 should end up deleted

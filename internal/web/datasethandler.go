@@ -815,6 +815,9 @@ func (handler *datasetHandler) processEntities(
 			return echo.NewHTTPError(http.StatusConflict, server.HTTPFullsyncErr(err2).Error())
 		}
 	} else if dataset.FullSyncStarted() {
+		if fullSyncID == "" {
+			return echo.NewHTTPError(http.StatusConflict, server.HTTPFullsyncErr(errors.New("fullsync is ongoing")).Error())
+		}
 		err = dataset.RefreshFullSyncLease(fullSyncID)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusConflict, server.HTTPFullsyncErr(err).Error())
