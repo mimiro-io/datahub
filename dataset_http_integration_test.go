@@ -408,14 +408,50 @@ var _ = Describe("The dataset endpoint", Ordered, Serial, func() {
 			_, _ = http.DefaultClient.Do(req)
 			cancel()
 
-			// try to add id 5 without sync-id. should  be rejected
-			payload = strings.NewReader(bananasFromTo(5, 5, false))
+			// try to add id 2 without sync-id. should  be rejected
+			payload = strings.NewReader(bananasFromTo(2, 2, false))
 			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
 			req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
 			res, err := http.DefaultClient.Do(req)
 			Expect(err).To(BeNil())
 			cancel()
 			Expect(res.StatusCode).To(Equal(409), "request should be rejected because fullsync is going on")
+
+			// last batch with "end" signal
+			payload = strings.NewReader(bananasFromTo(5, 16, false))
+			ctx, cancel = context.WithTimeout(context.Background(), 1000*time.Millisecond)
+			req, _ = http.NewRequestWithContext(ctx, "POST", dsURL+"/entities", payload)
+			req.Header.Add("universal-data-api-full-sync-id", "") // simulate job run, empty fsid
+			req.Header.Add("universal-data-api-full-sync-end", "true")
+			res, err = http.DefaultClient.Do(req)
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			cancel()
+
+			// read entities back
+			res, err = http.Get(dsURL + "/entities")
+			Expect(err).To(BeNil())
+			Expect(res).NotTo(BeZero())
+			Expect(res.StatusCode).To(Equal(200))
+			bodyBytes, _ := io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			var entities []*server.Entity = nil
+			err = json.Unmarshal(bodyBytes, &entities)
+			Expect(err).To(BeNil())
+			Expect(len(entities)).To(Equal(22), "expected 20 entities plus @context and @continuation")
+			// remove context
+			entities = entities[1:]
+			for i := 0; i < 3; i++ {
+				Expect(entities[i].IsDeleted).To(BeTrue(), "entity was not part of fullsync, should still be deleted: ", i)
+			}
+			for i := 3; i < 16; i++ {
+				Expect(entities[i].IsDeleted).To(BeFalse(), "entity was part of fullsync, should be active: ", i)
+			}
+			for i := 16; i < 20; i++ {
+				Expect(entities[i].IsDeleted).To(BeTrue(), "entity was not part of fullsync, should still be deleted: ", i)
+			}
+
 		})
 
 		It("should keep fullsync requests with same sync-id in parallel", func() {
