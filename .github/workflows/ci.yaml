@@ -1,0 +1,19 @@
+name: CI
+permissions:
+  contents: read
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  release:
+    types:
+      - published
+jobs:
+  DockerHub:
+    uses: mimiro-io/.github/.github/workflows/dockerhub.yaml@main
+    with:
+      name: "mimiro/datahub"
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
