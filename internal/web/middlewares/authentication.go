@@ -162,7 +162,7 @@ func (config *JwtConfig) ValidateToken(auth string) (*jwt.Token, error) {
 			}
 		})
 		if err != nil {
-			err = fmt.Errorf("Oauth: %w", err)
+			err = fmt.Errorf("oauth: %w", err)
 		}
 	}
 	if err != nil {
