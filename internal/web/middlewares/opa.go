@@ -57,14 +57,14 @@ func doOpaCheck(logger *zap.SugaredLogger, method string, path string, token *jw
 	// lets figure out the users datasets
 	body, err = opaQuery(fmt.Sprintf("%s/v1/data/datahub/authz/datasets", opaEndpoint), input)
 	if err != nil {
-		logger.Errorf("opa query failed, input|result|err: %+v %s %+v", input, string(body), err)
+		logger.Debugf("opa query failed, input|result|err: %+v %s %+v", input, string(body), err)
 
 		return nil, echo.NewHTTPError(http.StatusForbidden, err.Error())
 	}
 	resp := opaDatasets{}
 	err = json.Unmarshal(body, &resp)
 	if err != nil {
-		logger.Errorf("opaDatasets error, input|result|err: %+v %s %+v", input, string(body), err)
+		logger.Debugf("opaDatasets error, input|result|err: %+v %s %+v", input, string(body), err)
 
 		return nil, echo.NewHTTPError(http.StatusForbidden, err.Error())
 	}
