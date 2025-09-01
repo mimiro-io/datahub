@@ -23,11 +23,7 @@ type opaRequest struct {
 }
 
 type opaDatasets struct {
-	Result json.RawMessage `json:"result"`
-}
-
-type opaResultAdmin struct {
-	Wildcard bool `json:"*"`
+	Result []string `json:"result"`
 }
 
 func doOpaCheck(logger *zap.SugaredLogger, method string, path string, token *jwt.Token, scopes []string, opaEndpoint string) ([]string, error) {
@@ -69,7 +65,7 @@ func doOpaCheck(logger *zap.SugaredLogger, method string, path string, token *jw
 		return nil, echo.NewHTTPError(http.StatusForbidden, err.Error())
 	}
 
-	datasets := pluckDatasets(logger, resp)
+	datasets := pluckDatasets(resp)
 
 	logger.Debugf("OPA datasets: %+v", datasets)
 
@@ -110,27 +106,10 @@ func opaQuery(url string, request opaRequest) ([]byte, error) {
 
 // pluckDatasets is used to make sure we don't accidentally end up with a result
 // that breaks the endpoint
-func pluckDatasets(logger *zap.SugaredLogger, resp opaDatasets) []string {
-	var datasets []string
-	err := json.Unmarshal(resp.Result, &datasets)
-
-	if err == nil {
-		return datasets
+func pluckDatasets(resp opaDatasets) []string {
+	datasets := make([]string, 0)
+	if len(resp.Result) > 0 {
+		datasets = append(datasets, resp.Result...)
 	}
-
-	logger.Debugf("unable to parse opa datasets as slice: %+v", resp)
-
-	// For admins (using personal DEV JWT for local testing), must handle opa result {"*": true}
-	var resultAdmin opaResultAdmin
-	err = json.Unmarshal(resp.Result, &resultAdmin)
-
-	if err == nil {
-		if resultAdmin.Wildcard {
-			return []string{"*"}
-		}
-	}
-
-	logger.Debugf("unable to parse opa datasets as struct : %+v", resp)
-
-	return []string{}
+	return datasets
 }
