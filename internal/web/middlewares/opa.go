@@ -117,7 +117,7 @@ func pluckDatasets(logger *zap.SugaredLogger, resp opaDatasets) []string {
 	if err == nil {
 		return datasets
 	} else {
-		logger.Debugf("opa datasets parse error : %+v %+v", resp, err)
+		logger.Debugf("unable to parse opa datasets as slice: %+v", resp)
 	}
 
 	// For admins (using personal DEV JWT for local testing), must handle opa result {"*": true}
@@ -129,7 +129,7 @@ func pluckDatasets(logger *zap.SugaredLogger, resp opaDatasets) []string {
 			return []string{"*"}
 		}
 	} else {
-		logger.Debugf("opa datasets parse error : %+v %+v", resp, err)
+		logger.Debugf("unable to parse opa datasets as struct : %+v", resp)
 	}
 
 	return []string{}
