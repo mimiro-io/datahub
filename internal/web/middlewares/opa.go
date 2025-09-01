@@ -69,9 +69,7 @@ func doOpaCheck(logger *zap.SugaredLogger, method string, path string, token *jw
 		return nil, echo.NewHTTPError(http.StatusForbidden, err.Error())
 	}
 
-	logger.Debugf("OPA datasets response: %s", string(resp.Result))
-
-	datasets := pluckDatasets(resp)
+	datasets := pluckDatasets(logger, resp)
 
 	logger.Debugf("OPA datasets: %+v", datasets)
 
@@ -112,18 +110,27 @@ func opaQuery(url string, request opaRequest) ([]byte, error) {
 
 // pluckDatasets is used to make sure we don't accidentally end up with a result
 // that breaks the endpoint
-func pluckDatasets(resp opaDatasets) []string {
+func pluckDatasets(logger *zap.SugaredLogger, resp opaDatasets) []string {
 	var datasets []string
-	if err := json.Unmarshal(resp.Result, &datasets); err == nil {
+	err := json.Unmarshal(resp.Result, &datasets)
+
+	if err == nil {
 		return datasets
+	} else {
+		logger.Debugf("opa datasets parse error : %+v %+v", resp, err)
 	}
 
-	// For admin JWT, must handle opa result {"*": true}
+	// For admins (using personal DEV JWT for local testing), must handle opa result {"*": true}
 	var resultAdmin opaResultAdmin
-	if err := json.Unmarshal(resp.Result, &resultAdmin); err == nil {
+	err = json.Unmarshal(resp.Result, &resultAdmin)
+
+	if err == nil {
 		if resultAdmin.Wildcard {
 			return []string{"*"}
 		}
+	} else {
+		logger.Debugf("opa datasets parse error : %+v %+v", resp, err)
 	}
+
 	return []string{}
 }
