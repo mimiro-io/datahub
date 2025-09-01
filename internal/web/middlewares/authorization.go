@@ -15,8 +15,9 @@
 package middlewares
 
 import (
-	"github.com/spf13/viper"
 	"net/http"
+
+	"github.com/spf13/viper"
 
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
@@ -34,7 +35,7 @@ func Authorizer(core *security.ServiceCore) func(logger *zap.SugaredLogger, scop
 				token := c.Get("user").(*jwt.Token)
 
 				// check OPA
-				datasets, err := doOpaCheck(c.Request().Method, c.Request().URL.Path, token, scopes, opaEndpoint)
+				datasets, err := doOpaCheck(logger, c.Request().Method, c.Request().URL.Path, token, scopes, opaEndpoint)
 				if err != nil {
 					// if OPA failed, check ACL
 					err = doAclCheck(c.Request().Method, c.Request().URL.Path, token, core)

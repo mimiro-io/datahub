@@ -18,13 +18,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"time"
 
 	"github.com/gojektech/heimdall/v6/httpclient"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
+	"go.uber.org/zap"
 )
 
 type opaAnswer struct {
@@ -39,7 +40,7 @@ type opaDatasets struct {
 	Result []string `json:"result"`
 }
 
-func doOpaCheck(method string, path string, token *jwt.Token, scopes []string, opaEndpoint string) ([]string, error) {
+func doOpaCheck(logger *zap.SugaredLogger, method string, path string, token *jwt.Token, scopes []string, opaEndpoint string) ([]string, error) {
 	input := opaRequest{
 		Input: map[string]interface{}{
 			"method": method,
@@ -66,14 +67,22 @@ func doOpaCheck(method string, path string, token *jwt.Token, scopes []string, o
 	// lets figure out the users datasets
 	body, err = opaQuery(fmt.Sprintf("%s/v1/data/datahub/authz/datasets", opaEndpoint), input)
 	if err != nil {
+		logger.Debugf("opa query failed, input|result|err: %+v %s %+v", input, string(body), err)
+
 		return nil, echo.NewHTTPError(http.StatusForbidden, err.Error())
 	}
 	resp := opaDatasets{}
 	err = json.Unmarshal(body, &resp)
 	if err != nil {
+		logger.Debugf("opaDatasets error, input|result|err: %+v %s %+v", input, string(body), err)
+
 		return nil, echo.NewHTTPError(http.StatusForbidden, err.Error())
 	}
+
 	datasets := pluckDatasets(resp)
+
+	logger.Debugf("OPA datasets: %+v", datasets)
+
 	return datasets, nil
 }
 
@@ -102,7 +111,7 @@ func opaQuery(url string, request opaRequest) ([]byte, error) {
 		_ = res.Body.Close()
 	}()
 
-	bodyBytes, err := ioutil.ReadAll(res.Body)
+	bodyBytes, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +122,6 @@ func opaQuery(url string, request opaRequest) ([]byte, error) {
 // that breaks the endpoint
 func pluckDatasets(resp opaDatasets) []string {
 	datasets := make([]string, 0)
-
 	if len(resp.Result) > 0 {
 		datasets = append(datasets, resp.Result...)
 	}
