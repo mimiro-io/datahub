@@ -36,6 +36,11 @@ type opaRequest struct {
 	Input map[string]interface{} `json:"input"`
 }
 
+type opaRawResponse struct {
+	DecisionID string                 `json:"decision_id"`
+	Result     map[string]interface{} `json:"result"`
+}
+
 type opaDatasets struct {
 	Result []string `json:"result"`
 }
@@ -67,16 +72,37 @@ func doOpaCheck(logger *zap.SugaredLogger, method string, path string, token *jw
 	// lets figure out the users datasets
 	body, err = opaQuery(fmt.Sprintf("%s/v1/data/datahub/authz/datasets", opaEndpoint), input)
 	if err != nil {
-		logger.Debugf("opa query failed, input|result|err: %+v %s %+v", input, string(body), err)
+		logger.Errorf("opa query failed, result|err: %s %+v", string(body), err)
 
 		return nil, echo.NewHTTPError(http.StatusForbidden, err.Error())
 	}
-	resp := opaDatasets{}
-	err = json.Unmarshal(body, &resp)
-	if err != nil {
-		logger.Debugf("opaDatasets error, input|result|err: %+v %s %+v", input, string(body), err)
 
-		return nil, echo.NewHTTPError(http.StatusForbidden, err.Error())
+	return parseDatasetsFromOpaBody(logger, body)
+}
+
+// parseDatasetsFromOpaBody parses the response body from OPA to extract datasets
+// It handles both the case where the result is a list of datasets and the case
+// where the result is a map indicating admin access.
+func parseDatasetsFromOpaBody(logger *zap.SugaredLogger, opaBody []byte) ([]string, error) {
+	resp := opaDatasets{}
+	err := json.Unmarshal(opaBody, &resp)
+	if err != nil {
+		logger.Warnf("opaDatasets error, result|err: %s %+v", string(opaBody), err)
+
+		raw := opaRawResponse{}
+		rawErr := json.Unmarshal(opaBody, &raw)
+
+		// result is a map, check if we have a *:true in there
+		if rawErr == nil && raw.Result != nil {
+			if val, ok := raw.Result["*"]; ok {
+				if isAdmin, ok := val.(bool); ok && isAdmin {
+					// admin user, return wildcard
+					return []string{"*"}, nil
+				}
+			}
+		}
+
+		return nil, fmt.Errorf("error parsing opa response: %w", rawErr)
 	}
 
 	datasets := pluckDatasets(resp)
