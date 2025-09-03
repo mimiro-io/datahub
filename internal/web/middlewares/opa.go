@@ -37,8 +37,8 @@ type opaRequest struct {
 }
 
 type opaRawResponse struct {
-	DecisionID string                 `json:"decision_id"`
-	Result     map[string]interface{} `json:"result"`
+	DecisionID string         `json:"decision_id"`
+	Result     map[string]any `json:"result"`
 }
 
 type opaDatasets struct {
@@ -69,7 +69,7 @@ func doOpaCheck(logger *zap.SugaredLogger, method string, path string, token *jw
 		return nil, echo.NewHTTPError(http.StatusForbidden, "user has no access to resource")
 	}
 
-	// lets figure out the users datasets
+	// Determine the permitted datasets
 	body, err = opaQuery(fmt.Sprintf("%s/v1/data/datahub/authz/datasets", opaEndpoint), input)
 	if err != nil {
 		logger.Errorf("opa query failed, result|err: %s %+v", string(body), err)
@@ -95,7 +95,7 @@ func parseDatasetsFromOpaBody(logger *zap.SugaredLogger, opaBody []byte) ([]stri
 		// result is a map, check if we have a *:true in there
 		if rawErr == nil && raw.Result != nil {
 			if val, ok := raw.Result["*"]; ok {
-				if isAdmin, ok := val.(bool); ok && isAdmin {
+				if isAdmin := val.(bool); isAdmin {
 					// admin user, return wildcard
 					return []string{"*"}, nil
 				}
