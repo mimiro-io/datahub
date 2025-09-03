@@ -95,7 +95,7 @@ func parseDatasetsFromOpaBody(logger *zap.SugaredLogger, opaBody []byte) ([]stri
 		// result is a map, check if we have a *:true in there
 		if rawErr == nil && raw.Result != nil {
 			if val, ok := raw.Result["*"]; ok {
-				if isAdmin := val.(bool); isAdmin {
+				if isAdmin, ok := val.(bool); ok && isAdmin {
 					// admin user, return wildcard
 					return []string{"*"}, nil
 				}
