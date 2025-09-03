@@ -102,7 +102,7 @@ func parseDatasetsFromOpaBody(logger *zap.SugaredLogger, opaBody []byte) ([]stri
 			}
 		}
 
-		return nil, fmt.Errorf("error parsing opa response: %w", rawErr)
+		return nil, fmt.Errorf("failed to parse OPA response as either dataset list or admin privilege map: %w", rawErr)
 	}
 
 	datasets := pluckDatasets(resp)
