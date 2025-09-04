@@ -25,7 +25,6 @@ import (
 	"github.com/gojektech/heimdall/v6/httpclient"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
-	"go.uber.org/zap"
 )
 
 type opaAnswer struct {
@@ -45,7 +44,7 @@ type opaDatasets struct {
 	Result []string `json:"result"`
 }
 
-func doOpaCheck(logger *zap.SugaredLogger, method string, path string, token *jwt.Token, scopes []string, opaEndpoint string) ([]string, error) {
+func doOpaCheck(method string, path string, token *jwt.Token, scopes []string, opaEndpoint string) ([]string, error) {
 	input := opaRequest{
 		Input: map[string]interface{}{
 			"method": method,
@@ -72,23 +71,19 @@ func doOpaCheck(logger *zap.SugaredLogger, method string, path string, token *jw
 	// Determine the permitted datasets
 	body, err = opaQuery(fmt.Sprintf("%s/v1/data/datahub/authz/datasets", opaEndpoint), input)
 	if err != nil {
-		logger.Errorf("opa query failed, result|err: %s %+v", string(body), err)
-
 		return nil, echo.NewHTTPError(http.StatusForbidden, err.Error())
 	}
 
-	return parseDatasetsFromOpaBody(logger, body)
+	return parseDatasetsFromOpaBody(body)
 }
 
 // parseDatasetsFromOpaBody parses the response body from OPA to extract datasets
 // It handles both the case where the result is a list of datasets and the case
 // where the result is a map indicating admin access.
-func parseDatasetsFromOpaBody(logger *zap.SugaredLogger, opaBody []byte) ([]string, error) {
+func parseDatasetsFromOpaBody(opaBody []byte) ([]string, error) {
 	resp := opaDatasets{}
 	err := json.Unmarshal(opaBody, &resp)
 	if err != nil {
-		logger.Warnf("opaDatasets error, result|err: %s %+v", string(opaBody), err)
-
 		raw := opaRawResponse{}
 		rawErr := json.Unmarshal(opaBody, &raw)
 
@@ -103,8 +98,6 @@ func parseDatasetsFromOpaBody(logger *zap.SugaredLogger, opaBody []byte) ([]stri
 					datasets = append(datasets, k)
 				}
 
-				logger.Debugf("OPA datasets: %+v", datasets)
-
 				return datasets, nil
 			}
 		}
@@ -113,8 +106,6 @@ func parseDatasetsFromOpaBody(logger *zap.SugaredLogger, opaBody []byte) ([]stri
 	}
 
 	datasets := pluckDatasets(resp)
-
-	logger.Debugf("OPA datasets: %+v", datasets)
 
 	return datasets, nil
 }

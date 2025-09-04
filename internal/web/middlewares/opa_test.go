@@ -17,14 +17,11 @@ package middlewares
 import (
 	"slices"
 	"testing"
-
-	"go.uber.org/zap"
 )
 
 func Test_parse_wildcard(t *testing.T) {
-	result := []byte("{\"decision_id\":\"5c78dda3-6389-4fc3-9f01-764f5ef9fe36\",\"result\":{\"*\":true}}")
-	logger := zap.NewNop().Sugar()
-	ds, err := parseDatasetsFromOpaBody(logger, result)
+	result := []byte("{\"decision_id\":\"7363d2f4-e9fe-4fee-9d79-c1b5efe27483\",\"result\":{\"*\":true}}")
+	ds, err := parseDatasetsFromOpaBody(result)
 
 	if err != nil {
 		t.Fatalf("should parse : %+v", err)
@@ -41,8 +38,7 @@ func Test_parse_wildcard(t *testing.T) {
 
 func Test_parse_slice_datasets(t *testing.T) {
 	result := []byte("{\"decision_id\":\"5c78dda3-6389-4fc3-9f01-764f5ef9fe36\",\"result\":[\"TestEvent1\", \"TestEvent2\"]}")
-	logger := zap.NewNop().Sugar()
-	ds, err := parseDatasetsFromOpaBody(logger, result)
+	ds, err := parseDatasetsFromOpaBody(result)
 
 	if err != nil {
 		t.Fatalf("should parse : %+v", err)
@@ -60,8 +56,7 @@ func Test_parse_slice_datasets(t *testing.T) {
 
 func Test_parse_datasets(t *testing.T) {
 	result := []byte("{\"decision_id\":\"7cb26e70-2842-42a1-ac74-cceeffbb15c1\",\"result\":{\"datalake.TestEvent1\":true,\"datalake.TestEvent2\":true,\"datalake.TestEvent3\":true}}")
-	logger := zap.NewNop().Sugar()
-	ds, err := parseDatasetsFromOpaBody(logger, result)
+	ds, err := parseDatasetsFromOpaBody(result)
 
 	if err != nil {
 		t.Fatalf("should parse : %+v", err)
