@@ -15,6 +15,7 @@
 package middlewares
 
 import (
+	"slices"
 	"testing"
 
 	"go.uber.org/zap"
@@ -49,10 +50,10 @@ func Test_parse_mim_decision_datasets(t *testing.T) {
 	if len(ds) != 2 {
 		t.Fatalf("should have 2 datasets : %+v", ds)
 	}
-	if ds[0] != "cima.AnimalBirthEvent" {
+	if !slices.Contains(ds, "cima.AnimalBirthEvent") {
 		t.Fatalf("should have cima.AnimalBirthEvent dataset : %+v", ds)
 	}
-	if ds[1] != "cima.AnimalDeathEvent" {
+	if !slices.Contains(ds, "cima.AnimalDeathEvent") {
 		t.Fatalf("should have cima.AnimalDeathEvent dataset : %+v", ds)
 	}
 }
@@ -69,13 +70,13 @@ func Test_parse_datasets(t *testing.T) {
 	if len(ds) != 3 {
 		t.Fatalf("should have 3 datasets : %+v", ds)
 	}
-	if ds[0] != "datalake.NorturaLivestockCattle" {
+	if !slices.Contains(ds, "datalake.NorturaLivestockCattle") {
 		t.Fatalf("should have datalake.NorturaLivestockCattle dataset : %+v", ds)
 	}
-	if ds[1] != "datalake.NorturaLivestockHealthEvents" {
+	if !slices.Contains(ds, "datalake.NorturaLivestockHealthEvents") {
 		t.Fatalf("should have datalake.NorturaLivestockHealthEvents dataset : %+v", ds)
 	}
-	if ds[2] != "datalake.NorturaLivestockHerd" {
+	if !slices.Contains(ds, "datalake.NorturaLivestockHerd") {
 		t.Fatalf("should have datalake.NorturaLivestockHerd dataset : %+v", ds)
 	}
 }
