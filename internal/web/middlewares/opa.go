@@ -92,13 +92,22 @@ func parseDatasetsFromOpaBody(logger *zap.SugaredLogger, opaBody []byte) ([]stri
 		raw := opaRawResponse{}
 		rawErr := json.Unmarshal(opaBody, &raw)
 
-		// result is a map, check if we have a *:true in there
 		if rawErr == nil && raw.Result != nil {
 			if val, ok := raw.Result["*"]; ok {
 				if isAdmin, ok := val.(bool); ok && isAdmin {
 					// admin user, return wildcard
 					return []string{"*"}, nil
 				}
+			} else if len(raw.Result) > 1 {
+				// not admin, but we have some datasets, pluck them out
+				datasets := make([]string, 0, len(raw.Result))
+				for k := range raw.Result {
+					datasets = append(datasets, k)
+				}
+
+				logger.Debugf("OPA datasets: %+v", datasets)
+
+				return datasets, nil
 			}
 		}
 
