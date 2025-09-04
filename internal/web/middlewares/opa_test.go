@@ -21,7 +21,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func Test_parse_mim_decision_admin(t *testing.T) {
+func Test_parse_wildcard(t *testing.T) {
 	result := []byte("{\"decision_id\":\"5c78dda3-6389-4fc3-9f01-764f5ef9fe36\",\"result\":{\"*\":true}}")
 	logger := zap.NewNop().Sugar()
 	ds, err := parseDatasetsFromOpaBody(logger, result)
@@ -39,8 +39,8 @@ func Test_parse_mim_decision_admin(t *testing.T) {
 	}
 }
 
-func Test_parse_mim_decision_datasets(t *testing.T) {
-	result := []byte("{\"decision_id\":\"5c78dda3-6389-4fc3-9f01-764f5ef9fe36\",\"result\":[\"cima.AnimalBirthEvent\", \"cima.AnimalDeathEvent\"]}")
+func Test_parse_slice_datasets(t *testing.T) {
+	result := []byte("{\"decision_id\":\"5c78dda3-6389-4fc3-9f01-764f5ef9fe36\",\"result\":[\"TestEvent1\", \"TestEvent2\"]}")
 	logger := zap.NewNop().Sugar()
 	ds, err := parseDatasetsFromOpaBody(logger, result)
 
@@ -50,16 +50,16 @@ func Test_parse_mim_decision_datasets(t *testing.T) {
 	if len(ds) != 2 {
 		t.Fatalf("should have 2 datasets : %+v", ds)
 	}
-	if !slices.Contains(ds, "cima.AnimalBirthEvent") {
-		t.Fatalf("should have cima.AnimalBirthEvent dataset : %+v", ds)
+	if !slices.Contains(ds, "TestEvent1") {
+		t.Fatalf("should have TestEvent1 dataset : %+v", ds)
 	}
-	if !slices.Contains(ds, "cima.AnimalDeathEvent") {
-		t.Fatalf("should have cima.AnimalDeathEvent dataset : %+v", ds)
+	if !slices.Contains(ds, "TestEvent2") {
+		t.Fatalf("should have TestEvent2 dataset : %+v", ds)
 	}
 }
 
 func Test_parse_datasets(t *testing.T) {
-	result := []byte("{\"decision_id\":\"7cb26e70-2842-42a1-ac74-cceeffbb15c1\",\"result\":{\"datalake.NorturaLivestockCattle\":true,\"datalake.NorturaLivestockHealthEvents\":true,\"datalake.NorturaLivestockHerd\":true}}")
+	result := []byte("{\"decision_id\":\"7cb26e70-2842-42a1-ac74-cceeffbb15c1\",\"result\":{\"datalake.TestEvent1\":true,\"datalake.TestEvent2\":true,\"datalake.TestEvent3\":true}}")
 	logger := zap.NewNop().Sugar()
 	ds, err := parseDatasetsFromOpaBody(logger, result)
 
@@ -70,13 +70,13 @@ func Test_parse_datasets(t *testing.T) {
 	if len(ds) != 3 {
 		t.Fatalf("should have 3 datasets : %+v", ds)
 	}
-	if !slices.Contains(ds, "datalake.NorturaLivestockCattle") {
-		t.Fatalf("should have datalake.NorturaLivestockCattle dataset : %+v", ds)
+	if !slices.Contains(ds, "datalake.TestEvent1") {
+		t.Fatalf("should have datalake.TestEvent1 dataset : %+v", ds)
 	}
-	if !slices.Contains(ds, "datalake.NorturaLivestockHealthEvents") {
-		t.Fatalf("should have datalake.NorturaLivestockHealthEvents dataset : %+v", ds)
+	if !slices.Contains(ds, "datalake.TestEvent2") {
+		t.Fatalf("should have datalake.TestEvent2 dataset : %+v", ds)
 	}
-	if !slices.Contains(ds, "datalake.NorturaLivestockHerd") {
-		t.Fatalf("should have datalake.NorturaLivestockHerd dataset : %+v", ds)
+	if !slices.Contains(ds, "datalake.TestEvent3") {
+		t.Fatalf("should have datalake.TestEvent3 dataset : %+v", ds)
 	}
 }
