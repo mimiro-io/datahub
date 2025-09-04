@@ -59,7 +59,7 @@ func Test_parse_mim_decision_datasets(t *testing.T) {
 }
 
 func Test_parse_datasets(t *testing.T) {
-	result := []byte("{\"decision_id\":\"7cb26e70-2842-42a1-ac74-cceeffbb15c1\",\"result\":{\"datalake.NorturaLivestockCattle\":true,\"datalake.NorturaLivestockHealthEvents\":true,\"datalake.NorturaLivestockHerd\":true}}")
+	result := []byte("{\"decision_id\":\"7cb26e70-2842-42a1-ac74-cceeffbb15c1\",\"result\":{\"datalake.TestEvent1\":true,\"datalake.TestEvent2\":true,\"datalake.TestEvent3\":true}}")
 	logger := zap.NewNop().Sugar()
 	ds, err := parseDatasetsFromOpaBody(logger, result)
 
@@ -70,13 +70,13 @@ func Test_parse_datasets(t *testing.T) {
 	if len(ds) != 3 {
 		t.Fatalf("should have 3 datasets : %+v", ds)
 	}
-	if !slices.Contains(ds, "datalake.NorturaLivestockCattle") {
-		t.Fatalf("should have datalake.NorturaLivestockCattle dataset : %+v", ds)
+	if !slices.Contains(ds, "datalake.TestEvent1") {
+		t.Fatalf("should have datalake.TestEvent1 dataset : %+v", ds)
 	}
-	if !slices.Contains(ds, "datalake.NorturaLivestockHealthEvents") {
-		t.Fatalf("should have datalake.NorturaLivestockHealthEvents dataset : %+v", ds)
+	if !slices.Contains(ds, "datalake.TestEvent2") {
+		t.Fatalf("should have datalake.TestEvent2 dataset : %+v", ds)
 	}
-	if !slices.Contains(ds, "datalake.NorturaLivestockHerd") {
-		t.Fatalf("should have datalake.NorturaLivestockHerd dataset : %+v", ds)
+	if !slices.Contains(ds, "datalake.TestEvent3") {
+		t.Fatalf("should have datalake.TestEvent3 dataset : %+v", ds)
 	}
 }
