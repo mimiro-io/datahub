@@ -97,7 +97,7 @@ func parseDatasetsFromOpaBody(logger *zap.SugaredLogger, opaBody []byte) ([]stri
 				if isAdmin, ok := val.(bool); ok && isAdmin {
 					return []string{"*"}, nil
 				}
-			} else if len(raw.Result) > 1 {
+			} else if len(raw.Result) >= 1 {
 				datasets := make([]string, 0, len(raw.Result))
 				for k := range raw.Result {
 					datasets = append(datasets, k)
