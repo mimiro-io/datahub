@@ -77,3 +77,15 @@ func Test_parse_datasets(t *testing.T) {
 		t.Fatalf("should have datalake.TestEvent3 dataset : %+v", ds)
 	}
 }
+
+func Test_parse_single_dataset(t *testing.T) {
+	result := []byte("{\"decision_id\":\"84b6619d-b237-44b9-ad4e-900db0c0566c\",\"result\":{\"singleDataset\":true}}")
+	ds, err := parseDatasetsFromOpaBody(zap.NewNop().Sugar(), result)
+	if err != nil {
+		t.Fatalf("should parse : %+v", err)
+	}
+
+	if len(ds) != 1 {
+		t.Fatalf("should have 1 dataset : %+v", ds)
+	}
+}
