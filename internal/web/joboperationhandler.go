@@ -43,6 +43,7 @@ func RegisterJobOperationHandler(
 	e.PUT("/job/:jobid/kill", handler.jobsKill, mw.authorizer(log, datahubWrite))
 	e.PUT("/job/:jobid/run", handler.jobsRun, mw.authorizer(log, datahubWrite))
 	e.PUT("/job/:jobid/reset", handler.jobsReset, mw.authorizer(log, datahubWrite))
+	e.PUT("/job/:jobid/reset_meta", handler.jobsResetMeta, mw.authorizer(log, datahubWrite))
 	e.GET("/job/:jobid/status", handler.jobsGetStatus, mw.authorizer(log, datahubRead)) // is it running
 }
 
@@ -92,6 +93,16 @@ func (handler *jobOperationHandler) jobsReset(c echo.Context) error {
 	since := c.QueryParam("since")
 
 	err := handler.jobScheduler.ResetJob(jobID, since)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, "internal error")
+	}
+	return c.JSON(http.StatusOK, &JobResponse{JobID: jobID})
+}
+
+func (handler *jobOperationHandler) jobsResetMeta(c echo.Context) error {
+	jobID := c.Param("jobid")
+
+	err := handler.jobScheduler.ResetJobMeta(jobID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, "internal error")
 	}

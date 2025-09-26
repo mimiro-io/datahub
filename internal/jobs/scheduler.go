@@ -429,6 +429,22 @@ func (s *Scheduler) ResetJob(jobid string, since string) error {
 	return nil
 }
 
+func (s *Scheduler) ResetJobMeta(jobid string) error {
+	jobTitle := s.resolveJobTitle(jobid)
+	s.Logger.Infof("Resetting job meta for job with id '%s' (%s)", jobid, jobTitle)
+	meta := &server.MetaContext{}
+	err := s.Store.GetObject(server.JobMetaIndex, jobid, meta)
+	if err != nil {
+		return fmt.Errorf("error getting meta for job with id '%s' (%s)", jobid, jobTitle)
+	}
+
+	err = s.Store.StoreObject(server.JobMetaIndex, jobid, &server.MetaContext{})
+	if err != nil {
+		return fmt.Errorf("error resetting meta for job with id '%s' (%s)", jobid, jobTitle)
+	}
+	return nil
+}
+
 // RunJob runs an existing job, if not already running. It does so by adding a temp job to the scheduler, without saving it.
 // The temp job is added with the RunOnce flag set to true
 func (s *Scheduler) RunJob(jobid string, jobType string) (string, error) {

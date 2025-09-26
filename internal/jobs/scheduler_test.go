@@ -122,6 +122,32 @@ var _ = Describe("The Scheduler", func() {
 			"We find the continuation token that was injected with ResetJob in the syncState")
 	})
 
+	It("Should reset job meta when asked to", func() {
+		metaContext := &server.MetaContext{
+			QueriedDatasets: map[uint32]struct{}{
+				1: {},
+				2: {},
+			},
+			TransactionSink: map[string]struct{}{
+				"dataset1": {},
+				"dataset2": {},
+			},
+		}
+		err := store.StoreObject(server.JobMetaIndex, "job-1", metaContext)
+		Expect(err).To(BeNil(), "We could store a MetaContext")
+
+		err = scheduler.ResetJobMeta("job-1")
+		Expect(err).To(BeNil(), "We called ResetJobMeta without error")
+
+		resetMeta := &server.MetaContext{}
+		err = store.GetObject(server.JobMetaIndex, "job-1", resetMeta)
+		Expect(err).To(BeNil(), "We could load the MetaContext back")
+		Expect(resetMeta.QueriedDatasets).To(BeNil(),
+			"We find that QueriedDatasets was reset to nil after ResetJobMeta")
+		Expect(resetMeta.TransactionSink).To(BeNil(),
+			"We find that TransactionSink was reset to nil after ResetJobMeta")
+	})
+
 	It("Should kill a job when asked to", func() {
 		// install a job that runs 50*100 ms (6 sec, exceeding goblins 5s timeout)
 		sj, err := scheduler.Parse([]byte((`{
