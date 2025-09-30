@@ -40,9 +40,9 @@ func NewNamespaceCleaner(logger *zap.SugaredLogger, store store.BadgerStore, doD
 		err := cleaner.ScanNamespaceUsage(ctx)
 		if err != nil {
 			logger.Errorf("failed to scan namespace usage: %v", err)
-			return RunResult{state: RunResultFailed, timestame: time.Now()}
+			return RunResult{state: RunResultFailed, timestamp: time.Now()}
 		}
-		return RunResult{state: RunResultSuccess, timestame: time.Now()}
+		return RunResult{state: RunResultSuccess, timestamp: time.Now()}
 	})
 
 	t.OnStop = func(ctx context.Context) error {
