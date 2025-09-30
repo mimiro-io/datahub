@@ -24,6 +24,7 @@ type LegacyNamespaceAccess interface {
 	// need access ot in-memory mapping
 	LookupNamespaceExpansion(prefix types.Prefix) (types.URI, error)
 	LookupExpansionPrefix(input types.URI) (types.Prefix, error)
+	GetAllNamespacePrefixes() map[string]string
 }
 
 type BadgerStore interface {
