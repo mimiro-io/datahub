@@ -269,6 +269,19 @@ func (nc *NamespaceCleaner) compareWithStoredPrefixes(foundPrefixes map[string]b
 		for prefix, expansion := range unusedPrefixes {
 			nc.Logger.Infof("  %s -> %s", prefix, expansion)
 		}
+
+		// Delete unused prefixes if doDelete flag is true
+		if nc.delete {
+			nc.Logger.Infof("Deleting %d unused namespace prefixes", len(unusedPrefixes))
+			for prefix := range unusedPrefixes {
+				err := nc.badger.DeleteNamespacePrefix(prefix)
+				if err != nil {
+					nc.Logger.Errorf("Failed to delete namespace prefix %s: %v", prefix, err)
+				} else {
+					nc.Logger.Infof("Deleted namespace prefix: %s", prefix)
+				}
+			}
+		}
 	}
 
 	if len(missingPrefixes) > 0 {
