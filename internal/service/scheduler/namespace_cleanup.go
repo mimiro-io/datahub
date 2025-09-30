@@ -153,7 +153,7 @@ func (nc *NamespaceCleaner) ScanNamespaceUsage(ctx context.Context) error {
 		return fmt.Errorf("failed to orchestrate stream: %w", err)
 	}
 
-	if ctx.Done() != nil {
+	if ctx.Err() != nil {
 		go func() { nc.done <- true }()
 	}
 
