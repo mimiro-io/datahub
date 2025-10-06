@@ -62,11 +62,23 @@ func (c *MetaContext) RegisterQuerySideInput(datasetid uint32) {
 
 func (c *MetaContext) Add(meta *MetaContext) {
 	if c != nil {
-		for k, v := range meta.QueriedDatasets {
-			c.QueriedDatasets[k] = v
+		if meta.QueriedDatasets != nil {
+			if c.QueriedDatasets == nil {
+				c.QueriedDatasets = make(map[uint32]struct{})
+			}
+			for k, v := range meta.QueriedDatasets {
+				c.QueriedDatasets[k] = v
+			}
+
 		}
-		for k, v := range meta.TransactionSink {
-			c.TransactionSink[k] = v
+		if meta.TransactionSink != nil {
+			if c.TransactionSink == nil {
+				c.TransactionSink = make(map[string]struct{})
+			}
+			for k, v := range meta.TransactionSink {
+				c.TransactionSink[k] = v
+			}
+
 		}
 	}
 }
