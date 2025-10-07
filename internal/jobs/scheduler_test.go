@@ -142,9 +142,9 @@ var _ = Describe("The Scheduler", func() {
 		resetMeta := &server.MetaContext{}
 		err = store.GetObject(server.JobMetaIndex, "job-1", resetMeta)
 		Expect(err).To(BeNil(), "We could load the MetaContext back")
-		Expect(resetMeta.QueriedDatasets).To(BeNil(),
+		Expect(resetMeta.QueriedDatasets).To(BeEquivalentTo(make(map[uint32]struct{})),
 			"We find that QueriedDatasets was reset to nil after ResetJobMeta")
-		Expect(resetMeta.TransactionSink).To(BeNil(),
+		Expect(resetMeta.TransactionSink).To(BeEquivalentTo(make(map[string]struct{})),
 			"We find that TransactionSink was reset to nil after ResetJobMeta")
 	})
 
