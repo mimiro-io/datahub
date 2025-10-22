@@ -19,14 +19,15 @@ import (
 	"context"
 	"crypto/rsa"
 	"encoding/json"
-	"github.com/mimiro-io/datahub"
-	"github.com/mimiro-io/datahub/internal/conf"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/mimiro-io/datahub"
+	"github.com/mimiro-io/datahub/internal/conf"
 
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/mimiro-io/datahub/internal/security"
@@ -41,14 +42,7 @@ func TestFromOutside(t *testing.T) {
 
 // privateKey and well-known.json are generated from https://mkjwk.org/
 var privateKey = `-----BEGIN PRIVATE KEY-----
-MIIBVgIBADANBgkqhkiG9w0BAQEFAASCAUAwggE8AgEAAkEAgp2HWNZwdVzEflWx
-jK8hddWr2x+IKazSpMMfLg8oDQk+kYI6/ChNS4mdHWD58tQzI1FimW5z1lfPoSvc
-I5LzCwIDAQABAkBABnH7BRqZHQEgoGbo/EvdlACq57j6HMIgi5j0He/W+1SbAsoc
-zaAK2Wgr10dOt+r8URQ1BzYHokap67oLmy9RAiEA1eNGzCLrJsLO3OSaDsmBM0BQ
-Zks10U7AEugv+mPYuHMCIQCcVQR6isuehozn4YGev3jOZe6QuZUfAzw8elyFRobt
-CQIhALzted7dRTtCvnjt0IsZQO+lcp849fvBhPXudFrHEWqzAiEAjVvi3Nu8GvAX
-YWVry5vfJOLOwVbOHGjUgusx1eFcB+ECIQCyMIG0HM3l+maWePciN+ucgAhNLiiY
-9LvRBDUAB4Eoqw==
+MIIEvQIBADANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQ...
 -----END PRIVATE KEY-----`
 
 //	var publicKey = `-----BEGIN PUBLIC KEY-----
