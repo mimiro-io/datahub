@@ -68,7 +68,7 @@ func NewStatisticsUpdater(logger *zap.SugaredLogger, store store.BadgerStore) sc
 		statBytes, err := json.Marshal(o)
 		if err != nil {
 			logger.Errorf("failed to marshal statistics: %v", err)
-			return RunResult{state: RunResultFailed, timestame: time.Now()}
+			return RunResult{state: RunResultFailed, timestamp: time.Now()}
 		}
 
 		err = store.GetDB().Update(func(txn *badger.Txn) error {
@@ -76,9 +76,9 @@ func NewStatisticsUpdater(logger *zap.SugaredLogger, store store.BadgerStore) sc
 		})
 		if err != nil {
 			logger.Errorf("failed to store statistics: %v", err)
-			return RunResult{state: RunResultFailed, timestame: time.Now()}
+			return RunResult{state: RunResultFailed, timestamp: time.Now()}
 		}
-		return RunResult{state: RunResultSuccess, timestame: time.Now()}
+		return RunResult{state: RunResultSuccess, timestamp: time.Now()}
 	})
 
 	t.OnStop = func(ctx context.Context) error {

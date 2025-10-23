@@ -306,6 +306,30 @@ func (namespaceManager *NamespaceManager) AssertPrefixMappingForExpansion(uriExp
 	return prefix, nil
 }
 
+// DeleteNamespacePrefix removes a namespace prefix mapping in a mutex-protected operation
+func (namespaceManager *NamespaceManager) DeleteNamespacePrefix(prefix string) error {
+	namespaceManager.lock.Lock()
+	defer namespaceManager.lock.Unlock()
+
+	expansion, exists := namespaceManager.prefixToExpansionMapping[prefix]
+	if !exists {
+		return nil // Already deleted or never existed
+	}
+
+	delete(namespaceManager.prefixToExpansionMapping, prefix)
+	delete(namespaceManager.expansionToPrefixMapping, expansion)
+
+	state := &NamespacesState{}
+	state.PrefixToExpansionMapping = namespaceManager.prefixToExpansionMapping
+	state.ExpansionToPrefixMapping = namespaceManager.expansionToPrefixMapping
+	err := namespaceManager.store.StoreObject(NamespacesIndex, "namespacestate", state)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 type DsNsInfo struct {
 	DatasetPrefix       string
 	PublicNamespacesKey string

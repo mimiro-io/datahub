@@ -2,10 +2,11 @@ package scheduler
 
 import (
 	"context"
-	"github.com/robfig/cron/v3"
-	"go.uber.org/zap"
 	"sync"
 	"time"
+
+	"github.com/robfig/cron/v3"
+	"go.uber.org/zap"
 )
 
 type runnable interface {
@@ -26,7 +27,7 @@ const (
 
 type RunResult struct {
 	state     string
-	timestame time.Time
+	timestamp time.Time
 }
 
 type schedulable interface {

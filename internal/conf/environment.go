@@ -45,6 +45,7 @@ type Config struct {
 	BackupSourceLocation    string
 	RunnerConfig            *RunnerConfig
 	SlowLogThreshold        time.Duration
+	NamespaceCleanupMode    string
 }
 
 type AuthConfig struct {
