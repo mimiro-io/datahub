@@ -40,9 +40,34 @@ func TestFromOutside(t *testing.T) {
 	RunSpecs(t, "Integration Suite")
 }
 
-// privateKey and well-known.json are generated from https://mkjwk.org/
+// privateKey and well-known.json are generated using OpenSSL
 var privateKey = `-----BEGIN PRIVATE KEY-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQ...
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC3MHuEDhKoOSlV
+T4i7lH5iqsXW5FfeL6rqRBzRIsIPfOfJQMtfpGwBuSn4GLcWFnfjuaVQTpTzLVBq
+lbzBrCtG3vqO1mx9eVYXo94PTVs2jmWHuuq7oDL9nnQhK1XlBZ+pUjmspzV+Uy/2
+bi/+FAC7CvpM9sJ4CIjtKUj6KK12Tb5tpnbkw2wNC4UCU9njPahmPa543V/lylMk
+/A0hTzwFcBmbcYP3y4l1EiGc2HS0sd3jMdXUm2xplTXf57fO+p180Gy76VB8LjBT
+hzi9g7VhNws+Ef/Z/XH8S7iY/DDU8kXl8ODHA0ati3YBaxfkJ3BkyevBXBfjf9Ph
+dKQT0G4pAgMBAAECggEAF7HouBsN5L6IDyXbfM/nTSHjtzkP+IhX5jdrNs31JgW1
+AX4lEDj3U3285P9lZzD+zvDrZijT8WRyG2dE5BQ+AMvEwwcPP2ebcDFc/sO1wafH
+kDfoNt6w2cdOJCAz2wzQKxmcpi12qOFfudNk18uEkK0J1TyxyM7pzytg6iKq1Tte
+areyFDWAR/XKn+2Z5+P+GVtTAn9czvK6JV+/QLL1mvopj74On0fLV4pPa/f34ifd
+Xn8l635R/rpH6NOGivExdsvpydkfTx67CrsPi7sx6EQEBdSONwgoLkPcPVL7QkIi
+TvOFfmZyIMfdBfeBHj3K2TiLv6s0QdckWfSCyZmgEQKBgQD9HbwKga7il1JE08fW
+TUsWg6wRSy4EgL03zN9yAcoeBA1keM4nFCxSr0ZgipCGWC6TfNFLuY4Rdyk/hxgK
+HjJZROWRLMlpTUTzfolcZe0J3tGobDvL70NiOoSh3cLS55EJOlPv3eYnx7hDACnQ
+OPr+4WwmRQ2nu26mVaWWOtrihQKBgQC5RsrH1WXCKQuWMrUmiq+tt+Ji3m486gh0
+CWKejWi4eiEwWgFNU4c3hHw10FBUu8TtndZ0lZgL0rv4q0XG7FAueaZogbgDM3CW
+Fl7DGgzSHtTAp1vk3g/huGombe/vRQGrSb33OYGbtHMFKtqRwV9yih55d6B99M6F
+qjlF5OfYVQKBgQCNdtTlul0X3yLnvMVvjHtu9eBxOedaNOmMCkDH4yAnbnRdtvbg
++HFdNQDMbCUiMJ63Z4dCH067jDHNg5936DCTm+ICJVncNIdY31u9/Glintnmm7c/
+31V1zObb4KlGXo287pCC+y3rBcCCEdFMwsvlL+/V47oiCKtq42tMb1BuUQKBgFBU
+qFEybhdb8oEh5TcbxIXeh5J0fHl+w0GEXDUAfNoXYdJ0A8KCJ8tjbvNqKZpDe2PH
+HpeX0L+3k/aCVBOmnDE6X3NKYv1ITVVVx6px3gMwiPAq4AYAXgRxD90vp2snkUyy
+AWJylYZsG76u0OuHWxnvVr01p+lUvkJoBsMON5OtAoGAcxVv3JXPOInmgj+i5hjp
+0H12vHrnNZ6AFXQvQekQDpHf3G4QU1WHtNDf0HLVOVCz3Rd1BqkhUymgA97uDFRr
+0fmX93sK3glQTwh6y6F1PQOl8YGD4w5JnrrPRCDyhsTXqG0o6k8YvcYrDMjFX+Dw
+zXbtwu6jXEX4kkVwBtxHfpA=
 -----END PRIVATE KEY-----`
 
 //	var publicKey = `-----BEGIN PUBLIC KEY-----
@@ -56,19 +81,37 @@ var wellKnown = `{"keys":[{
     "use": "sig",
     "kid": "letmein",
     "alg": "RS256",
-    "n": "gp2HWNZwdVzEflWxjK8hddWr2x-IKazSpMMfLg8oDQk-kYI6_ChNS4mdHWD58tQzI1FimW5z1lfPoSvcI5LzCw"
+    "n": "tzB7hA4SqDkpVU-Iu5R-YqrF1uRX3i-q6kQc0SLCD3znyUDLX6RsAbkp-Bi3FhZ347mlUE6U8y1QapW8wawrRt76jtZsfXlWF6PeD01bNo5lh7rqu6Ay_Z50IStV5QWfqVI5rKc1flMv9m4v_hQAuwr6TPbCeAiI7SlI-iitdk2-baZ25MNsDQuFAlPZ4z2oZj2ueN1f5cpTJPwNIU88BXAZm3GD98uJdRIhnNh0tLHd4zHV1JtsaZU13-e3zvqdfNBsu-lQfC4wU4c4vYO1YTcLPhH_2f1x_Eu4mPww1PJF5fDgxwNGrYt2AWsX5CdwZMnrwVwX43_T4XSkE9BuKQ"
 }]}`
 
-// to do negative testing
+// to do negative testing - valid key format but doesn't match wellKnown public key
 var invalidPrivateKey = `-----BEGIN PRIVATE KEY-----
-MIIBVAIBADANBgkqhkiG9w0BAQEFAASCAT4wggE6AgEAAkEAghnDh8yBi6fUe0aZ
-WDwF/PQUsya9IcuUmRmLbDiNTg/RyUOwrD9jn7cgK3KmOVkZExH3p0naYtfZWAA3
-T74leQIDAQABAkBtkHTysG+IxVZUWyhY/nOsi4HDPiSZiXEjXjfkc9vMmKKYD5i4
-Uofi1kzfVJUepsAKsQTjz/Fb6Htv7cnfA1VhAiEAt0wwZkco0o4GtbM0YkXPJWVV
-TUrlcUCX8bJR8cRNajMCIQC1tAU5NvyER4offN/00xbtQKNSzbGuIna29gxnQKVd
-owIgZbMGH5lX0wsuOd5GMEhfWHZSz+HAUAfwxg+UW7n44fUCIQCn6DfffDlyv20a
-1dlasun/yfhi3yNvB/ft8IbbrzhgwwIgZS6QVrn9Ro/oEnrTM0FuIigl1sXlZT/w
-yLOZNSc/qIQ=
+MIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQDqRy8zSH8O1I6s
+e98RT8DZFi6lnPcGiDtnWuOxswIW96r7KnHPXKrC6zL0H4ohv0mjyVRGaqPb84Oj
+zF0u+7RGOZRM3wwZPc+NA8O4fAApBUUaS0eZW+9bAKK2YnctBv9rupB+hVPA7zfL
+wX3YQqB/aaMZGcPmlxxH/hwZoblYR0pCaMUao1Abts51J9OuvNpDcqpFzqU8Tfea
+rNFaty6dg3n0G+82qI3iwlk94dVbzi/UCXzIlJ6wIjdDg3ob8Chmbi19E6DAWSmI
+5ZBinMMIlIf2NpjbOsoD6QOIyYs8YCI5NzY8y4X67iVfELZpDWnZnebmtbDDFwQx
+yEiTHjjTAgMBAAECggEAOefPUE8mbH14KETTvV0njuCvNesGmZw5hpHN/qF+rjuY
+DM2QZM8EO/pTVUioZS/5HR0JkgAQsTBOxMEh9RdslwDrWVa2EFUZREL+cM5hYcI2
+MsoRj+PL1QPis87BoyT8I93wkf0VVvYppdiU6MuLDQMIt48JPyjxag/yVRmGjL1V
+GA7EuQ3OLJVbTBAkzjuW2FFKrP9rhpq2L0VTvRn9CNbfS0QDI2nHWfmln0cF8aGZ
+Hc0pBPGoVDXne6puibdVjGS/D4fIjaJRfQwkkqAw2e/DGxjM/8QdkhClbjx1Jn3c
+3758qP/R7PC3WZphhzOrWLDpfVNX5xx2fV05D7YRYQKBgQD4OvrkbsVK6w5yZYkT
+lCsk/gX2IB/Fi0iiBIaz07tXNJP9O8JOJBtvOmeHbXFjuwJyr/cNdvttNVsHkJS8
+J58pPoLbUq5ocK5XSDVN5x3ZbJw3C103sxlocqNn7qZPqXSOqcFSJKYbAebiry0m
+FI4BkjPjNyGFGvdcZJMgqpbJMwKBgQDxnGg7LuvCGKKb3uO+mreOqeVd6JFaB4MS
+4N6kU/saur77mY0ivrJnqvRcdJWghBRWkzFnzWVN/fJwSdyKYkAlQXAbOAdb7ToC
+yedx9AMrCRgnBfxoTJCGXTPSEHajxybqFdHhGYV7toHi8x+DkSx7vF32BwpXQKpT
+Uww7l9kR4QKBgQCQ6j3WZiSf3CIO/t/LolCdw/7O9WoW9X1tuJ67FPzlqDhNOjnx
+THsHsF0IXwg3ZNHFCp18Kt4Vn3SJMgri3W65sVjLmbVgG4hsRCd6V1bBu/pm2CeP
+gOtwYpyq7FQDZbY6IzhNMEAYvD+CTypYdN+CY0wPdfwHrPqD4eNSysREqQKBgQDX
+iB5XRWkc8dsFT1U88En040xwdIpNlMvxqFYUo7IqSxMZ4QXNS+5cml14qKvd0FVQ
+UehN4CWR6ItAbjNl43WzhmeacGXoNHx+hlyIBBRbbLZ2AVoENODsa/JRX0xml774
+LVTYCGtSTCIcMaQYOwZCr2vmkKtB4LbQtBICi1giIQKBgQCPuncLkkAtTv98Rv8t
+QCHmBUPupQoORO4vwqHhg77h4ryBT/iNAqKmSrsy0HL/TrDyeZlFELfnU8+obJYR
+C7JSzTwrprLwhZ9t0qFrXBWiGfGerKaq7ygRmcufzv9/qop8pU+XCd9pxj0khFKB
+7++RmfEnYJr8nOakCk+83B/5tw==
 -----END PRIVATE KEY-----`
 
 var _ = Describe("The dataset endpoint", Ordered, func() {
@@ -723,6 +766,9 @@ func giveBobACLForPaths(datahubURL string, user string, pwd string, paths ...str
 
 func createOauthJwtToken(privateKeyPEM string, subject string, issuer string, audience string) (string, error) {
 	privateKeyFromPEM, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(privateKeyPEM))
+	if err != nil {
+		return "", err
+	}
 
 	// make an external JWT for bob
 	claims := security.CustomClaims{}
