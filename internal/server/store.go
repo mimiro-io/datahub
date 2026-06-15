@@ -281,7 +281,10 @@ func (namespaceManager *NamespaceManager) GetPrefixMappingForExpansion(uriExpans
 
 func (namespaceManager *NamespaceManager) GetPrefixToExpansionMap() (result map[string]string) {
 	namespaceManager.lock.Lock()
-	result = namespaceManager.prefixToExpansionMapping
+	result = make(map[string]string, len(namespaceManager.prefixToExpansionMapping))
+	for k, v := range namespaceManager.prefixToExpansionMapping {
+		result[k] = v
+	}
 	namespaceManager.lock.Unlock()
 	return
 }
