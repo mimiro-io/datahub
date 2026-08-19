@@ -20,22 +20,16 @@ func NewNamespaceCleaner(logger *zap.SugaredLogger, store store.BadgerStore, doD
 	cleaner := &NamespaceCleaner{
 		badger: store,
 		Logger: logger,
-		done:   make(chan bool),
 		delete: doDelete,
 	}
 
 	t := newSchedulableTask("namespace_cleanup", true, logger, func() RunResult {
-		ctx, cancel := context.WithCancel(context.Background())
-		cleaner.cancel = func() {
-			cancel()
-			<-cleaner.done
+		ctx, ok := cleaner.beginScan()
+		if !ok {
+			logger.Info("Namespace cleaner is stopped, skipping scan")
+			return RunResult{state: RunResultSuccess, timestamp: time.Now()}
 		}
-		defer func() {
-			if cleaner.cancel != nil {
-				cleaner.cancel()
-			}
-			cleaner.cancel = nil
-		}()
+		defer cleaner.endScan()
 		logger.Info("Starting namespace cleanup scan, delete=" + fmt.Sprint(doDelete))
 		err := cleaner.ScanNamespaceUsage(ctx)
 		if err != nil {
@@ -53,11 +47,38 @@ func NewNamespaceCleaner(logger *zap.SugaredLogger, store store.BadgerStore, doD
 }
 
 type NamespaceCleaner struct {
-	badger store.BadgerStore
-	Logger *zap.SugaredLogger
-	cancel context.CancelFunc
-	done   chan bool
-	delete bool
+	badger  store.BadgerStore
+	Logger  *zap.SugaredLogger
+	lock    sync.Mutex
+	cancel  context.CancelFunc
+	done    chan struct{}
+	stopped bool
+	delete  bool
+}
+
+// beginScan registers a new scan and returns its context. It returns false when Stop
+// has been called, so a run dispatched around shutdown never touches the store.
+func (nc *NamespaceCleaner) beginScan() (context.Context, bool) {
+	nc.lock.Lock()
+	defer nc.lock.Unlock()
+	if nc.stopped {
+		return nil, false
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	nc.cancel = cancel
+	nc.done = make(chan struct{})
+	return ctx, true
+}
+
+// endScan releases the scan registered by beginScan and unblocks a waiting Stop.
+func (nc *NamespaceCleaner) endScan() {
+	nc.lock.Lock()
+	nc.cancel()
+	nc.cancel = nil
+	done := nc.done
+	nc.done = nil
+	nc.lock.Unlock()
+	close(done)
 }
 
 func (nc *NamespaceCleaner) ScanNamespaceUsage(ctx context.Context) error {
@@ -153,8 +174,10 @@ func (nc *NamespaceCleaner) ScanNamespaceUsage(ctx context.Context) error {
 		return fmt.Errorf("failed to orchestrate stream: %w", err)
 	}
 
+	// Orchestrate can return nil when cancellation stops the scan early, and the
+	// prefixes collected so far are incomplete
 	if ctx.Err() != nil {
-		go func() { nc.done <- true }()
+		return ctx.Err()
 	}
 
 	// Compare found prefixes with stored prefixes
@@ -289,9 +312,16 @@ func (nc *NamespaceCleaner) compareWithStoredPrefixes(foundPrefixes map[string]b
 	}
 }
 
+// Stop cancels a running scan and waits for it to unwind, so that shutdown can
+// close the store without the scan still reading from it. Later runs skip the scan.
 func (nc *NamespaceCleaner) Stop(_ context.Context) error {
-	if nc.cancel != nil {
-		nc.cancel()
+	nc.lock.Lock()
+	nc.stopped = true
+	cancel, done := nc.cancel, nc.done
+	nc.lock.Unlock()
+	if cancel != nil {
+		cancel()
+		<-done
 	}
 	return nil
 }

@@ -222,12 +222,16 @@ type NamespaceManager struct {
 	lock                     sync.Mutex
 	prefixToExpansionMapping map[string]string
 	expansionToPrefixMapping map[string]string
+	nextPrefixID             int
 	store                    *Store
 }
 
 type NamespacesState struct {
 	PrefixToExpansionMapping map[string]string
 	ExpansionToPrefixMapping map[string]string
+	// NextPrefixID is the counter that generates the next nsN prefix. It only ever
+	// increases, so a deleted prefix is never handed out again for another expansion.
+	NextPrefixID int
 }
 
 type Context struct {
@@ -295,18 +299,39 @@ func (namespaceManager *NamespaceManager) AssertPrefixMappingForExpansion(uriExp
 
 	prefix := namespaceManager.expansionToPrefixMapping[uriExpansion]
 	if prefix == "" {
-		prefix = "ns" + strconv.Itoa(len(namespaceManager.prefixToExpansionMapping))
+		prefix = namespaceManager.nextPrefix()
 		namespaceManager.prefixToExpansionMapping[prefix] = uriExpansion
 		namespaceManager.expansionToPrefixMapping[uriExpansion] = prefix
-		state := &NamespacesState{}
-		state.PrefixToExpansionMapping = namespaceManager.prefixToExpansionMapping
-		state.ExpansionToPrefixMapping = namespaceManager.expansionToPrefixMapping
-		err := namespaceManager.store.StoreObject(NamespacesIndex, "namespacestate", state)
+		err := namespaceManager.persistState()
 		if err != nil {
 			return "", err
 		}
 	}
 	return prefix, nil
+}
+
+// nextPrefix returns an unused prefix and advances the counter. The counter is never
+// rewound, so a prefix removed by DeleteNamespacePrefix is not reused for a different
+// expansion, which would silently remap every stored curie that carries it.
+// Callers must hold the lock.
+func (namespaceManager *NamespaceManager) nextPrefix() string {
+	for {
+		prefix := "ns" + strconv.Itoa(namespaceManager.nextPrefixID)
+		namespaceManager.nextPrefixID++
+		if _, taken := namespaceManager.prefixToExpansionMapping[prefix]; !taken {
+			return prefix
+		}
+	}
+}
+
+// persistState writes the namespace mappings and the prefix counter to the store.
+// Callers must hold the lock.
+func (namespaceManager *NamespaceManager) persistState() error {
+	return namespaceManager.store.StoreObject(NamespacesIndex, "namespacestate", &NamespacesState{
+		PrefixToExpansionMapping: namespaceManager.prefixToExpansionMapping,
+		ExpansionToPrefixMapping: namespaceManager.expansionToPrefixMapping,
+		NextPrefixID:             namespaceManager.nextPrefixID,
+	})
 }
 
 // DeleteNamespacePrefix removes a namespace prefix mapping in a mutex-protected operation
@@ -322,15 +347,7 @@ func (namespaceManager *NamespaceManager) DeleteNamespacePrefix(prefix string) e
 	delete(namespaceManager.prefixToExpansionMapping, prefix)
 	delete(namespaceManager.expansionToPrefixMapping, expansion)
 
-	state := &NamespacesState{}
-	state.PrefixToExpansionMapping = namespaceManager.prefixToExpansionMapping
-	state.ExpansionToPrefixMapping = namespaceManager.expansionToPrefixMapping
-	err := namespaceManager.store.StoreObject(NamespacesIndex, "namespacestate", state)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return namespaceManager.persistState()
 }
 
 type DsNsInfo struct {
@@ -553,6 +570,18 @@ func (s *Store) Open() error {
 		s.NamespaceManager.prefixToExpansionMapping = nsState.PrefixToExpansionMapping
 		s.NamespaceManager.lock.Unlock()
 	}
+
+	s.NamespaceManager.lock.Lock()
+	s.NamespaceManager.nextPrefixID = nsState.NextPrefixID
+	// state written before NextPrefixID existed decodes it as 0, so recover the counter
+	// from the mappings themselves
+	for prefix := range s.NamespaceManager.prefixToExpansionMapping {
+		id, err := strconv.Atoi(strings.TrimPrefix(prefix, "ns"))
+		if err == nil && id >= s.NamespaceManager.nextPrefixID {
+			s.NamespaceManager.nextPrefixID = id + 1
+		}
+	}
+	s.NamespaceManager.lock.Unlock()
 
 	// load deleted datasets
 	err = s.GetObject(StoreMetaIndex, "deleteddatasets", &s.deletedDatasets)

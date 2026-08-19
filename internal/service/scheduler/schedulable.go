@@ -53,6 +53,8 @@ func (s *schedulableTask) ImmediateRun() bool {
 }
 
 func (s *schedulableTask) State() string {
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	return s.state
 }
 
