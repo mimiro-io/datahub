@@ -591,6 +591,7 @@ It can be configured as follows:
         "Type": "HttpDatasetSource",
         "Url": "full url of change endpoint of the datalayer to read from",
         "TokenProvider": "optional: name of token provider that allows access"
+        "TimoutSeconds": "optional: timeout in seconds for the http request. 5s default"
     }
 }
 ```
