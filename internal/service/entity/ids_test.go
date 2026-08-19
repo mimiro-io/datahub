@@ -27,6 +27,16 @@ import (
 
 type nsMock struct{}
 
+func (n nsMock) GetAllNamespacePrefixes() map[string]string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (n nsMock) DeleteNamespacePrefix(prefix string) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (n nsMock) LookupNamespaceExpansion(prefix types.Prefix) (types.URI, error) {
 	if prefix == "foo" {
 		return "http://foo", nil

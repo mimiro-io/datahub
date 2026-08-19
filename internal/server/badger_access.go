@@ -65,6 +65,14 @@ func (b BadgerAccess) LookupNamespaceExpansion(prefix types.Prefix) (types.URI, 
 	return "", fmt.Errorf("expansion for prefix %v not found", prefix)
 }
 
+func (b BadgerAccess) GetAllNamespacePrefixes() map[string]string {
+	return b.dsm.store.NamespaceManager.GetPrefixToExpansionMap()
+}
+
+func (b BadgerAccess) DeleteNamespacePrefix(prefix string) error {
+	return b.dsm.store.NamespaceManager.DeleteNamespacePrefix(prefix)
+}
+
 func (b BadgerAccess) LookupDatasetIDs(datasetNames []string) []types.InternalDatasetID {
 	var scopeArray []types.InternalDatasetID
 	if len(datasetNames) > 0 {

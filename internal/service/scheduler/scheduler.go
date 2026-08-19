@@ -2,11 +2,13 @@ package scheduler
 
 import (
 	"context"
+	"sync"
+
+	"github.com/mimiro-io/datahub/internal/conf"
 	"github.com/mimiro-io/datahub/internal/server"
 	"github.com/mimiro-io/datahub/internal/service/store"
 	"github.com/robfig/cron/v3"
 	"go.uber.org/zap"
-	"sync"
 )
 
 type Scheduler struct {
@@ -17,9 +19,14 @@ type Scheduler struct {
 	cron    *cron.Cron
 }
 
-func (s *Scheduler) Start() error {
-	s.cron.AddJob("0 2 * * *", NewStatisticsUpdater(s.logger, s.store))
-	s.cron.AddJob("0 19 * * *", NewGCUpdate(s.logger, s.gc))
+func (s *Scheduler) Start(conf *conf.Config) error {
+	s.cron.AddJob("0 2 * * *", NewStatisticsUpdater(s.logger, s.store)) //daily at 2am
+	s.cron.AddJob("0 19 * * *", NewGCUpdate(s.logger, s.gc))            //daily at 7pm
+	if conf.NamespaceCleanupMode != "" && conf.NamespaceCleanupMode != "off" && conf.NamespaceCleanupMode != "disabled" {
+		s.cron.AddJob("0 14 * * 0", NewNamespaceCleaner(s.logger, s.store, conf.NamespaceCleanupMode == "delete")) //sundays at 2pm
+	} else {
+		s.logger.Info("Namespace cleanup is disabled")
+	}
 	s.cron.Start()
 	for _, e := range s.cron.Entries() {
 		task := e.Job.(schedulable)

@@ -17,6 +17,10 @@ package datahub
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/labstack/echo/v4"
 	"github.com/mimiro-io/datahub/internal/conf"
@@ -27,9 +31,6 @@ import (
 	"github.com/mimiro-io/datahub/internal/service/scheduler"
 	"github.com/mimiro-io/datahub/internal/web"
 	"go.uber.org/zap"
-	"os"
-	"os/signal"
-	"syscall"
 )
 
 type DatahubInstance struct {
@@ -56,7 +57,7 @@ type DatahubInstance struct {
 func (dhi *DatahubInstance) Start() error {
 	dhi.logger.Info("Starting data hub instance")
 
-	dhi.updater.Start()
+	dhi.updater.Start(dhi.config)
 	// start web server
 	go func() {
 		err := dhi.webService.Start(context.Background())

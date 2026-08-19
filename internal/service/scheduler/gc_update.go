@@ -15,7 +15,7 @@ func NewGCUpdate(logger *zap.SugaredLogger, gc *server.GarbageCollector) schedul
 		err = gc.Cleandeleted()
 		if err != nil {
 			logger.Warnf("cleaning of deleted datasets failed: %v", err.Error())
-			return RunResult{state: RunResultFailed, timestame: time.Now()}
+			return RunResult{state: RunResultFailed, timestamp: time.Now()}
 		} else {
 			logger.Infof("Finished cleaning of deleted datasets after %v", time.Since(ts).Round(time.Millisecond))
 		}
@@ -24,10 +24,10 @@ func NewGCUpdate(logger *zap.SugaredLogger, gc *server.GarbageCollector) schedul
 		err = gc.GC()
 		if err != nil {
 			logger.Warn("badger gc failed: ", err)
-			return RunResult{state: RunResultFailed, timestame: time.Now()}
+			return RunResult{state: RunResultFailed, timestamp: time.Now()}
 		}
 		logger.Infof("Finished badger gc after %v", time.Since(ts).Round(time.Millisecond))
-		return RunResult{state: RunResultSuccess, timestame: time.Now()}
+		return RunResult{state: RunResultSuccess, timestamp: time.Now()}
 	})
 	t.OnStop = func(ctx context.Context) error {
 		logger.Info("Stopping garbage collector")

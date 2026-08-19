@@ -93,7 +93,8 @@ func load(basePath string) (*Config, error) {
 			PoolFull:        viper.GetInt("JOBS_MAX_FULLSYNC"),
 			Concurrent:      1,
 		},
-		SlowLogThreshold: viper.GetDuration("SLOW_LOG_THRESHOLD"),
+		SlowLogThreshold:     viper.GetDuration("SLOW_LOG_THRESHOLD"),
+		NamespaceCleanupMode: viper.GetString("NAMESPACE_CLEANUP_MODE"), // can be "log", "delete", empty value means job is disabled
 	}, nil
 }
 
@@ -148,6 +149,7 @@ func parse(basePath string, logger *zap.SugaredLogger) error {
 	viper.SetDefault("JOBS_MAX_INCREMENTAL", 10)
 	viper.SetDefault("JOBS_MAX_FULLSYNC", 10)
 	viper.SetDefault("SLOW_LOG_THRESHOLD", "1s")
+	viper.SetDefault("NAMESPACE_CLEANUP_MODE", "disabled") // can be "log", "delete", "disabled" empty value means job is disabled
 	viper.AutomaticEnv()
 
 	viper.SetConfigType("env")
