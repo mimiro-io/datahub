@@ -438,7 +438,9 @@ func (s *Scheduler) ResetJobMeta(jobid string) error {
 		return fmt.Errorf("error getting meta for job with id '%s' (%s)", jobid, jobTitle)
 	}
 
-	err = s.Store.StoreObject(server.JobMetaIndex, jobid, &server.MetaContext{})
+	err = s.Store.StoreObject(server.JobMetaIndex, jobid, &server.MetaContext{
+		QueriedDatasets: make(map[uint32]struct{}),
+		TransactionSink: make(map[string]struct{})})
 	if err != nil {
 		return fmt.Errorf("error resetting meta for job with id '%s' (%s)", jobid, jobTitle)
 	}
