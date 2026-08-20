@@ -2206,25 +2206,46 @@ When the provider is used the first time, the values are loaded from their store
 
 #### Backup
 
-Backup of the Datahub is important. This makes sure you can recover from disaster.
+The Datahub backs up its store on a schedule. Configuring a backup location enables it.
 
 `BACKUP_LOCATION=`
 
-To enable back, a backup location needs to be configured. The Datahub will attempt to create the directories in this location if they are missing.
+The directory the backup is written to. The Datahub creates it if it is missing.
 
-We do recomment that you put the backup on a separate disk from the STORE_LOCATION for performance reasons. If you are in a Cloud setup, you should probably use something like AWS ELB to make sure your disk survive a shutdown.
+Put the backup on a separate disk from the store for performance. In a cloud setup, use a disk that survives a shutdown, such as an AWS EBS volume.
 
 `BACKUP_SCHEDULE=`
 
-The backup gets scheduled in the internal Job runner in the Datahub, and the schedule supports the same cron schedules as regular Jobs. You can find the documentation [here](https://pkg.go.dev/github.com/robfig/cron#hdr-CRON_Expression_Format).
-
-If you don't provide a schedule, the default schedule is "_/5 _ \* \* \*", aka every 5 minutes.
+A cron expression, the same format as Job schedules ([cron format reference](https://pkg.go.dev/github.com/robfig/cron#hdr-CRON_Expression_Format)). The default is `*/5 * * * *`, every 5 minutes.
 
 `BACKUP_USE_RSYNC=true`
 
-If this is true, then the backup will use rsync for it's backup. rsync must be installed, and on the path for this to work.
-If this is false, the Badger DB native backup will be used instead.
+When true, each backup run mirrors the store to the backup location with rsync. rsync must be installed and on the path.
 
+When false, the Badger DB native backup is used.
+
+`BACKUP_SOURCE_LOCATION=`
+
+The directory rsync backs up. It defaults to the `STORE_LOCATION` setting, which backs up the store alone.
+
+Point it at a common parent to also cover sibling state, such as the `SECURITY_STORAGE_LOCATION` directory. It must always contain the store location. The Datahub refuses to start otherwise.
+
+A trailing slash makes rsync mirror the directory's contents onto the backup location root.
+
+##### The backup id
+
+A `DATAHUB_BACKUPID` file marks which store a backup belongs to. The store creates the file in the store location on first start.
+
+Every backup run compares this id with the one in the backup before writing anything:
+
+- The first backup into an empty backup location places the id file.
+- A mismatch halts the process instead of overwriting another store's backup.
+- A backup location with content but no id file also halts. If the backup belongs to the current store, copy the id file to the path named in the error log.
+
+##### Restoring a backup
+
+- An rsync backup mirrors the backup source. Copy the store's files, id file included, back to the store location.
+- A native backup keeps the id file at the backup location root. After restoring it, copy `DATAHUB_BACKUPID` into the store location before starting the Datahub.
 
 #### Logging profile
 
