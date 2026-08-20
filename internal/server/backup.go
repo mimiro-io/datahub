@@ -16,6 +16,7 @@ package server
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -124,7 +125,19 @@ func (backupManager *BackupManager) DoRsyncBackup() error {
 
 	cmd := exec.Command("rsync", "-avz", "--delete", backupManager.backupSourceLocation, backupManager.backupLocation)
 	err = cmd.Run()
+	if rsyncFilesVanished(err) {
+		// on a live store, compaction can delete files between rsync's file-list scan and the transfer
+		backupManager.logger.Info("backup completed, some source files were deleted after rsync listed them and the next run reconciles the backup (rsync exit 24)")
+		return nil
+	}
 	return err
+}
+
+// rsyncFilesVanished reports whether err is rsync exit status 24 (RERR_VANISHED),
+// source files deleted between rsync's file-list scan and the transfer.
+func rsyncFilesVanished(err error) bool {
+	var exitErr *exec.ExitError
+	return errors.As(err, &exitErr) && exitErr.ExitCode() == 24
 }
 
 func (backupManager *BackupManager) DoNativeBackup() error {
