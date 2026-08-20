@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -258,6 +259,46 @@ var _ = ginkgo.Describe("The BackupManager with a backup source above the store 
 		Expect(err).To(BeNil())
 		Expect(current).To(Equal(backedUpID))
 	}, ginkgo.SpecTimeout(2*time.Minute))
+})
+
+var _ = ginkgo.Describe("rsyncFilesVanished", func() {
+	ginkgo.It("recognizes rsync exit 24 as vanished source files", func() {
+		Expect(rsyncFilesVanished(exec.Command("sh", "-c", "exit 24").Run())).To(BeTrue())
+	})
+	ginkgo.It("treats other rsync exits as real errors", func() {
+		Expect(rsyncFilesVanished(exec.Command("sh", "-c", "exit 23").Run())).To(BeFalse())
+		Expect(rsyncFilesVanished(exec.Command("sh", "-c", "exit 1").Run())).To(BeFalse())
+	})
+	ginkgo.It("treats success as no error", func() {
+		Expect(rsyncFilesVanished(nil)).To(BeFalse())
+	})
+})
+
+var _ = ginkgo.Describe("DoRsyncBackup with a stubbed rsync", func() {
+	var backup *BackupManager
+
+	stubRsync := func(exitCode int) {
+		dir := ginkgo.GinkgoT().TempDir()
+		script := fmt.Sprintf("#!/bin/sh\nexit %v\n", exitCode)
+		Expect(os.WriteFile(filepath.Join(dir, "rsync"), []byte(script), 0o755)).To(BeNil())
+		ginkgo.GinkgoT().Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	}
+
+	ginkgo.BeforeEach(func() {
+		backup = &BackupManager{}
+		backup.logger = zap.NewNop().Sugar()
+		backup.backupLocation = ginkgo.GinkgoT().TempDir()
+		backup.backupSourceLocation = ginkgo.GinkgoT().TempDir()
+	})
+
+	ginkgo.It("reports success when rsync exits 24", func() {
+		stubRsync(24)
+		Expect(backup.DoRsyncBackup()).To(BeNil())
+	})
+	ginkgo.It("reports an error for other rsync exit codes", func() {
+		stubRsync(23)
+		Expect(backup.DoRsyncBackup()).To(HaveOccurred())
+	})
 })
 
 func assertPanic(f func()) {
