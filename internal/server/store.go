@@ -557,7 +557,7 @@ func (s *Store) Open() error {
 
 	// if new storage, create unique storage id file. BackupManager can use this id to ensure it does not overwrite
 	// a backup belonging to a different storage
-	storageIDFile := filepath.Join(s.storeLocation, "DATAHUB_BACKUPID")
+	storageIDFile := filepath.Join(s.storeLocation, StorageIDFileName)
 	if _, err = os.Stat(storageIDFile); errors.Is(err, os.ErrNotExist) {
 		err = os.WriteFile(storageIDFile, []byte(fmt.Sprintf("%v", time.Now().UnixNano())), 0o644)
 		if err != nil {

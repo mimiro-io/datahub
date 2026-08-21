@@ -101,19 +101,28 @@ var _ = ginkgo.Describe("The BackupManager", func() {
 		backup.lastID, err = backup.LoadLastID()
 		Expect(err).To(BeNil())
 		backup.Run()
-		// check backup id file is synced
+		mirroredIDFile := filepath.Join(backupLocation, filepath.Base(storeLocation), StorageIDFileName)
+		if _, err := os.Stat(mirroredIDFile); errors.Is(err, os.ErrNotExist) {
+			ginkgo.Fail("expected store id file to be mirrored into the backup")
+		}
+	}, ginkgo.SpecTimeout(2*time.Minute))
+	ginkgo.It("Should compare ids at the backup root when the source is the store with a trailing slash", func(_ ginkgo.SpecContext) {
+		backup.useRsync = true
+		backup.backupSourceLocation = storeLocation + "/"
+		backup.Run()
 		storageIDFile := filepath.Join(backupLocation, StorageIDFileName)
 		if _, err := os.Stat(storageIDFile); errors.Is(err, os.ErrNotExist) {
-			ginkgo.Fail("expected backup id file to be copied")
+			ginkgo.Fail("expected store id file to be mirrored to the backup root")
 		}
+		// second run takes the id comparison path
+		backup.Run()
 	}, ginkgo.SpecTimeout(2*time.Minute))
 	ginkgo.It("Should stop datahub if backup to invalid location", func(_ ginkgo.SpecContext) {
 		backup.useRsync = true
 		backup.Run()
-		// check backup id file is synced
-		storageIDFile := filepath.Join(backupLocation, StorageIDFileName)
-		if _, err := os.Stat(storageIDFile); errors.Is(err, os.ErrNotExist) {
-			ginkgo.Fail("expected backup id file to be copied")
+		mirroredIDFile := filepath.Join(backupLocation, filepath.Base(storeLocation), StorageIDFileName)
+		if _, err := os.Stat(mirroredIDFile); errors.Is(err, os.ErrNotExist) {
+			ginkgo.Fail("expected store id file to be mirrored into the backup")
 		}
 		// stop store, remove id file and start again - a new id file should be generated
 		s.Close()
@@ -122,6 +131,132 @@ var _ = ginkgo.Describe("The BackupManager", func() {
 
 		// backup should fail now
 		assertPanic(func() { backup.Run() })
+	}, ginkgo.SpecTimeout(2*time.Minute))
+	ginkgo.It("Should stop datahub if the backup location has content but no id file", func(_ ginkgo.SpecContext) {
+		backup.useRsync = true
+		err := os.MkdirAll(backupLocation, 0o700)
+		Expect(err).To(BeNil())
+		err = os.WriteFile(filepath.Join(backupLocation, "orphan.kv"), []byte("data"), 0o644)
+		Expect(err).To(BeNil())
+
+		assertPanic(func() { backup.Run() })
+	}, ginkgo.SpecTimeout(2*time.Minute))
+	ginkgo.It("Should stop datahub when the backup source does not contain the store", func(_ ginkgo.SpecContext) {
+		backup.useRsync = true
+		backup.backupSourceLocation = "./test_store_backup_elsewhere"
+
+		assertPanic(func() { backup.Run() })
+	}, ginkgo.SpecTimeout(2*time.Minute))
+	ginkgo.It("Should fail construction when the backup source does not contain the store", func(_ ginkgo.SpecContext) {
+		e := &conf.Config{
+			Logger:               zap.NewNop().Sugar(),
+			StoreLocation:        storeLocation,
+			BackupLocation:       backupLocation,
+			BackupSchedule:       "*/5 * * * *",
+			BackupSourceLocation: "./test_store_backup_elsewhere",
+			BackupRsync:          true,
+		}
+
+		_, err := NewBackupManager(s, e)
+		Expect(err).To(HaveOccurred())
+	}, ginkgo.SpecTimeout(2*time.Minute))
+	ginkgo.It("Should treat a backup location holding only lost+found as empty", func(_ ginkgo.SpecContext) {
+		backup.useRsync = true
+		err := os.MkdirAll(filepath.Join(backupLocation, "lost+found"), 0o700)
+		Expect(err).To(BeNil())
+
+		backup.Run()
+
+		mirroredIDFile := filepath.Join(backupLocation, filepath.Base(storeLocation), StorageIDFileName)
+		if _, err := os.Stat(mirroredIDFile); errors.Is(err, os.ErrNotExist) {
+			ginkgo.Fail("expected store id file to be mirrored into the backup")
+		}
+	}, ginkgo.SpecTimeout(2*time.Minute))
+})
+
+var _ = ginkgo.Describe("The BackupManager with a backup source above the store location", func() {
+	testCnt := 0
+	var sourceLocation string
+	var storeLocation string
+	var backupLocation string
+	var s *Store
+	var backup *BackupManager
+	ginkgo.BeforeEach(func() {
+		testCnt += 1
+		sourceLocation = fmt.Sprintf("./test_backup_source_%v", testCnt)
+		storeLocation = filepath.Join(sourceLocation, "datahub.store")
+		backupLocation = fmt.Sprintf("./test_backup_source_backup_%v", testCnt)
+		err := os.RemoveAll(sourceLocation)
+		Expect(err).To(BeNil(), "should be allowed to clean testfiles in "+sourceLocation)
+		err = os.RemoveAll(backupLocation)
+		Expect(err).To(BeNil(), "should be allowed to clean testfiles in "+backupLocation)
+
+		e := &conf.Config{
+			Logger:        zap.NewNop().Sugar(),
+			StoreLocation: storeLocation,
+		}
+		s = NewStore(e, &statsd.NoOpClient{})
+
+		backup = &BackupManager{}
+		backup.logger = zap.NewNop().Sugar()
+		backup.store = s
+		backup.backupLocation = backupLocation
+		// the trailing slash makes rsync mirror the source's contents onto the backup location root
+		backup.backupSourceLocation = sourceLocation + "/"
+		backup.useRsync = true
+	})
+	ginkgo.AfterEach(func() {
+		_ = os.RemoveAll(sourceLocation)
+		_ = os.RemoveAll(backupLocation)
+	})
+
+	ginkgo.It("Should compare ids inside the mirrored store across runs", func(_ ginkgo.SpecContext) {
+		backup.Run()
+		// the id file travels inside the mirrored store directory, so a restored store carries it
+		mirroredIDFile := filepath.Join(backupLocation, "datahub.store", StorageIDFileName)
+		if _, err := os.Stat(mirroredIDFile); errors.Is(err, os.ErrNotExist) {
+			ginkgo.Fail("expected store id file to be mirrored with the store")
+		}
+		// no id copy at the backup root, so rsync --delete has nothing to remove
+		if _, err := os.Stat(filepath.Join(backupLocation, StorageIDFileName)); err == nil {
+			ginkgo.Fail("expected no id file at the backup root")
+		}
+
+		// second run takes the id comparison path
+		backup.Run()
+		if _, err := os.Stat(mirroredIDFile); errors.Is(err, os.ErrNotExist) {
+			ginkgo.Fail("expected store id file to survive the rsync run")
+		}
+	}, ginkgo.SpecTimeout(2*time.Minute))
+
+	ginkgo.It("Should place the id file before the first backup writes data", func(_ ginkgo.SpecContext) {
+		Expect(backup.validLocation()).To(BeTrue())
+
+		// a first backup torn mid-transfer must already carry its identity
+		mirroredIDFile := filepath.Join(backupLocation, "datahub.store", StorageIDFileName)
+		if _, err := os.Stat(mirroredIDFile); errors.Is(err, os.ErrNotExist) {
+			ginkgo.Fail("expected the id file to be placed before any data")
+		}
+	}, ginkgo.SpecTimeout(2*time.Minute))
+
+	ginkgo.It("Should stop datahub when an empty store points at an existing backup", func(_ ginkgo.SpecContext) {
+		backup.Run()
+		mirroredIDFile := filepath.Join(backupLocation, "datahub.store", StorageIDFileName)
+		backedUpID, err := os.ReadFile(mirroredIDFile)
+		Expect(err).To(BeNil())
+
+		// wipe the store and start over, as after losing the store volume
+		s.Close()
+		err = os.RemoveAll(sourceLocation)
+		Expect(err).To(BeNil())
+		s.Open()
+
+		assertPanic(func() { backup.Run() })
+
+		// the previous store's backup must be untouched
+		current, err := os.ReadFile(mirroredIDFile)
+		Expect(err).To(BeNil())
+		Expect(current).To(Equal(backedUpID))
 	}, ginkgo.SpecTimeout(2*time.Minute))
 })
 
