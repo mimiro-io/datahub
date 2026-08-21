@@ -172,3 +172,104 @@ func TestNamespacePrefixCounterRecoveredFromStateWithoutCounter(t *testing.T) {
 		t.Errorf("expected ns3, got %s", got)
 	}
 }
+
+func TestAssertSpecificPrefixMapping(t *testing.T) {
+	t.Run("Should restore a deleted mapping under its exact prefix", func(t *testing.T) {
+		s := testStore(t, t.TempDir())
+		defer s.Close()
+
+		prefix := assertPrefix(t, s, "http://data.example.io/people/")
+		if err := s.NamespaceManager.DeleteNamespacePrefix(prefix); err != nil {
+			t.Fatalf("failed to delete prefix: %v", err)
+		}
+
+		err := s.NamespaceManager.AssertSpecificPrefixMapping(prefix, "http://data.example.io/people/")
+		if err != nil {
+			t.Fatalf("failed to restore mapping: %v", err)
+		}
+		expanded, err := s.NamespaceManager.ExpandCurie(prefix + ":bob")
+		if err != nil {
+			t.Fatalf("restored prefix must expand again: %v", err)
+		}
+		if expanded != "http://data.example.io/people/bob" {
+			t.Errorf("unexpected expansion %s", expanded)
+		}
+		roundtrip, err := s.NamespaceManager.GetPrefixMappingForExpansion("http://data.example.io/people/")
+		if err != nil || roundtrip != prefix {
+			t.Errorf("expected expansion to map back to %s, got %s (%v)", prefix, roundtrip, err)
+		}
+	})
+
+	t.Run("Should accept the same mapping twice", func(t *testing.T) {
+		s := testStore(t, t.TempDir())
+		defer s.Close()
+
+		if err := s.NamespaceManager.AssertSpecificPrefixMapping("ns40", "http://data.example.io/a/"); err != nil {
+			t.Fatalf("first restore failed: %v", err)
+		}
+		if err := s.NamespaceManager.AssertSpecificPrefixMapping("ns40", "http://data.example.io/a/"); err != nil {
+			t.Errorf("restore must be idempotent, got: %v", err)
+		}
+	})
+
+	t.Run("Should refuse a prefix that is mapped to a different expansion", func(t *testing.T) {
+		s := testStore(t, t.TempDir())
+		defer s.Close()
+
+		prefix := assertPrefix(t, s, "http://data.example.io/people/")
+		err := s.NamespaceManager.AssertSpecificPrefixMapping(prefix, "http://data.example.io/other/")
+		if err == nil {
+			t.Error("expected an error when the prefix is taken by another expansion")
+		}
+	})
+
+	t.Run("Should keep generated prefixes clear of a restored prefix", func(t *testing.T) {
+		s := testStore(t, t.TempDir())
+		defer s.Close()
+
+		if err := s.NamespaceManager.AssertSpecificPrefixMapping("ns40", "http://data.example.io/a/"); err != nil {
+			t.Fatalf("restore failed: %v", err)
+		}
+		next := assertPrefix(t, s, "http://data.example.io/b/")
+		if next != "ns41" {
+			t.Errorf("expected the counter to jump past the restored prefix, got %s", next)
+		}
+	})
+
+	t.Run("Should not take over the write path when the expansion has a newer prefix", func(t *testing.T) {
+		s := testStore(t, t.TempDir())
+		defer s.Close()
+
+		newer := assertPrefix(t, s, "http://data.example.io/people/")
+		if err := s.NamespaceManager.AssertSpecificPrefixMapping("ns99", "http://data.example.io/people/"); err != nil {
+			t.Fatalf("restore failed: %v", err)
+		}
+		writePrefix, err := s.NamespaceManager.GetPrefixMappingForExpansion("http://data.example.io/people/")
+		if err != nil || writePrefix != newer {
+			t.Errorf("the newer prefix %s must keep the write path, got %s (%v)", newer, writePrefix, err)
+		}
+		expanded, err := s.NamespaceManager.ExpandCurie("ns99:bob")
+		if err != nil || expanded != "http://data.example.io/people/bob" {
+			t.Errorf("restored prefix must still resolve, got %s (%v)", expanded, err)
+		}
+	})
+
+	t.Run("Should survive a restart", func(t *testing.T) {
+		location := t.TempDir()
+		s := testStore(t, location)
+
+		if err := s.NamespaceManager.AssertSpecificPrefixMapping("ns673", "http://data.example.io/transfers/"); err != nil {
+			t.Fatalf("restore failed: %v", err)
+		}
+		if err := s.Close(); err != nil {
+			t.Fatalf("failed to close store: %v", err)
+		}
+
+		restarted := testStore(t, location)
+		defer restarted.Close()
+		expanded, err := restarted.NamespaceManager.ExpandCurie("ns673:1697017997")
+		if err != nil || expanded != "http://data.example.io/transfers/1697017997" {
+			t.Errorf("restored mapping must survive a restart, got %s (%v)", expanded, err)
+		}
+	})
+}

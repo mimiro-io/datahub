@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/ristretto/v2/z"
 	"github.com/mimiro-io/datahub/internal/service/store"
+	"github.com/mimiro-io/datahub/internal/service/types"
 	"go.uber.org/zap"
 )
 
@@ -83,8 +85,11 @@ func (nc *NamespaceCleaner) endScan() {
 
 func (nc *NamespaceCleaner) ScanNamespaceUsage(ctx context.Context) error {
 	s := nc.badger.GetDB().NewStream()
+	// prefix for badger's own 5-second progress log lines
+	s.LogPrefix = "namespace_cleanup.scan"
 	foundPrefixes := make(map[string]bool)
 	mapLock := sync.RWMutex{}
+	var scanned, skipped atomic.Int64
 
 	// Set up prefix filter for entity index to reduce iteration scope
 	entityIndexPrefix := make([]byte, 2)
@@ -92,6 +97,16 @@ func (nc *NamespaceCleaner) ScanNamespaceUsage(ctx context.Context) error {
 	s.Prefix = entityIndexPrefix
 
 	s.KeyToList = func(key []byte, itr *badger.Iterator) (*pb.KVList, error) {
+		// key layout: index id (2) + entity rid (8) + dataset id (4) + ...
+		// skip entities of deleted datasets still awaiting GC
+		if len(key) >= 14 {
+			dsID := types.InternalDatasetID(binary.BigEndian.Uint32(key[10:14]))
+			if nc.badger.IsDatasetDeleted(dsID) {
+				skipped.Add(1)
+				return nil, nil
+			}
+		}
+		scanned.Add(1)
 		item := itr.Item()
 		if item.IsDeletedOrExpired() {
 			return nil, nil
@@ -180,6 +195,9 @@ func (nc *NamespaceCleaner) ScanNamespaceUsage(ctx context.Context) error {
 		return ctx.Err()
 	}
 
+	nc.Logger.Infof("Namespace cleanup scanned %d entity versions, skipped %d versions from deleted datasets",
+		scanned.Load(), skipped.Load())
+
 	// Compare found prefixes with stored prefixes
 	nc.compareWithStoredPrefixes(foundPrefixes)
 	return nil
@@ -194,7 +212,20 @@ func (nc *NamespaceCleaner) extractNamespacePrefixesFromJSON(entityData []byte) 
 
 	// Use a map to collect unique prefixes
 	prefixMap := make(map[string]bool)
+	nc.collectEntityPrefixes(entity, prefixMap)
 
+	// Convert map to slice
+	prefixes := make([]string, 0, len(prefixMap))
+	for prefix := range prefixMap {
+		prefixes = append(prefixes, prefix)
+	}
+
+	return prefixes, nil
+}
+
+// collectEntityPrefixes gathers prefixes from an entity's id, property keys, and
+// reference keys and values, recursing into sub-entities in property values.
+func (nc *NamespaceCleaner) collectEntityPrefixes(entity map[string]interface{}, prefixMap map[string]bool) {
 	// Extract prefix from entity ID
 	if id, ok := entity["id"].(string); ok {
 		if prefix := nc.extractPrefix(id); prefix != "" {
@@ -202,12 +233,13 @@ func (nc *NamespaceCleaner) extractNamespacePrefixesFromJSON(entityData []byte) 
 		}
 	}
 
-	// Extract prefixes from property keys
+	// Extract prefixes from property keys, and recurse into sub-entities
 	if props, ok := entity["props"].(map[string]interface{}); ok {
-		for key := range props {
+		for key, value := range props {
 			if prefix := nc.extractPrefix(key); prefix != "" {
 				prefixMap[prefix] = true
 			}
+			nc.collectSubEntityPrefixes(value, prefixMap)
 		}
 	}
 
@@ -236,14 +268,18 @@ func (nc *NamespaceCleaner) extractNamespacePrefixesFromJSON(entityData []byte) 
 			}
 		}
 	}
+}
 
-	// Convert map to slice
-	prefixes := make([]string, 0, len(prefixMap))
-	for prefix := range prefixMap {
-		prefixes = append(prefixes, prefix)
+// collectSubEntityPrefixes recurses into property values that hold sub-entities.
+func (nc *NamespaceCleaner) collectSubEntityPrefixes(value interface{}, prefixMap map[string]bool) {
+	switch v := value.(type) {
+	case map[string]interface{}:
+		nc.collectEntityPrefixes(v, prefixMap)
+	case []interface{}:
+		for _, item := range v {
+			nc.collectSubEntityPrefixes(item, prefixMap)
+		}
 	}
-
-	return prefixes, nil
 }
 
 func (nc *NamespaceCleaner) extractPrefix(value string) string {

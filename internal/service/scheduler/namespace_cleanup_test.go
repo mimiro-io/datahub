@@ -219,10 +219,149 @@ func TestExtractNamespacePrefixesFromJSON(t *testing.T) {
 		}
 	})
 
+	t.Run("Should collect prefixes from sub-entities nested in property values", func(t *testing.T) {
+		// sub-entities in lists under props, nested two levels
+		entity := `{
+			"id": "ns0:cow",
+			"props": {
+				"ns0:transfers": [
+					{
+						"refs": {"ns0:externalId": "ns5:1697017997"},
+						"props": {"ns0:date": "2023-10-11", "ns0:audit": {
+							"refs": {"ns6:verifiedBy": "ns7:vet-1"},
+							"props": {}
+						}}
+					}
+				],
+				"ns0:note": "plain string, no curie"
+			},
+			"refs": {}
+		}`
+
+		got, err := cleaner.extractNamespacePrefixesFromJSON([]byte(entity))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		sort.Strings(got)
+		want := []string{"ns0", "ns5", "ns6", "ns7"}
+		if len(got) != len(want) {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("got %v, want %v", got, want)
+			}
+		}
+	})
+
 	t.Run("Should return an error for data that is not an entity", func(t *testing.T) {
 		_, err := cleaner.extractNamespacePrefixesFromJSON([]byte("not json"))
 		if err == nil {
 			t.Error("expected an error for malformed entity data")
 		}
 	})
+}
+
+func TestNamespaceCleanupKeepsNestedPrefixes(t *testing.T) {
+	task, s, dsm := testCleanupTask(t, true)
+
+	basePrefix, err := s.NamespaceManager.AssertPrefixMappingForExpansion("http://data.example.io/cattle/")
+	if err != nil {
+		t.Fatalf("failed to assert base prefix: %v", err)
+	}
+	nestedPrefix, err := s.NamespaceManager.AssertPrefixMappingForExpansion("http://data.example.io/transfers/")
+	if err != nil {
+		t.Fatalf("failed to assert nested prefix: %v", err)
+	}
+
+	ds, err := dsm.CreateDataset("cattle", nil)
+	if err != nil {
+		t.Fatalf("failed to create dataset: %v", err)
+	}
+	// nested prefix used only inside a sub-entity
+	err = ds.StoreEntities([]*server.Entity{
+		server.NewEntityFromMap(map[string]interface{}{
+			"id": basePrefix + ":cow-1",
+			"props": map[string]interface{}{
+				basePrefix + ":transfers": []interface{}{
+					map[string]interface{}{
+						"refs":  map[string]interface{}{basePrefix + ":externalId": nestedPrefix + ":1697017997"},
+						"props": map[string]interface{}{basePrefix + ":date": "2023-10-11"},
+					},
+				},
+			},
+			"refs": map[string]interface{}{},
+		}),
+	})
+	if err != nil {
+		t.Fatalf("failed to store entities: %v", err)
+	}
+
+	task.Run()
+	awaitTask(t, task)
+
+	mapping := s.NamespaceManager.GetPrefixToExpansionMap()
+	if mapping[nestedPrefix] != "http://data.example.io/transfers/" {
+		t.Errorf("prefix %s is used inside a sub-entity and must survive the cleanup, got %q",
+			nestedPrefix, mapping[nestedPrefix])
+	}
+}
+
+func TestNamespaceCleanupIgnoresDeletedDatasets(t *testing.T) {
+	task, s, dsm := testCleanupTask(t, true)
+
+	keepPrefix, err := s.NamespaceManager.AssertPrefixMappingForExpansion("http://data.example.io/people/")
+	if err != nil {
+		t.Fatalf("failed to assert prefix: %v", err)
+	}
+	condemnedPrefix, err := s.NamespaceManager.AssertPrefixMappingForExpansion("http://data.example.io/bad-import/")
+	if err != nil {
+		t.Fatalf("failed to assert prefix: %v", err)
+	}
+
+	people, err := dsm.CreateDataset("people", nil)
+	if err != nil {
+		t.Fatalf("failed to create dataset: %v", err)
+	}
+	err = people.StoreEntities([]*server.Entity{
+		server.NewEntityFromMap(map[string]interface{}{
+			"id":    keepPrefix + ":homer",
+			"props": map[string]interface{}{},
+			"refs":  map[string]interface{}{},
+		}),
+	})
+	if err != nil {
+		t.Fatalf("failed to store entities: %v", err)
+	}
+
+	bad, err := dsm.CreateDataset("bad-import", nil)
+	if err != nil {
+		t.Fatalf("failed to create dataset: %v", err)
+	}
+	err = bad.StoreEntities([]*server.Entity{
+		server.NewEntityFromMap(map[string]interface{}{
+			"id":    condemnedPrefix + ":x-1",
+			"props": map[string]interface{}{},
+			"refs":  map[string]interface{}{},
+		}),
+	})
+	if err != nil {
+		t.Fatalf("failed to store entities: %v", err)
+	}
+
+	// the deleted dataset's data stays in the store until GC purges it
+	if err := dsm.DeleteDataset("bad-import"); err != nil {
+		t.Fatalf("failed to delete dataset: %v", err)
+	}
+
+	task.Run()
+	awaitTask(t, task)
+
+	mapping := s.NamespaceManager.GetPrefixToExpansionMap()
+	if _, found := mapping[condemnedPrefix]; found {
+		t.Errorf("prefix %s is only used by a deleted dataset and should have been cleaned up", condemnedPrefix)
+	}
+	if mapping[keepPrefix] != "http://data.example.io/people/" {
+		t.Errorf("prefix %s is used by a live dataset and must survive, got %q", keepPrefix, mapping[keepPrefix])
+	}
 }
