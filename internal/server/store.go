@@ -350,6 +350,35 @@ func (namespaceManager *NamespaceManager) DeleteNamespacePrefix(prefix string) e
 	return namespaceManager.persistState()
 }
 
+// AssertSpecificPrefixMapping restores a mapping under the exact prefix given, for
+// example after a wrong delete. Idempotent; fails when the prefix is taken. An
+// existing prefix for the same expansion keeps the write path.
+func (namespaceManager *NamespaceManager) AssertSpecificPrefixMapping(prefix string, expansion string) error {
+	if prefix == "" || expansion == "" {
+		return errors.New("both prefix and expansion must be given")
+	}
+	namespaceManager.lock.Lock()
+	defer namespaceManager.lock.Unlock()
+
+	if existing, exists := namespaceManager.prefixToExpansionMapping[prefix]; exists {
+		if existing == expansion {
+			return nil
+		}
+		return errors.New("prefix " + prefix + " is already mapped to " + existing)
+	}
+	namespaceManager.prefixToExpansionMapping[prefix] = expansion
+	if _, exists := namespaceManager.expansionToPrefixMapping[expansion]; !exists {
+		namespaceManager.expansionToPrefixMapping[expansion] = prefix
+	}
+	// keep generated prefixes clear of the restored one
+	if rest, found := strings.CutPrefix(prefix, "ns"); found {
+		if n, err := strconv.Atoi(rest); err == nil && n >= namespaceManager.nextPrefixID {
+			namespaceManager.nextPrefixID = n + 1
+		}
+	}
+	return namespaceManager.persistState()
+}
+
 type DsNsInfo struct {
 	DatasetPrefix       string
 	PublicNamespacesKey string
