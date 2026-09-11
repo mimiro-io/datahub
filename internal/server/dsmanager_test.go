@@ -85,6 +85,21 @@ var _ = ginkgo.Describe("The dataset manager", func() {
 		Expect(details.Properties).To(Equal(map[string]interface{}{"ns0:items": float64(1), "ns0:name": "more.people"}))
 	})
 
+	ginkgo.It("Should give dataset details when more than 1000 datasets exist", func() {
+		for i := 0; i < 1000; i++ {
+			_, err := dsm.CreateDataset(fmt.Sprintf("ds%04d", i), nil)
+			Expect(err).To(BeNil())
+		}
+		_, err := dsm.CreateDataset("last.one", nil)
+		Expect(err).To(BeNil())
+
+		details, found, err := dsm.GetDatasetDetails("last.one")
+		Expect(err).To(BeNil())
+		Expect(found).To(BeTrue(), "dataset created after the first 1000 must still be found")
+		Expect(details.ID).To(Equal("ns0:last.one"))
+		Expect(details.Properties["ns0:name"]).To(Equal("last.one"))
+	})
+
 	ginkgo.It("Should persist internal IDs of deleted datasets, so that they are not given out again", func() {
 		ds, err := dsm.CreateDataset("people", nil)
 		Expect(err).To(BeNil())
