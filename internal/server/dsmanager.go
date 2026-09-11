@@ -323,7 +323,7 @@ func (dsm *DsManager) GetDatasetDetails(name string) (*Entity, bool, error) {
 	dataset := dsm.GetDataset(datasetCore)
 	entity := &Entity{}
 	found := false
-	_, err := dataset.MapEntitiesRaw("", 1000, func(jsonData []byte) error {
+	_, err := dataset.MapEntitiesRaw("", 2000, func(jsonData []byte) error {
 		e := &Entity{}
 		err := json.Unmarshal(jsonData, e)
 		if err == nil {
