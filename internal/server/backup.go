@@ -16,10 +16,12 @@ package server
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/bamzi/jobrunner"
 	"github.com/robfig/cron/v3"
@@ -61,6 +63,10 @@ func NewBackupManager(store *Store, env *conf.Config) (*BackupManager, error) {
 	backup.useRsync = env.BackupRsync
 	backup.store = store
 	backup.logger = env.Logger.Named("backup")
+
+	if _, err := backup.backedUpIDFile(); err != nil {
+		return nil, err
+	}
 
 	// load last id
 	lastID, err := backup.LoadLastID()
@@ -181,39 +187,100 @@ func (backupManager *BackupManager) validLocation() bool {
 	dhIDFile := filepath.Join(backupManager.store.storeLocation, StorageIDFileName)
 	b, err := os.ReadFile(dhIDFile)
 	if err != nil {
-		backupManager.logger.Warnf("could not read DATAHUB_BACKUPID file")
+		backupManager.logger.Warnf("could not read %v file at %v. (%v)", StorageIDFileName, dhIDFile, err)
 		return false
 	}
 	dhID := string(b)
-	backedUpDhIDFile := filepath.Join(backupManager.backupLocation, StorageIDFileName)
-	b, err = os.ReadFile(backedUpDhIDFile)
-	if err != nil {
-		backupManager.logger.Infof("could not read DATAHUB_BACKUPID file at backup location. copying now")
-		source, err := os.Open(dhIDFile)
-		if err != nil {
-			backupManager.logger.Errorf("Could not open backup id file at %v.", dhIDFile)
-			return false
-		}
-		defer source.Close()
 
-		err = os.MkdirAll(backupManager.backupLocation, 0o700)
-		if err != nil {
-			backupManager.logger.Errorf("Could create backup dir at %v. (%w)", backupManager.backupLocation, err)
-			return false
-		}
-		destination, err := os.Create(backedUpDhIDFile)
-		if err != nil {
-			backupManager.logger.Errorf("Could not open backed up id file at %v. (%w)", backedUpDhIDFile, err)
-			return false
-		}
-		defer destination.Close()
-		_, err = io.Copy(destination, source)
-		if err != nil {
-			backupManager.logger.Errorf("Could not copý %v to %v.", dhIDFile, backedUpDhIDFile)
-			return false
-		}
-		return true
+	backedUpIDFile, err := backupManager.backedUpIDFile()
+	if err != nil {
+		backupManager.logger.Errorf("%v", err)
+		return false
 	}
-	buDhID := string(b)
-	return dhID == buDhID
+	b, err = os.ReadFile(backedUpIDFile)
+	if err == nil {
+		return dhID == string(b)
+	}
+	if !os.IsNotExist(err) {
+		backupManager.logger.Errorf("Could not read backup id file at %v. (%v)", backedUpIDFile, err)
+		return false
+	}
+	empty, err := backupManager.backupLocationEmpty()
+	if err != nil {
+		backupManager.logger.Errorf("Could not read backup location %v. (%v)", backupManager.backupLocation, err)
+		return false
+	}
+	if !empty {
+		backupManager.logger.Errorf("no %v file at %v in non-empty backup location. refusing to overwrite a backup "+
+			"of unknown origin. if the backup belongs to this store, copy %v to %v",
+			StorageIDFileName, backedUpIDFile, dhIDFile, filepath.Dir(backedUpIDFile))
+		return false
+	}
+	// the id lands before any data, so a backup torn mid-transfer keeps its identity
+	return backupManager.copyIDFile(dhIDFile, backedUpIDFile)
+}
+
+// backedUpIDFile returns the path of the store's id file inside the backup.
+// Rsync puts a trailing-slash source's contents at the backup root and a slashless source under its basename.
+func (backupManager *BackupManager) backedUpIDFile() (string, error) {
+	if !backupManager.useRsync {
+		return filepath.Join(backupManager.backupLocation, StorageIDFileName), nil
+	}
+	root := backupManager.backupLocation
+	source := backupManager.backupSourceLocation
+	if !strings.HasSuffix(source, "/") {
+		root = filepath.Join(root, filepath.Base(source))
+	}
+	rel, err := filepath.Rel(filepath.Clean(source), filepath.Clean(backupManager.store.storeLocation))
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("store location %v is not inside backup source location %v, "+
+			"the rsync backup would not contain the store",
+			backupManager.store.storeLocation, source)
+	}
+	return filepath.Join(root, rel, StorageIDFileName), nil
+}
+
+func (backupManager *BackupManager) backupLocationEmpty() (bool, error) {
+	entries, err := os.ReadDir(backupManager.backupLocation)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return true, nil
+		}
+		return false, err
+	}
+	for _, entry := range entries {
+		// a fresh ext4 mount holds only lost+found, which is not backup content
+		if entry.Name() != "lost+found" {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func (backupManager *BackupManager) copyIDFile(from string, to string) bool {
+	backupManager.logger.Infof("no %v file at backup location. copying now", StorageIDFileName)
+	source, err := os.Open(from)
+	if err != nil {
+		backupManager.logger.Errorf("Could not open backup id file at %v.", from)
+		return false
+	}
+	defer source.Close()
+
+	err = os.MkdirAll(filepath.Dir(to), 0o700)
+	if err != nil {
+		backupManager.logger.Errorf("Could not create backup dir at %v. (%v)", filepath.Dir(to), err)
+		return false
+	}
+	destination, err := os.Create(to)
+	if err != nil {
+		backupManager.logger.Errorf("Could not create backup id file at %v. (%v)", to, err)
+		return false
+	}
+	defer destination.Close()
+	_, err = io.Copy(destination, source)
+	if err != nil {
+		backupManager.logger.Errorf("Could not copy %v to %v.", from, to)
+		return false
+	}
+	return true
 }
