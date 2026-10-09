@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func Test_parse_wildcard(t *testing.T) {
@@ -87,5 +88,50 @@ func Test_parse_single_dataset(t *testing.T) {
 
 	if len(ds) != 1 {
 		t.Fatalf("should have 1 dataset : %+v", ds)
+	}
+}
+
+func Test_parse_datasets_map_logs_no_warning(t *testing.T) {
+	core, logs := observer.New(zap.WarnLevel)
+	result := []byte("{\"decision_id\":\"7cb26e70-2842-42a1-ac74-cceeffbb15c1\",\"result\":{\"datalake.TestEvent1\":true}}")
+	_, err := parseDatasetsFromOpaBody(zap.New(core).Sugar(), result)
+	if err != nil {
+		t.Fatalf("should parse : %+v", err)
+	}
+
+	if logs.Len() != 0 {
+		t.Fatalf("should not log warnings : %+v", logs.All())
+	}
+}
+
+func Test_parse_datasets_excludes_false(t *testing.T) {
+	result := []byte("{\"decision_id\":\"7cb26e70-2842-42a1-ac74-cceeffbb15c1\",\"result\":{\"datalake.Allowed\":true,\"datalake.Denied\":false}}")
+	ds, err := parseDatasetsFromOpaBody(zap.NewNop().Sugar(), result)
+	if err != nil {
+		t.Fatalf("should parse : %+v", err)
+	}
+
+	if len(ds) != 1 || ds[0] != "datalake.Allowed" {
+		t.Fatalf("should only have datalake.Allowed dataset : %+v", ds)
+	}
+}
+
+func Test_parse_wildcard_with_other_datasets(t *testing.T) {
+	result := []byte("{\"decision_id\":\"7363d2f4-e9fe-4fee-9d79-c1b5efe27483\",\"result\":{\"a\":true,\"*\":true,\"z\":true}}")
+	ds, err := parseDatasetsFromOpaBody(zap.NewNop().Sugar(), result)
+	if err != nil {
+		t.Fatalf("should parse : %+v", err)
+	}
+
+	if len(ds) != 1 || ds[0] != "*" {
+		t.Fatalf("should only have * dataset : %+v", ds)
+	}
+}
+
+func Test_parse_wildcard_false_is_error(t *testing.T) {
+	result := []byte("{\"decision_id\":\"7363d2f4-e9fe-4fee-9d79-c1b5efe27483\",\"result\":{\"*\":false}}")
+	_, err := parseDatasetsFromOpaBody(zap.NewNop().Sugar(), result)
+	if err == nil {
+		t.Fatalf("should return error so the ACL check runs")
 	}
 }
