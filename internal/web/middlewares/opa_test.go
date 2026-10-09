@@ -135,3 +135,36 @@ func Test_parse_wildcard_false_is_error(t *testing.T) {
 		t.Fatalf("should return error so the ACL check runs")
 	}
 }
+
+// Test_parse_response_shapes lists every OPA result shape and whether the request
+// passes (nil error) or falls back to the ACL check (error) in Authorizer.
+func Test_parse_response_shapes(t *testing.T) {
+	tests := []struct {
+		name     string
+		body     string
+		datasets []string
+		aclCheck bool
+	}{
+		{"list", `{"result":["a","b"]}`, []string{"a", "b"}, false},
+		{"empty list", `{"result":[]}`, []string{}, false},
+		{"map of true", `{"result":{"a":true,"b":true}}`, []string{"a", "b"}, false},
+		{"map with false", `{"result":{"a":true,"b":false}}`, []string{"a"}, false},
+		{"empty map", `{"result":{}}`, []string{}, false},
+		{"* true", `{"result":{"*":true}}`, []string{"*"}, false},
+		{"* with other keys", `{"result":{"a":true,"*":true}}`, []string{"*"}, false},
+		{"* false", `{"result":{"*":false}}`, nil, true},
+		{"missing result", `{"decision_id":"x"}`, []string{}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ds, err := parseDatasetsFromOpaBody(zap.NewNop().Sugar(), []byte(tt.body))
+			if (err != nil) != tt.aclCheck {
+				t.Fatalf("aclCheck = %v, want %v (err: %v)", err != nil, tt.aclCheck, err)
+			}
+			slices.Sort(ds)
+			if !slices.Equal(ds, tt.datasets) {
+				t.Fatalf("datasets = %v, want %v", ds, tt.datasets)
+			}
+		})
+	}
+}
