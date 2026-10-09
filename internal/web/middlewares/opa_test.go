@@ -104,38 +104,6 @@ func Test_parse_datasets_map_logs_no_warning(t *testing.T) {
 	}
 }
 
-func Test_parse_datasets_excludes_false(t *testing.T) {
-	result := []byte("{\"decision_id\":\"7cb26e70-2842-42a1-ac74-cceeffbb15c1\",\"result\":{\"datalake.Allowed\":true,\"datalake.Denied\":false}}")
-	ds, err := parseDatasetsFromOpaBody(zap.NewNop().Sugar(), result)
-	if err != nil {
-		t.Fatalf("should parse : %+v", err)
-	}
-
-	if len(ds) != 1 || ds[0] != "datalake.Allowed" {
-		t.Fatalf("should only have datalake.Allowed dataset : %+v", ds)
-	}
-}
-
-func Test_parse_wildcard_with_other_datasets(t *testing.T) {
-	result := []byte("{\"decision_id\":\"7363d2f4-e9fe-4fee-9d79-c1b5efe27483\",\"result\":{\"a\":true,\"*\":true,\"z\":true}}")
-	ds, err := parseDatasetsFromOpaBody(zap.NewNop().Sugar(), result)
-	if err != nil {
-		t.Fatalf("should parse : %+v", err)
-	}
-
-	if len(ds) != 1 || ds[0] != "*" {
-		t.Fatalf("should only have * dataset : %+v", ds)
-	}
-}
-
-func Test_parse_wildcard_false_is_error(t *testing.T) {
-	result := []byte("{\"decision_id\":\"7363d2f4-e9fe-4fee-9d79-c1b5efe27483\",\"result\":{\"*\":false}}")
-	_, err := parseDatasetsFromOpaBody(zap.NewNop().Sugar(), result)
-	if err == nil {
-		t.Fatalf("should return error so the ACL check runs")
-	}
-}
-
 // Test_parse_response_shapes lists every OPA result shape and whether the request
 // passes (nil error) or falls back to the ACL check (error) in Authorizer.
 func Test_parse_response_shapes(t *testing.T) {
@@ -153,6 +121,9 @@ func Test_parse_response_shapes(t *testing.T) {
 		{"* true", `{"result":{"*":true}}`, []string{"*"}, false},
 		{"* with other keys", `{"result":{"a":true,"*":true}}`, []string{"*"}, false},
 		{"* false", `{"result":{"*":false}}`, nil, true},
+		{"* false with other keys", `{"result":{"*":false,"a":true}}`, nil, true},
+		{"map with non-bool value", `{"result":{"a":1}}`, nil, true},
+		{"* with non-bool value", `{"result":{"*":"true"}}`, nil, true},
 		{"missing result", `{"decision_id":"x"}`, []string{}, false},
 	}
 	for _, tt := range tests {
