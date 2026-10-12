@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func Test_parse_wildcard(t *testing.T) {
@@ -87,5 +88,54 @@ func Test_parse_single_dataset(t *testing.T) {
 
 	if len(ds) != 1 {
 		t.Fatalf("should have 1 dataset : %+v", ds)
+	}
+}
+
+func Test_parse_datasets_map_logs_no_warning(t *testing.T) {
+	core, logs := observer.New(zap.WarnLevel)
+	result := []byte("{\"decision_id\":\"7cb26e70-2842-42a1-ac74-cceeffbb15c1\",\"result\":{\"datalake.TestEvent1\":true}}")
+	_, err := parseDatasetsFromOpaBody(zap.New(core).Sugar(), result)
+	if err != nil {
+		t.Fatalf("should parse : %+v", err)
+	}
+
+	if logs.Len() != 0 {
+		t.Fatalf("should not log warnings : %+v", logs.All())
+	}
+}
+
+// Test_parse_response_shapes lists every OPA result shape and whether the request
+// passes (nil error) or falls back to the ACL check (error) in Authorizer.
+func Test_parse_response_shapes(t *testing.T) {
+	tests := []struct {
+		name     string
+		body     string
+		datasets []string
+		aclCheck bool
+	}{
+		{"list", `{"result":["a","b"]}`, []string{"a", "b"}, false},
+		{"empty list", `{"result":[]}`, []string{}, false},
+		{"map of true", `{"result":{"a":true,"b":true}}`, []string{"a", "b"}, false},
+		{"map with false", `{"result":{"a":true,"b":false}}`, []string{"a"}, false},
+		{"empty map", `{"result":{}}`, []string{}, false},
+		{"* true", `{"result":{"*":true}}`, []string{"*"}, false},
+		{"* with other keys", `{"result":{"a":true,"*":true}}`, []string{"*"}, false},
+		{"* false", `{"result":{"*":false}}`, nil, true},
+		{"* false with other keys", `{"result":{"*":false,"a":true}}`, nil, true},
+		{"map with non-bool value", `{"result":{"a":1}}`, nil, true},
+		{"* with non-bool value", `{"result":{"*":"true"}}`, nil, true},
+		{"missing result", `{"decision_id":"x"}`, []string{}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ds, err := parseDatasetsFromOpaBody(zap.NewNop().Sugar(), []byte(tt.body))
+			if (err != nil) != tt.aclCheck {
+				t.Fatalf("aclCheck = %v, want %v (err: %v)", err != nil, tt.aclCheck, err)
+			}
+			slices.Sort(ds)
+			if !slices.Equal(ds, tt.datasets) {
+				t.Fatalf("datasets = %v, want %v", ds, tt.datasets)
+			}
+		})
 	}
 }

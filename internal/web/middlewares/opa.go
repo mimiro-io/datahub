@@ -36,13 +36,8 @@ type opaRequest struct {
 	Input map[string]interface{} `json:"input"`
 }
 
-type opaRawResponse struct {
-	DecisionID string         `json:"decision_id"`
-	Result     map[string]any `json:"result"`
-}
-
 type opaDatasets struct {
-	Result []string `json:"result"`
+	Result json.RawMessage `json:"result"`
 }
 
 func doOpaCheck(logger *zap.SugaredLogger, method string, path string, token *jwt.Token, scopes []string, opaEndpoint string) ([]string, error) {
@@ -80,37 +75,42 @@ func doOpaCheck(logger *zap.SugaredLogger, method string, path string, token *jw
 	return parseDatasetsFromOpaBody(logger, body)
 }
 
-// parseDatasetsFromOpaBody parses the response body from OPA to extract datasets
-// It handles both the case where the result is a list of datasets and the case
-// where the result is a map indicating admin access.
+// parseDatasetsFromOpaBody parses the response body from OPA to extract datasets.
+// The result is either a map of dataset name to bool, where only true grants access,
+// or a list of dataset names. A "*" key in the map decides alone: true means access
+// to all datasets, and false returns an error so the caller falls back to the ACL check.
 func parseDatasetsFromOpaBody(logger *zap.SugaredLogger, opaBody []byte) ([]string, error) {
 	resp := opaDatasets{}
-	err := json.Unmarshal(opaBody, &resp)
-	if err != nil {
+	if err := json.Unmarshal(opaBody, &resp); err != nil {
 		logger.Warnf("opaDatasets error, result|err: %s %+v", string(opaBody), err)
-
-		raw := opaRawResponse{}
-		rawErr := json.Unmarshal(opaBody, &raw)
-
-		if rawErr == nil && raw.Result != nil {
-			if val, ok := raw.Result["*"]; ok {
-				if isAdmin, ok := val.(bool); ok && isAdmin {
-					return []string{"*"}, nil
-				}
-			} else if len(raw.Result) >= 1 {
-				datasets := make([]string, 0, len(raw.Result))
-				for k := range raw.Result {
-					datasets = append(datasets, k)
-				}
-
-				return datasets, nil
-			}
-		}
-
-		return nil, fmt.Errorf("failed to parse OPA response as either dataset list or admin privilege map: %w", rawErr)
+		return nil, err
 	}
 
-	datasets := pluckDatasets(resp)
+	datasets := make([]string, 0)
+	if len(resp.Result) == 0 {
+		return datasets, nil
+	}
+
+	allowed := map[string]bool{}
+	if err := json.Unmarshal(resp.Result, &allowed); err == nil {
+		if isAdmin, ok := allowed["*"]; ok {
+			if !isAdmin {
+				return nil, fmt.Errorf("OPA denied admin access")
+			}
+			return []string{"*"}, nil
+		}
+		for name, ok := range allowed {
+			if ok {
+				datasets = append(datasets, name)
+			}
+		}
+		return datasets, nil
+	}
+
+	if err := json.Unmarshal(resp.Result, &datasets); err != nil {
+		logger.Warnf("opaDatasets error, result|err: %s %+v", string(opaBody), err)
+		return nil, fmt.Errorf("failed to parse OPA response as either dataset map or dataset list: %w", err)
+	}
 
 	return datasets, nil
 }
@@ -145,14 +145,4 @@ func opaQuery(url string, request opaRequest) ([]byte, error) {
 		return nil, err
 	}
 	return bodyBytes, nil
-}
-
-// pluckDatasets is used to make sure we don't accidentally end up with a result
-// that breaks the endpoint
-func pluckDatasets(resp opaDatasets) []string {
-	datasets := make([]string, 0)
-	if len(resp.Result) > 0 {
-		datasets = append(datasets, resp.Result...)
-	}
-	return datasets
 }
