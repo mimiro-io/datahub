@@ -70,9 +70,10 @@ func (nodeTokenProvider *NodeJwtBearerProvider) getToken() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		nodeTokenProvider.cache = &cache{
-			until: token.Claims.(*CustomClaims).ExpiresAt.Time,
-			token: token.Raw,
+		nodeTokenProvider.cache = &cache{token: token.Raw}
+		// without exp, until stays zero and the token is fetched again on the next call
+		if exp := token.Claims.(*CustomClaims).ExpiresAt; exp != nil {
+			nodeTokenProvider.cache.until = exp.Time
 		}
 	}
 
@@ -109,17 +110,11 @@ func (nodeTokenProvider *NodeJwtBearerProvider) callRemoteNodeEndpoint() (*jwt.T
 	}
 	if accessToken, ok := response["access_token"]; ok {
 		if rawToken, isString := accessToken.(string); isString {
-			token, parseErr := jwt.ParseWithClaims(
-				rawToken,
-				&CustomClaims{},
-				func(token *jwt.Token) (interface{}, error) {
-					// return nil, nil
-					return nodeTokenProvider.serviceCore.GetActiveKeyPair().PublicKey, nil
-				},
-			)
-			// we ignore validation errors, we just care about the token (and the remote will validate the now-obtained token anyway)
+			// the remote node signed the token with its own key, so we can't verify it here.
+			// we only need its expiry for caching, and the remote validates the token when we send it back.
+			token, _, parseErr := jwt.NewParser().ParseUnverified(rawToken, &CustomClaims{})
 			if parseErr != nil {
-				nodeTokenProvider.logger.Warnf("access_token did not validate, ignoring: %v", parseErr)
+				return nil, fmt.Errorf("access_token returned from %v is not a valid JWT: %w", requestURL, parseErr)
 			}
 			return token, nil
 		}
