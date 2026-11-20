@@ -1,8 +1,7 @@
-FROM golang:1.26.9 AS builder_src
+FROM golang:1.27.4 AS builder_src
 
 COPY jemalloc-install.sh .
-RUN apt-get update -y
-RUN apt-get install bzip2 -y
+RUN apt-get update -y && apt-get install -y --no-install-recommends bzip2 && rm -rf /var/lib/apt/lists/*
 RUN bash jemalloc-install.sh
 
 FROM builder_src AS builder
@@ -32,10 +31,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -pgo=cmd/datahub/default-gogc.pprof -o ser
 RUN go test ./... -v
 
 FROM alpine:latest
-RUN apk update
-RUN apk add --upgrade rsync
-RUN apk --no-cache add ca-certificates rsync
-RUN apk upgrade libssl3 libcrypto3
+RUN apk --no-cache upgrade && apk --no-cache add ca-certificates rsync
 
 WORKDIR /root/
 
